@@ -22,9 +22,6 @@ A Cargo workspace of four crates, each versioned independently (see each crate's
 - **`pipa-ui`** — a Leptos dashboard (Tailwind CSS v4 + daisyUI) for registering and
   managing OLTP data sources.
 
-See `CLAUDE.md` for the full architecture writeup (clean-architecture layering, why
-things are split the way they are, extension points).
-
 ## Prerequisites
 
 - Rust (stable) with the `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
