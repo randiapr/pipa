@@ -1,0 +1,8 @@
+{
+  "name": "pipa-ui",
+  "private": true,
+  "description": "Not a Node project — this only exists so npm can install daisyui into node_modules/, which Trunk's Tailwind CSS v4 build resolves `@plugin \"daisyui\"` against. Tailwind CSS itself is managed by Trunk (see Trunk.toml), not npm.",
+  "devDependencies": {
+    "daisyui": "^5.7.43"
+  }
+}
