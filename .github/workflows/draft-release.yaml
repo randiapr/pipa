@@ -1,0 +1,70 @@
+name: Draft release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: draft-release
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/gitlog
+        name: Get changed commits
+        id: gitlog
+        with:
+          output-file: ./gitlog.md
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/next-version
+        name: Compute next version
+        id: next_version
+        with:
+          last-release: ${{ steps.gitlog.outputs.last_release }}
+
+      - name: Prepare release notes
+        if: steps.next_version.outputs.version != ''
+        run: |
+          echo "## What's New" > ./release-notes.md
+          cat ./gitlog.md >> ./release-notes.md
+          echo "" >> ./release-notes.md
+          echo "**Full changelog**: ${{ github.server_url }}/${{ github.repository }}/compare/${{ steps.gitlog.outputs.last_release }}...${{ steps.next_version.outputs.version }}" >> ./release-notes.md
+
+      - name: Check for already-published tag
+        id: existing
+        if: steps.next_version.outputs.version != ''
+        run: |
+          if git tag -l "${{ steps.next_version.outputs.version }}" | grep -q .; then
+            echo "Tag ${{ steps.next_version.outputs.version }} already exists, won't re-draft an already-published release" >&2
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Remove stale draft
+        if: steps.next_version.outputs.version != '' && steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "${{ steps.next_version.outputs.version }}" --repo "${{ github.repository }}" -y || true
+
+      - name: Create draft release
+        if: steps.next_version.outputs.version != '' && steps.existing.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.next_version.outputs.version }}
+          name: ${{ steps.next_version.outputs.version }}
+          body_path: ./release-notes.md
+          target_commitish: ${{ github.sha }}
+          draft: true
+          prerelease: false

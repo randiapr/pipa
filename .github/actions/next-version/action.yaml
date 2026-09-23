@@ -1,0 +1,20 @@
+name: Next version
+description: Computes the next vX.Y.Z tag from Conventional Commits since the last release
+inputs:
+  last-release:
+    description: Last release tag, as output by the gitlog action
+    required: true
+outputs:
+  version:
+    description: Next vX.Y.Z tag to release, empty if no release-worthy commits were found
+    value: ${{ steps.next_version.outputs.version }}
+  bump:
+    description: Bump kind that was applied (major, minor, patch, or none)
+    value: ${{ steps.next_version.outputs.bump }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      id: next_version
+      run: |
+        ${{ github.action_path }}/next-version.sh --last-release "${{ inputs.last-release }}"
