@@ -4983,6 +4983,7 @@ dependencies = [
  "datafusion 55.1.0",
  "pipa-data",
  "serde",
+ "serde_json",
  "tokio",
  "tower",
  "tower-http 0.7.1",

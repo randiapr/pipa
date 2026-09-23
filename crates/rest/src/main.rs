@@ -6,7 +6,7 @@ mod http;
 
 use std::sync::Arc;
 
-use axum::{Router, routing::get};
+use axum::{Json, Router, routing::get};
 use pipa_data::{
     ObjectStoreConfig,
     datasource::{
@@ -43,6 +43,9 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "status": "ok",
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
 }
