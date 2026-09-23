@@ -1,0 +1,20 @@
+name: Git log
+description: Formats the commits since the last release tag into a changelog fragment
+inputs:
+  output-file:
+    description: File path to write the changelog content to (or - for stdout)
+    required: true
+  token:
+    description: Token used to look up each commit's GitHub author login
+    required: false
+outputs:
+  last_release:
+    description: Last vX.Y.Z release tag, or the repo's first commit SHA if none exists yet
+    value: ${{ steps.gitlog.outputs.last_release }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      id: gitlog
+      run: |
+        ${{ github.action_path }}/gitlog.sh --output-file "${{ inputs.output-file }}" --token "${{ inputs.token }}"
