@@ -10,8 +10,10 @@ mod capture;
 use std::sync::Arc;
 
 use pipa_data::{
-    datasource::{infrastructure::ObjectStoreDataSourceRepository, DataSource, DataSourceRepository, DbEngine},
     ObjectStoreConfig,
+    datasource::{
+        DataSource, DataSourceRepository, DbEngine, infrastructure::ObjectStoreDataSourceRepository,
+    },
 };
 
 use crate::capture::{CdcSource, PostgresWalSource};

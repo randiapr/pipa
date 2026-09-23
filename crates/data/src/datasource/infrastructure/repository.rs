@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::StreamExt;
-use object_store::{path::Path as ObjectPath, ObjectStore, ObjectStoreExt, PutPayload};
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload, path::Path as ObjectPath};
 
 use crate::datasource::domain::{DataSource, DataSourceError, DataSourceId, DataSourceRepository};
 

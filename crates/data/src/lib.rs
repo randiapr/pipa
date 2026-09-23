@@ -2,6 +2,7 @@
 
 pub mod catalog;
 pub mod datasource;
+pub mod project;
 pub mod storage;
 
 pub use catalog::IcebergCatalogConfig;

@@ -47,9 +47,17 @@ up:
     rc bucket create {{rustfs_alias}}/pipa --ignore-existing >/dev/null
     echo "rustfs ready, \"pipa\" bucket ensured"
 
-    cargo run -p pipa-rest &
+    # build first, together, so a cold compile (datafusion/sqlx/parquet etc. can take
+    # minutes) shows normal cargo progress instead of silently eating the wait_for_port
+    # budget below. Then exec the built binaries directly rather than `cargo run`ning
+    # each -p separately: two concurrent single-package `cargo run` invocations resolve
+    # workspace feature unification differently than this combined build, which
+    # invalidates and recompiles shared deps all over again.
+    cargo build -p pipa-rest -p pipa-core
+
+    ./target/debug/pipa-rest &
     rest_pid=$!
-    cargo run -p pipa-core &
+    ./target/debug/pipa-core &
     core_pid=$!
 
     echo "waiting for pipa-rest on :8080..."
