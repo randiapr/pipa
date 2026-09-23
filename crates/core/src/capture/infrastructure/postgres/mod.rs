@@ -6,10 +6,12 @@ mod decode;
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use decode::{decode_delete, decode_insert, decode_relation, decode_update, DecodedChange, RelationInfo};
+use decode::{
+    DecodedChange, RelationInfo, decode_delete, decode_insert, decode_relation, decode_update,
+};
 use pgwire_replication::{Lsn, ReplicationClient, ReplicationConfig, ReplicationEvent};
 use pipa_data::datasource::DataSource;
-use sqlx::{postgres::PgConnectOptions, Connection, PgConnection};
+use sqlx::{Connection, PgConnection, postgres::PgConnectOptions};
 use tokio::sync::mpsc;
 
 use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, Operation};
@@ -59,12 +61,13 @@ impl PostgresWalSource {
             Err(err) => return Err(CaptureError::Setup(err.to_string())),
         }
 
-        let slot_exists: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)")
-                .bind(slot)
-                .fetch_one(&mut conn)
-                .await
-                .map_err(|err| CaptureError::Setup(err.to_string()))?;
+        let slot_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)",
+        )
+        .bind(slot)
+        .fetch_one(&mut conn)
+        .await
+        .map_err(|err| CaptureError::Setup(err.to_string()))?;
 
         if !slot_exists {
             sqlx::query("SELECT pg_create_logical_replication_slot($1, 'pgoutput')")
@@ -222,15 +225,19 @@ fn to_change_event(
     commit_timestamp_unix_micros: i64,
 ) -> Option<ChangeEvent> {
     let (relation_oid, operation) = match change {
-        DecodedChange::Insert { relation_oid, after } => (relation_oid, Operation::Insert { after }),
+        DecodedChange::Insert {
+            relation_oid,
+            after,
+        } => (relation_oid, Operation::Insert { after }),
         DecodedChange::Update {
             relation_oid,
             before,
             after,
         } => (relation_oid, Operation::Update { before, after }),
-        DecodedChange::Delete { relation_oid, before } => {
-            (relation_oid, Operation::Delete { before })
-        }
+        DecodedChange::Delete {
+            relation_oid,
+            before,
+        } => (relation_oid, Operation::Delete { before }),
     };
 
     let relation = relations.get(&relation_oid)?;
@@ -269,7 +276,8 @@ mod live_tests {
             name: "smoke-test".to_string(),
             engine: DbEngine::Postgres,
             connection: ConnectionConfig {
-                host: std::env::var("PIPA_TEST_PG_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
+                host: std::env::var("PIPA_TEST_PG_HOST")
+                    .unwrap_or_else(|_| "127.0.0.1".to_string()),
                 port: std::env::var("PIPA_TEST_PG_PORT")
                     .ok()
                     .and_then(|p| p.parse().ok())
@@ -278,6 +286,7 @@ mod live_tests {
                 password: "postgres".to_string(),
                 database: "testdb".to_string(),
             },
+            project_id: None,
             registered_at_unix: 0,
         };
 

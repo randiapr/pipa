@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use object_store::{aws::AmazonS3Builder, ObjectStore};
+use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
 
 /// Connection settings for the RustFS (S3-compatible) object store.

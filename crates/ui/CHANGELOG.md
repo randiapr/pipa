@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.2.0] - 2026-09-23
+
+### Added
+
+- **Projects**: a new card on the dashboard (`/dashboard#projects`) to create, rename/
+  re-describe, and delete projects, and a project picker on the data source registration
+  form to group sources under one. A new landing page (`/`) shows every project as a card
+  (name, description, data source count) with a link into the dashboard.
+- Create-project, edit-project, and register-data-source forms now open as native
+  `<dialog class="modal">` dialogs (`showModal()`/`close()`) instead of inline forms,
+  dismissible via their Cancel button, a backdrop click, or Esc, with form state reset on
+  every close regardless of cause.
+- Registered data sources and projects are now shown in daisyUI `table`s inside `card`s,
+  paginated client-side (5 rows/page) with a shared `Pagination` component.
+
+### Changed
+
+- Restructured the crate as MVVM: `model` (wire/domain types, split out of `api`), `api`
+  (pure HTTP client), `viewmodel` (`ProjectsViewModel`/`SourcesViewModel`/`AppViewModel` —
+  `RwSignal`-backed state and the only code that calls `api`), and `view` (render-only
+  Leptos components that call ViewModel methods).
+- The dashboard moved from `/` to `/dashboard`; `/` is now the projects landing page. Nav
+  updated to Home / Projects / Sources (the separate "Register" nav entry was folded into
+  the Sources card's new-data-source dialog).
+
+### Fixed
+
+- A `disabled=move || ... >= ...` attribute closure in `Pagination` tripped a Leptos
+  `view!` macro parsing gotcha — a bare (non-`{}`-wrapped) top-level `>=`/`>` in an
+  attribute expression is misparsed as tag-closing syntax, dumping raw token text into the
+  DOM as visible button text. Fixed by wrapping the closure in braces.
+- The register-data-source dialog's `.modal-box` could exceed the viewport height on
+  shorter screens with no way to reach the submit button; it now caps at 85vh and scrolls
+  internally (applied to all three dialogs for consistency).
+
 ## [0.1.0] - 2026-09-22
 
 ### Added

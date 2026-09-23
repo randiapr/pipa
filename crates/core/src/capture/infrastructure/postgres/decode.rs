@@ -313,7 +313,10 @@ mod tests {
         assert_eq!(oid, 16412);
         assert_eq!(relation.namespace, "public");
         assert_eq!(relation.name, "orders");
-        assert_eq!(relation.columns, vec!["id".to_string(), "total".to_string()]);
+        assert_eq!(
+            relation.columns,
+            vec!["id".to_string(), "total".to_string()]
+        );
     }
 
     #[test]

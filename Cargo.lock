@@ -4956,7 +4956,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-data"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4976,7 +4976,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-rest"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -4993,7 +4993,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
  "console_log",

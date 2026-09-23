@@ -7,6 +7,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::project::domain::ProjectId;
+
 /// Identity of a registered OLTP data source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DataSourceId(pub Uuid);
@@ -64,6 +66,7 @@ pub struct DataSource {
     pub name: String,
     pub engine: DbEngine,
     pub connection: ConnectionConfig,
+    pub project_id: Option<ProjectId>,
     pub registered_at_unix: u64,
 }
 
@@ -73,6 +76,8 @@ pub struct NewDataSource {
     pub name: String,
     pub engine: DbEngine,
     pub connection: ConnectionConfig,
+    #[serde(default)]
+    pub project_id: Option<ProjectId>,
 }
 
 impl DataSource {
@@ -109,6 +114,7 @@ impl DataSource {
             name: new.name,
             engine: new.engine,
             connection: new.connection,
+            project_id: new.project_id,
             registered_at_unix: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|duration| duration.as_secs())

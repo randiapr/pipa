@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use sqlx::{mysql::MySqlConnectOptions, postgres::PgConnectOptions, Connection, Executor};
+use sqlx::{Connection, Executor, mysql::MySqlConnectOptions, postgres::PgConnectOptions};
 
 use crate::datasource::domain::{ConnectionTestOutcome, ConnectionTester, DataSource, DbEngine};
 
@@ -37,10 +37,11 @@ impl SqlxConnectionTester {
             .password(&source.connection.password)
             .database(&source.connection.database);
 
-        let mut conn = tokio::time::timeout(CONNECT_TIMEOUT, sqlx::PgConnection::connect_with(&options))
-            .await
-            .map_err(|_| "timed out connecting".to_string())?
-            .map_err(|err| err.to_string())?;
+        let mut conn =
+            tokio::time::timeout(CONNECT_TIMEOUT, sqlx::PgConnection::connect_with(&options))
+                .await
+                .map_err(|_| "timed out connecting".to_string())?
+                .map_err(|err| err.to_string())?;
 
         conn.execute("SELECT 1")
             .await
