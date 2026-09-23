@@ -59,10 +59,16 @@ if [[ -n "$last_release" ]]; then
     ancestry_path="--ancestry-path"
 fi
 
+# A here-string (fed from a completed command substitution) is used instead
+# of `< <(git log ...)` process substitution: the latter races the forked git
+# process against `read`'s first read and can silently yield zero lines.
+raw_log_lines="$(git log --pretty=format:'(%h) %s' $ancestry_path "$commit_range")"
 log_lines=()
-while IFS= read -r log_line; do
-    log_lines+=("$log_line")
-done < <(git log --pretty=format:'(%h) %s' $ancestry_path "$commit_range")
+if [ -n "$raw_log_lines" ]; then
+    while IFS= read -r log_line; do
+        log_lines+=("$log_line")
+    done <<<"$raw_log_lines"
+fi
 
 get_username() {
     commit="$1"

@@ -36,10 +36,16 @@ IFS='.' read -r major minor patch <<<"$version"
 
 commit_range="HEAD...$last_release"
 
+# A here-string (fed from a completed command substitution) is used instead of
+# `< <(git log ...)` process substitution: the latter races the forked git
+# process against `read`'s first read and can silently yield zero lines.
+raw_subjects="$(git log --pretty=format:'%s' --ancestry-path "$commit_range")"
 subjects=()
-while IFS= read -r subject; do
-    subjects+=("$subject")
-done < <(git log --pretty=format:'%s' --ancestry-path "$commit_range")
+if [ -n "$raw_subjects" ]; then
+    while IFS= read -r subject; do
+        subjects+=("$subject")
+    done <<<"$raw_subjects"
+fi
 full_log=$(git log --pretty=format:'%B' --ancestry-path "$commit_range")
 
 bump="none"
