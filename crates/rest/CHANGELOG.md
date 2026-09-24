@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.2.1] - 2026-09-24
+
+### Changed
+
+- The projects API now maps `ProjectError::DuplicateName` to `409 Conflict` (previously
+  unreachable, since `pipa-data` didn't reject duplicate names).
+
 ## [0.2.0] - 2026-09-23
 
 ### Added

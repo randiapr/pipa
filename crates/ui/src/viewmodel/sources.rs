@@ -8,7 +8,7 @@ use crate::api;
 use crate::model::{
     ConnectionConfig, ConnectionTestOutcome, DataSourceView, DbEngine, NewDataSource, ProjectView,
 };
-use crate::viewmodel::PAGE_SIZE;
+use crate::viewmodel::{StatusMessage, PAGE_SIZE};
 
 /// Reactive state for the data source registration form and table, plus the commands that
 /// mutate it via [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is
@@ -29,11 +29,14 @@ pub struct SourcesViewModel {
     /// project picker and for labeling each row with its project's current name.
     projects: RwSignal<Vec<ProjectView>>,
     /// Shared with the rest of the dashboard, so failures here surface in the same banner.
-    status: RwSignal<Option<String>>,
+    status: RwSignal<Option<StatusMessage>>,
 }
 
 impl SourcesViewModel {
-    pub fn new(projects: RwSignal<Vec<ProjectView>>, status: RwSignal<Option<String>>) -> Self {
+    pub fn new(
+        projects: RwSignal<Vec<ProjectView>>,
+        status: RwSignal<Option<StatusMessage>>,
+    ) -> Self {
         Self {
             sources: RwSignal::new(Vec::new()),
             page: RwSignal::new(0),
@@ -56,7 +59,9 @@ impl SourcesViewModel {
         spawn_local(async move {
             match api::list_sources().await {
                 Ok(list) => sources.set(list),
-                Err(err) => status.set(Some(format!("Failed to load data sources: {err}"))),
+                Err(err) => status.set(Some(StatusMessage::Error(format!(
+                    "Failed to load data sources: {err}"
+                )))),
             }
         });
     }
@@ -83,6 +88,16 @@ impl SourcesViewModel {
         self.projects.get()
     }
 
+    /// Looks up a data source's current display name by id — used by the delete confirmation
+    /// dialog, which only holds an id.
+    pub fn name_of(&self, id: &str) -> Option<String> {
+        self.sources
+            .get()
+            .into_iter()
+            .find(|s| s.id == id)
+            .map(|s| s.name)
+    }
+
     /// The current display name of a source's project, if it has one and it still exists.
     pub fn project_label(&self, project_id: &Option<String>) -> Option<String> {
         let id = project_id.as_ref()?;
@@ -100,7 +115,7 @@ impl SourcesViewModel {
             Ok(parsed) => parsed,
             Err(_) => {
                 self.status
-                    .set(Some("Port must be a valid number.".to_string()));
+                    .set(Some(StatusMessage::Error("Port must be a valid number.".to_string())));
                 return;
             }
         };
@@ -122,7 +137,9 @@ impl SourcesViewModel {
         spawn_local(async move {
             match api::register_source(&new_source).await {
                 Ok(_) => {
-                    this.status.set(Some("Data source registered.".to_string()));
+                    this.status.set(Some(StatusMessage::Success(
+                        "Data source registered.".to_string(),
+                    )));
                     this.name.set(String::new());
                     this.host.set(String::new());
                     this.port.set(String::new());
@@ -132,9 +149,9 @@ impl SourcesViewModel {
                     this.selected_project_id.set(String::new());
                     this.refresh();
                 }
-                Err(err) => this
-                    .status
-                    .set(Some(format!("Failed to register data source: {err}"))),
+                Err(err) => this.status.set(Some(StatusMessage::Error(format!(
+                    "Failed to register data source: {err}"
+                )))),
             }
         });
     }
@@ -144,7 +161,9 @@ impl SourcesViewModel {
         spawn_local(async move {
             match api::test_source(&id).await {
                 Ok(outcome) => result.set(Some(outcome)),
-                Err(err) => status.set(Some(format!("Connection test failed: {err}"))),
+                Err(err) => status.set(Some(StatusMessage::Error(format!(
+                    "Connection test failed: {err}"
+                )))),
             }
         });
     }
@@ -153,10 +172,15 @@ impl SourcesViewModel {
         let this = *self;
         spawn_local(async move {
             match api::delete_source(&id).await {
-                Ok(()) => this.refresh(),
-                Err(err) => this
-                    .status
-                    .set(Some(format!("Failed to remove data source: {err}"))),
+                Ok(()) => {
+                    this.status.set(Some(StatusMessage::Success(
+                        "Data source removed.".to_string(),
+                    )));
+                    this.refresh();
+                }
+                Err(err) => this.status.set(Some(StatusMessage::Error(format!(
+                    "Failed to remove data source: {err}"
+                )))),
             }
         });
     }

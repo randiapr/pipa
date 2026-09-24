@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.0] - 2026-09-24
+
+### Added
+
+- Delete confirmation dialogs for projects and data sources, naming the item being removed,
+  instead of deleting on a single click.
+- Explicit close (`✕`) buttons on the create/edit/register dialogs.
+- A light/dark theme toggle in the navbar and mobile drawer, in the spot the "Home" nav
+  entry used to occupy — the brand link (`pipa`) now covers going back to `/`.
+- `StatusMessage` (`Success`/`Error`) picks the matching daisyUI `alert` variant for a
+  dashboard status message, shown as an auto-dismissing toast (`toast-top toast-end`)
+  instead of an inline banner.
+- `SourcesViewModel::name_of`, so the delete-source confirmation dialog can show the
+  source's name from just its id.
+
+### Changed
+
+- Edit/delete row actions in the projects and sources tables now render as icon buttons
+  instead of text buttons.
+- Cards use `card-border`/`shadow-xl` instead of `shadow-sm` for a more defined boundary.
+- Registering or renaming a project now surfaces the backend's duplicate-name rejection
+  (see `pipa-data` 0.2.1) as a status toast instead of silently failing.
+
 ## [0.2.0] - 2026-09-23
 
 ### Added

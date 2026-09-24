@@ -6,7 +6,7 @@ use leptos::task::spawn_local;
 
 use crate::api;
 use crate::model::{NewProject, ProjectUpdate, ProjectView};
-use crate::viewmodel::PAGE_SIZE;
+use crate::viewmodel::{StatusMessage, PAGE_SIZE};
 
 /// Reactive state for the Projects feature, plus the commands that mutate it via
 /// [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is cheap to
@@ -21,11 +21,11 @@ pub struct ProjectsViewModel {
     pub edit_name: RwSignal<String>,
     pub edit_description: RwSignal<String>,
     /// Shared with the rest of the dashboard, so failures here surface in the same banner.
-    status: RwSignal<Option<String>>,
+    status: RwSignal<Option<StatusMessage>>,
 }
 
 impl ProjectsViewModel {
-    pub fn new(status: RwSignal<Option<String>>) -> Self {
+    pub fn new(status: RwSignal<Option<StatusMessage>>) -> Self {
         Self {
             projects: RwSignal::new(Vec::new()),
             page: RwSignal::new(0),
@@ -44,7 +44,7 @@ impl ProjectsViewModel {
         spawn_local(async move {
             match api::list_projects().await {
                 Ok(list) => projects.set(list),
-                Err(err) => status.set(Some(format!("Failed to load projects: {err}"))),
+                Err(err) => status.set(Some(StatusMessage::Error(format!("Failed to load projects: {err}")))),
             }
         });
     }
@@ -88,14 +88,15 @@ impl ProjectsViewModel {
         spawn_local(async move {
             match api::register_project(&new_project).await {
                 Ok(_) => {
-                    this.status.set(Some("Project created.".to_string()));
+                    this.status
+                        .set(Some(StatusMessage::Success("Project created.".to_string())));
                     this.name.set(String::new());
                     this.description.set(String::new());
                     this.refresh();
                 }
                 Err(err) => this
                     .status
-                    .set(Some(format!("Failed to create project: {err}"))),
+                    .set(Some(StatusMessage::Error(format!("Failed to create project: {err}")))),
             }
         });
     }
@@ -124,7 +125,7 @@ impl ProjectsViewModel {
                 }
                 Err(err) => this
                     .status
-                    .set(Some(format!("Failed to update project: {err}"))),
+                    .set(Some(StatusMessage::Error(format!("Failed to update project: {err}")))),
             }
         });
     }
@@ -137,10 +138,14 @@ impl ProjectsViewModel {
         let this = *self;
         spawn_local(async move {
             match api::delete_project(&id).await {
-                Ok(()) => this.refresh(),
+                Ok(()) => {
+                    this.status
+                        .set(Some(StatusMessage::Success("Project removed.".to_string())));
+                    this.refresh();
+                }
                 Err(err) => this
                     .status
-                    .set(Some(format!("Failed to remove project: {err}"))),
+                    .set(Some(StatusMessage::Error(format!("Failed to remove project: {err}")))),
             }
         });
     }

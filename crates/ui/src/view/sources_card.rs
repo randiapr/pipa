@@ -13,6 +13,8 @@ use crate::viewmodel::SourcesViewModel;
 #[component]
 pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
     let register_dialog = NodeRef::<html::Dialog>::new();
+    let delete_dialog = NodeRef::<html::Dialog>::new();
+    let pending_delete = RwSignal::new(Option::<String>::None);
 
     let open_register = move |_| {
         if let Some(dialog) = register_dialog.get() {
@@ -27,7 +29,7 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
         }
     };
 
-    // Fires on every close, whatever the cause (submit, Cancel, backdrop click, Esc), so the
+    // Fires on every close, whatever the cause (submit, Cancel, Esc), so the
     // form always starts empty next time it's opened. Leaves `engine` alone, matching
     // `SourcesViewModel::submit_new`'s own reset — the last-picked engine is a sensible
     // default to keep across registrations.
@@ -41,13 +43,22 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
         vm.selected_project_id.set(String::new());
     };
 
+    let on_confirm_delete = move |_| {
+        if let Some(id) = pending_delete.get() {
+            vm.delete(id);
+        }
+        if let Some(dialog) = delete_dialog.get() {
+            dialog.close();
+        }
+    };
+
     view! {
-        <section id="sources" class="card bg-base-100 shadow-sm">
+        <section id="sources" class="card card-border bg-base-100 shadow-xl">
             <div class="card-body">
                 <div class="flex items-center justify-between">
                     <h2 class="card-title">"Registered data sources"</h2>
                     <button class="btn btn-primary btn-sm" type="button" on:click=open_register>
-                        "New data source"
+                        "New Data Source"
                     </button>
                 </div>
                 <Show
@@ -72,7 +83,16 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                                 <For
                                     each=move || vm.paged()
                                     key=|source| source.id.clone()
-                                    children=move |source| view! { <SourceRow vm=vm source=source /> }
+                                    children=move |source| {
+                                        view! {
+                                            <SourceRow
+                                                vm=vm
+                                                delete_dialog=delete_dialog
+                                                pending_delete=pending_delete
+                                                source=source
+                                            />
+                                        }
+                                    }
                                 />
                             </tbody>
                         </table>
@@ -86,6 +106,17 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
 
         <dialog node_ref=register_dialog class="modal" on:close=on_register_closed>
             <div class="modal-box max-h-[85vh] overflow-y-auto">
+                <button
+                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                    type="button"
+                    on:click=move |_| {
+                        if let Some(dialog) = register_dialog.get() {
+                            dialog.close();
+                        }
+                    }
+                >
+                    "✕"
+                </button>
                 <h3 class="text-lg font-bold">"Register a data source"</h3>
                 <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_register>
                     <fieldset class="fieldset">
@@ -198,9 +229,50 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                     </div>
                 </form>
             </div>
-            <form method="dialog" class="modal-backdrop">
-                <button>"close"</button>
-            </form>
+        </dialog>
+
+        <dialog node_ref=delete_dialog class="modal">
+            <div class="modal-box">
+                <button
+                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+                    type="button"
+                    on:click=move |_| {
+                        if let Some(dialog) = delete_dialog.get() {
+                            dialog.close();
+                        }
+                    }
+                >
+                    "✕"
+                </button>
+                <h3 class="text-lg font-bold">"Remove data source"</h3>
+                <p class="py-4">
+                    {move || {
+                        pending_delete
+                            .get()
+                            .and_then(|id| vm.name_of(&id))
+                            .map(|name| {
+                                format!("Are you sure you want to remove \"{name}\"? This cannot be undone.")
+                            })
+                            .unwrap_or_default()
+                    }}
+                </p>
+                <div class="modal-action">
+                    <button
+                        class="btn"
+                        type="button"
+                        on:click=move |_| {
+                            if let Some(dialog) = delete_dialog.get() {
+                                dialog.close();
+                            }
+                        }
+                    >
+                        "Cancel"
+                    </button>
+                    <button class="btn btn-error" type="button" on:click=on_confirm_delete>
+                        "Remove"
+                    </button>
+                </div>
+            </div>
         </dialog>
     }
 }
@@ -210,14 +282,24 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
 /// *name* can change out from under it, which is why that one field is still looked up
 /// reactively via `vm.project_label`.
 #[component]
-fn SourceRow(vm: SourcesViewModel, source: DataSourceView) -> impl IntoView {
+fn SourceRow(
+    vm: SourcesViewModel,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    source: DataSourceView,
+) -> impl IntoView {
     let id_for_test = source.id.clone();
     let id_for_delete = source.id.clone();
     let project_id = source.project_id.clone();
     let test_result = RwSignal::new(Option::<ConnectionTestOutcome>::None);
 
     let on_test = move |_| vm.test(id_for_test.clone(), test_result);
-    let on_delete = move |_| vm.delete(id_for_delete.clone());
+    let on_delete = move |_| {
+        pending_delete.set(Some(id_for_delete.clone()));
+        if let Some(dialog) = delete_dialog.get() {
+            let _ = dialog.show_modal();
+        }
+    };
 
     view! {
         <tr>
@@ -259,8 +341,26 @@ fn SourceRow(vm: SourcesViewModel, source: DataSourceView) -> impl IntoView {
                     <button class="join-item btn btn-sm" on:click=on_test type="button">
                         "Test connection"
                     </button>
-                    <button class="join-item btn btn-sm btn-error btn-soft" on:click=on_delete type="button">
-                        "Remove"
+                    <button
+                        class="join-item btn btn-sm btn-square btn-error btn-soft"
+                        type="button"
+                        title="Remove"
+                        aria-label="Remove"
+                        on:click=on_delete
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            class="h-4 w-4 stroke-current"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+                            ></path>
+                        </svg>
                     </button>
                 </div>
             </td>
