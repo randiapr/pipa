@@ -17,12 +17,36 @@ pub use sources::SourcesViewModel;
 /// Rows shown per page in a paginated data table.
 pub const PAGE_SIZE: usize = 5;
 
+/// A dashboard-wide status message, carrying enough to pick the right daisyUI `alert` variant
+/// (`alert-success`/`alert-error`) rather than always rendering the same neutral alert.
+#[derive(Clone, PartialEq, Eq)]
+pub enum StatusMessage {
+    Success(String),
+    Error(String),
+}
+
+impl StatusMessage {
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Success(text) | Self::Error(text) => text,
+        }
+    }
+
+    /// The daisyUI `alert` variant class for this message's kind.
+    pub fn alert_class(&self) -> &'static str {
+        match self {
+            Self::Success(_) => "alert alert-success",
+            Self::Error(_) => "alert alert-error",
+        }
+    }
+}
+
 /// Composition root for the app's ViewModels and the status message they share. Used by
 /// every route (`Landing`, `Dashboard`) that needs project/source data — each route
 /// constructs its own instance and fetches independently on mount.
 #[derive(Copy, Clone)]
 pub struct AppViewModel {
-    pub status: RwSignal<Option<String>>,
+    pub status: RwSignal<Option<StatusMessage>>,
     pub projects: ProjectsViewModel,
     pub sources: SourcesViewModel,
 }

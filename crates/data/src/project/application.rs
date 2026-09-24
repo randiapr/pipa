@@ -20,6 +20,7 @@ impl ProjectService {
     }
 
     pub async fn register(&self, new: NewProject) -> Result<Project, ProjectError> {
+        self.ensure_name_available(&new.name, None).await?;
         let project = Project::register(new)?;
         self.repository.save(&project).await?;
         Ok(project)
@@ -41,6 +42,7 @@ impl ProjectService {
         id: ProjectId,
         update: ProjectUpdate,
     ) -> Result<Project, ProjectError> {
+        self.ensure_name_available(&update.name, Some(id)).await?;
         let mut project = self.get(id).await?;
         project.apply_update(update)?;
         self.repository.save(&project).await?;
@@ -49,5 +51,23 @@ impl ProjectService {
 
     pub async fn remove(&self, id: ProjectId) -> Result<(), ProjectError> {
         self.repository.delete(id).await
+    }
+
+    /// Rejects a name already held by another project (case-insensitive, trimmed), so two
+    /// projects can never be confused for one another in the dashboard. `exclude` is the
+    /// project being updated, which is allowed to keep its own name.
+    async fn ensure_name_available(
+        &self,
+        name: &str,
+        exclude: Option<ProjectId>,
+    ) -> Result<(), ProjectError> {
+        let name = name.trim();
+        let taken = self.repository.list().await?.into_iter().any(|project| {
+            Some(project.id) != exclude && project.name.trim().eq_ignore_ascii_case(name)
+        });
+        if taken {
+            return Err(ProjectError::DuplicateName(name.to_string()));
+        }
+        Ok(())
     }
 }

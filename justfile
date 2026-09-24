@@ -72,6 +72,23 @@ fmt:
 clippy:
     cargo clippy {{native}} -- -D warnings
 
+# check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
+outdated:
+    @DEPS=$(awk '/^\[/{s=$0} s~/\[workspace\.dependencies\]/ && /^[a-zA-Z]/{sub(/[[:space:]=].*/,""); print}' Cargo.toml | tr '\n' '|' | sed 's/|$//'); \
+      cargo update --dry-run 2>&1 | grep -E " ($DEPS) " || echo "All direct dependencies are up to date"
+
+# upgrade Rust dependencies to the latest semver-compatible versions (requires cargo-edit: cargo install cargo-edit)
+upgrade:
+    cargo upgrade
+
+# check for outdated npm deps in crates/ui (daisyui)
+outdated-ui: ui-deps
+    cd crates/ui && npm outdated
+
+# upgrade npm deps in crates/ui to the latest version allowed by package.json
+upgrade-ui: ui-deps
+    cd crates/ui && npm update
+
 # remove build artifacts (target/, crates/ui/dist/) — leaves rustfs-data/ and node_modules/ alone
 clean:
     cargo clean

@@ -90,6 +90,8 @@ impl Project {
 pub enum ProjectError {
     #[error("invalid project: {0}")]
     InvalidField(String),
+    #[error("a project named \"{0}\" already exists")]
+    DuplicateName(String),
     #[error("project {0} was not found")]
     NotFound(ProjectId),
     #[error("project storage error: {0}")]

@@ -162,6 +162,7 @@ impl IntoResponse for ProjectApiError {
         let status = match &self.0 {
             ProjectError::NotFound(_) => StatusCode::NOT_FOUND,
             ProjectError::InvalidField(_) => StatusCode::BAD_REQUEST,
+            ProjectError::DuplicateName(_) => StatusCode::CONFLICT,
             ProjectError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (

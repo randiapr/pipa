@@ -3,12 +3,20 @@
 
 use leptos::prelude::*;
 
+use crate::view::STATUS_TOAST_DURATION;
 use crate::viewmodel::AppViewModel;
 
 #[component]
 pub fn Landing() -> impl IntoView {
     let vm = AppViewModel::new();
     Effect::new(move |_| vm.refresh_all());
+
+    // Auto-dismiss the status toast so it doesn't linger on screen forever.
+    Effect::new(move |_| {
+        if vm.status.get().is_some() {
+            set_timeout(move || vm.status.set(None), STATUS_TOAST_DURATION);
+        }
+    });
 
     view! {
         <div class="flex flex-col gap-6">
@@ -24,8 +32,10 @@ pub fn Landing() -> impl IntoView {
                     .get()
                     .map(|msg| {
                         view! {
-                            <div role="alert" class="alert">
-                                <span>{msg}</span>
+                            <div class="toast toast-top toast-end">
+                                <div role="alert" class=msg.alert_class()>
+                                    <span>{msg.text().to_string()}</span>
+                                </div>
                             </div>
                         }
                     })
@@ -35,7 +45,7 @@ pub fn Landing() -> impl IntoView {
                 when=move || !vm.projects.projects.get().is_empty()
                 fallback=|| {
                     view! {
-                        <div class="card bg-base-100 shadow-sm">
+                        <div class="card card-border bg-base-100 shadow-xl">
                             <div class="card-body items-center text-center">
                                 <h2 class="card-title">"No projects yet"</h2>
                                 <p class="text-base-content/70">
@@ -80,7 +90,7 @@ fn ProjectCard(
     };
 
     view! {
-        <div class="card bg-base-100 shadow-sm">
+        <div class="card card-border bg-base-100 shadow-xl">
             <div class="card-body">
                 <h2 class="card-title">{name}</h2>
                 <p class="text-base-content/70">

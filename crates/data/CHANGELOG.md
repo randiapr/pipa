@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.2.1] - 2026-09-24
+
+### Fixed
+
+- `ProjectService::register`/`update` now reject a name already held by another project
+  (case-insensitive, trimmed) via a new `ProjectError::DuplicateName` variant, instead of
+  silently allowing two projects to share a name.
+
 ## [0.2.0] - 2026-09-23
 
 ### Added
