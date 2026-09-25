@@ -2,7 +2,7 @@
 //!
 //! Organized as MVVM:
 //! - [`model`] — wire/domain types shared between the API client and the views.
-//! - [`api`] — the HTTP client talking to `pipa-rest`; the Model's I/O.
+//! - [`api`] — the HTTP client talking to `pipa-backend`; the Model's I/O.
 //! - [`viewmodel`] — reactive state (`RwSignal`s) plus the commands that mutate it; the only
 //!   layer that calls `api`.
 //! - [`view`] — Leptos components that render from a ViewModel's signals and call its

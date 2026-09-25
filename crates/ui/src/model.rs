@@ -1,7 +1,7 @@
 //! Model layer: wire/domain types shared by the API client and the views.
 //!
-//! These mirror the wire format of `pipa_data::datasource`/`pipa_data::project`'s domain
-//! types without depending on that crate directly, since `pipa-data` pulls in native-only
+//! These mirror the wire format of `pipa_storage::datasource`/`pipa_storage::project`'s domain
+//! types without depending on that crate directly, since `pipa-storage` pulls in native-only
 //! dependencies that don't target `wasm32-unknown-unknown`.
 
 use serde::{Deserialize, Serialize};

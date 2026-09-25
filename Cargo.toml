@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/data", "crates/rest", "crates/ui"]
+members = ["crates/backend", "crates/ingestion", "crates/storage", "crates/ui"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-pipa-data = { path = "crates/data" }
+pipa-storage = { path = "crates/storage" }
 
 anyhow = "1.0.104"
 async-trait = "0.1.92"
@@ -15,10 +15,11 @@ axum = "0.8.9"
 bytes = "1.12.1"
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
-datafusion = "55.1.0"
+datafusion = "53.1.0"
 futures = "0.3.34"
 gloo-net = { version = "0.6.0", features = ["json"] }
 iceberg = "0.10.1"
+iceberg-catalog-rest = "0.10.1"
 iceberg-datafusion = "0.10.1"
 leptos = { version = "0.8.20", features = ["csr"] }
 leptos_router = "0.8.15"
