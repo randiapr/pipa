@@ -3,12 +3,13 @@
 
 rustfs_data := "rustfs-data"
 rustfs_alias := "pipa-local"
+logs_dir := "logs"
 
-# bring up rustfs, pipa-rest, and pipa-core in the background (ensuring the "pipa"
-# bucket exists via `rc` first), then run the dashboard dev server in the foreground.
-# Ctrl+C stops everything. Logs from the background services interleave in this
-# terminal since nothing is redirected — for isolated output use the individual
-# `just rustfs` / `just rest` / `just core` / `just ui` recipes in separate terminals.
+# bring up rustfs, pipa-backend, pipa-ingestion, and the dashboard dev server, all
+# detached in the background (ensuring the "pipa" bucket exists via `rc` first) — `up`
+# returns once everything is listening rather than blocking the terminal. Each service's
+# stdout/stderr goes to its own file under `{{logs_dir}}/`; tail them with
+# `just local::log`, stop everything with `just local::down`.
 up:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -26,19 +27,15 @@ up:
         exec 3<&- 3>&-
     }
 
-    cleaned_up=0
-    cleanup() {
-        [ "$cleaned_up" -eq 1 ] && return
-        cleaned_up=1
-        echo "stopping local stack..."
-        kill "$rustfs_pid" "$rest_pid" "$core_pid" 2>/dev/null || true
-        wait "$rustfs_pid" "$rest_pid" "$core_pid" 2>/dev/null || true
-    }
-    trap cleanup EXIT INT TERM
+    mkdir -p {{rustfs_data}} {{logs_dir}}
 
-    mkdir -p {{rustfs_data}}
-    rustfs server --console-enable --access-key rustfsadmin --secret-key rustfsadmin {{rustfs_data}} &
-    rustfs_pid=$!
+    # `nohup ... &` + `disown` detaches each service from this script's shell, so it
+    # keeps running (logging to its own file) after `up` itself exits — `nohup` stops it
+    # getting SIGHUP when the shell exits, `disown` drops it from the job table so the
+    # shell doesn't wait on it.
+    nohup rustfs server --console-enable --access-key rustfsadmin --secret-key rustfsadmin {{rustfs_data}} \
+        > {{logs_dir}}/rustfs.log 2>&1 &
+    disown
 
     echo "waiting for rustfs on :9000..."
     wait_for_port 9000
@@ -53,29 +50,40 @@ up:
     # each -p separately: two concurrent single-package `cargo run` invocations resolve
     # workspace feature unification differently than this combined build, which
     # invalidates and recompiles shared deps all over again.
-    cargo build -p pipa-rest -p pipa-core
+    cargo build -p pipa-backend -p pipa-ingestion
 
-    ./target/debug/pipa-rest &
-    rest_pid=$!
-    ./target/debug/pipa-core &
-    core_pid=$!
+    nohup ./target/debug/pipa-backend > {{logs_dir}}/backend.log 2>&1 &
+    disown
+    nohup ./target/debug/pipa-ingestion > {{logs_dir}}/ingestion.log 2>&1 &
+    disown
 
-    echo "waiting for pipa-rest on :8080..."
+    echo "waiting for pipa-backend on :8080..."
     wait_for_port 8080
 
-    cd crates/ui
-    [ -d node_modules ] || npm install
-    trunk serve
+    ( cd crates/ui
+      [ -d node_modules ] || npm install
+      nohup trunk serve > "../../{{logs_dir}}/ui.log" 2>&1 &
+      disown )
 
-# stop any local stack processes left running (fallback for when `up`'s Ctrl+C cleanup didn't run)
+    echo "waiting for dashboard on :3000..."
+    wait_for_port 3000
+
+    echo "local stack is up — logs: just local::log, stop: just local::down"
+
+# tail every service's log from the background stack `up` started (Ctrl+C just stops
+# tailing, it doesn't stop the services — use `just local::down` for that)
+log:
+    tail -n 100 -f {{logs_dir}}/*.log
+
+# stop any local stack processes left running
 down:
     #!/usr/bin/env bash
     set -uo pipefail
 
     patterns=(
         "rustfs server"
-        "target/debug/pipa-rest"
-        "target/debug/pipa-core"
+        "target/debug/pipa-backend"
+        "target/debug/pipa-ingestion"
         "trunk serve"
     )
 

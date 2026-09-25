@@ -1,0 +1,95 @@
+# Containerized equivalent of `just local::up` (see local.just). pipa-ui (the dashboard)
+# isn't included here: it's a static Trunk-built SPA, not a Rust service, so it doesn't
+# fit the distroless-binary pattern the other two do; run it separately with `just ui`
+# against pipa-backend's published port below.
+#
+# No Iceberg REST catalog service is included: apache/iceberg-rest-fixture (the
+# reference implementation's own dev/test image) is JVM-based, which this project
+# avoids, and its JVM-free replacement (e.g. lakekeeper) hasn't been wired in yet. Until
+# one is added, `POST /query` on pipa-backend has nothing to reach at
+# ICEBERG_CATALOG_URI and will fail.
+#
+# Quickstart: docker compose up --build
+
+services:
+  # S3-compatible object store backing both the Iceberg REST catalog's metadata files
+  # and pipa's own direct table data/metadata access (crates/storage/src/storage.rs).
+  rustfs:
+    image: rustfs/rustfs:1.0.0
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+    command: ["/data"]
+    volumes:
+      - rustfs-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: ensures the "pipa" bucket exists before anything tries to read/write it.
+  create-bucket:
+    image: rustfs/rustfs:1.0.0
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - >-
+        curl -sf -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user rustfsadmin:rustfsadmin
+        --head http://rustfs:9000/pipa ||
+        curl -sSf --aws-sigv4 aws:amz:us-east-1:s3 --user rustfsadmin:rustfsadmin
+        -X PUT http://rustfs:9000/pipa
+
+  pipa-backend:
+    build:
+      context: .
+      target: backend
+    depends_on:
+      rustfs:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_BUCKET: pipa
+      RUSTFS_REGION: us-east-1
+      RUSTFS_ACCESS_KEY_ID: rustfsadmin
+      RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
+      RUSTFS_ALLOW_HTTP: "true"
+      RUST_LOG: info
+    ports:
+      - "8080:8080"
+
+  # Standalone: no dependency on any other crate in this workspace (see the module doc on
+  # crates/ingestion/src/main.rs), so it's a separate `build.target` here rather than
+  # something wired through pipa-storage/pipa-backend. INGESTION_SHARD_COUNT stays 1 (a single
+  # instance handles every registered source) until this is actually scaled out; add more
+  # `pipa-ingestion` services here with distinct INGESTION_SHARD_INDEX values to do that.
+  pipa-ingestion:
+    build:
+      context: .
+      target: ingestion
+    depends_on:
+      rustfs:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_BUCKET: pipa
+      RUSTFS_REGION: us-east-1
+      RUSTFS_ACCESS_KEY_ID: rustfsadmin
+      RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
+      RUSTFS_ALLOW_HTTP: "true"
+      INGESTION_SHARD_INDEX: "0"
+      INGESTION_SHARD_COUNT: "1"
+      RUST_LOG: info
+
+volumes:
+  rustfs-data:

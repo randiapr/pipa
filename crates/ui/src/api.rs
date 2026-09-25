@@ -1,6 +1,6 @@
-//! HTTP client for the `pipa-rest` data source and project APIs.
+//! HTTP client for the `pipa-backend` data source and project APIs.
 //!
-//! This is the Model's I/O: it moves [`crate::model`] types to and from `pipa-rest` over
+//! This is the Model's I/O: it moves [`crate::model`] types to and from `pipa-backend` over
 //! HTTP and nothing else. It is called only from `crate::viewmodel` — views never reach
 //! into this module directly.
 
@@ -11,7 +11,7 @@ use crate::model::{
 };
 use serde::Deserialize;
 
-/// Base URL of the `pipa-rest` API. Defaults to the local dev server.
+/// Base URL of the `pipa-backend` API. Defaults to the local dev server.
 const API_BASE: &str = "http://localhost:8080";
 
 #[derive(Deserialize)]

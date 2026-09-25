@@ -2,7 +2,7 @@
 mod local
 
 # native crates only (pipa-ui targets wasm32 and is excluded)
-native := "-p pipa-core -p pipa-data -p pipa-rest"
+native := "-p pipa-backend -p pipa-ingestion -p pipa-storage"
 
 # local RustFS storage volume, rooted in the project so it's easy to find/wipe (gitignored)
 rustfs_data := "rustfs-data"
@@ -11,7 +11,7 @@ rustfs_data := "rustfs-data"
 default:
     just --list
 
-# check native crates (core, data, rest)
+# check native crates (backend, ingestion, storage)
 check:
     cargo check {{native}}
 
@@ -29,9 +29,10 @@ build:
 # run a local RustFS server (S3 API on :9000, console on :9001, data under ./rustfs-data)
 rustfs:
     # Credentials match the RUSTFS_ACCESS_KEY_ID/RUSTFS_SECRET_ACCESS_KEY defaults
-    # `pipa-data::ObjectStoreConfig::from_env()` uses, so `just core`/`just rest` connect
-    # with no extra setup. Still need the "pipa" bucket created once — see `rustfs-init`,
-    # or just use `just local::up`, which does both automatically.
+    # `pipa-storage::ObjectStoreConfig::from_env()` (and `pipa-ingestion`'s own duplicate of it)
+    # use, so `just ingestion`/`just backend` connect with no extra setup. Still need the "pipa"
+    # bucket created once — see `rustfs-init`, or just use `just local::up`, which does both
+    # automatically.
     mkdir -p {{rustfs_data}}
     rustfs server --console-enable --access-key rustfsadmin --secret-key rustfsadmin {{rustfs_data}}
 
@@ -41,12 +42,12 @@ rustfs-init:
     rc bucket create pipa-local/pipa --ignore-existing
 
 # run the CDC engine
-core:
-    cargo run -p pipa-core
+ingestion:
+    cargo run -p pipa-ingestion
 
-# run the REST API (serves on 0.0.0.0:8080, GET /healthz)
-rest:
-    cargo run -p pipa-rest
+# run the backend API (serves on 0.0.0.0:8080, GET /healthz)
+backend:
+    cargo run -p pipa-backend
 
 # install crates/ui's npm deps (daisyui) if node_modules is missing; a no-op otherwise
 ui-deps:

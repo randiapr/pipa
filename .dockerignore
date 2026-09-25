@@ -1,0 +1,8 @@
+target
+crates/ui/dist
+crates/ui/node_modules
+rustfs-data
+.git
+.env
+.env.*
+!.env.example
