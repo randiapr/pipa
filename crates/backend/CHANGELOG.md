@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.1] - 2026-09-26
+
+### Changed
+
+- `.env.example`'s `RUSTFS_REGION` default updated to `ap-southeast-3`, matching
+  `pipa-storage`/`pipa-ingestion`.
+
 ## [0.5.0] - 2026-09-25
 
 ### Changed

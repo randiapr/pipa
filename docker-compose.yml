@@ -1,7 +1,4 @@
-# Containerized equivalent of `just local::up` (see local.just). pipa-ui (the dashboard)
-# isn't included here: it's a static Trunk-built SPA, not a Rust service, so it doesn't
-# fit the distroless-binary pattern the other two do; run it separately with `just ui`
-# against pipa-backend's published port below.
+# Containerized equivalent of `just local::up` (see local.just).
 #
 # No Iceberg REST catalog service is included: apache/iceberg-rest-fixture (the
 # reference implementation's own dev/test image) is JVM-based, which this project
@@ -11,11 +8,25 @@
 #
 # Quickstart: docker compose up --build
 
+x-pipa-ingestion-build: &pipa-ingestion-build
+  context: .
+  target: ingestion
+
+x-pipa-ingestion-env: &pipa-ingestion-env
+  RUSTFS_ENDPOINT: http://rustfs:9000
+  RUSTFS_BUCKET: pipa
+  RUSTFS_REGION: ap-southeast-3
+  RUSTFS_ACCESS_KEY_ID: rustfsadmin
+  RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
+  RUSTFS_ALLOW_HTTP: "true"
+  INGESTION_SHARD_COUNT: "2"
+  RUST_LOG: info
+
 services:
   # S3-compatible object store backing both the Iceberg REST catalog's metadata files
   # and pipa's own direct table data/metadata access (crates/storage/src/storage.rs).
   rustfs:
-    image: rustfs/rustfs:1.0.0
+    image: rustfs/rustfs:latest
     environment:
       RUSTFS_ACCESS_KEY: rustfsadmin
       RUSTFS_SECRET_KEY: rustfsadmin
@@ -31,9 +42,33 @@ services:
       timeout: 5s
       retries: 5
 
+  # Example OLTP source for local CDC testing: register it as a data source via pipa-backend's
+  # /datasources API (or pipa-ui) pointing at postgres:5432, then pipa-ingestion picks it up on
+  # its own read of the shared object store (see crates/ingestion/src/datasource.rs). wal_level
+  # must be logical for PostgresWalSource's replication slot (crates/ingestion/src/capture/
+  # infrastructure/postgres) — the default "replica" won't support logical decoding.
+  example-source:
+    image: postgres:18.2-alpine
+    command: ["postgres", "-c", "wal_level=logical"]
+    environment:
+      POSTGRES_USER: pipa
+      POSTGRES_PASSWORD: pipa
+      POSTGRES_DB: testdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pipa -d testdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # One-shot: ensures the "pipa" bucket exists before anything tries to read/write it.
+  # rustfs/rc ships the `rc` CLI (RustFS's mc-equivalent, also used by `just rustfs-init`) —
+  # not curl — so this ensures the bucket the same way, rather than hand-rolling sigv4 requests.
   create-bucket:
-    image: rustfs/rustfs:1.0.0
+    image: rustfs/rc:latest
     depends_on:
       rustfs:
         condition: service_healthy
@@ -41,12 +76,10 @@ services:
     command:
       - -c
       - >-
-        curl -sf -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user rustfsadmin:rustfsadmin
-        --head http://rustfs:9000/pipa ||
-        curl -sSf --aws-sigv4 aws:amz:us-east-1:s3 --user rustfsadmin:rustfsadmin
-        -X PUT http://rustfs:9000/pipa
+        rc alias set pipa http://rustfs:9000 rustfsadmin rustfsadmin &&
+        rc bucket create pipa/pipa --ignore-existing
 
-  pipa-backend:
+  backend:
     build:
       context: .
       target: backend
@@ -58,7 +91,7 @@ services:
     environment:
       RUSTFS_ENDPOINT: http://rustfs:9000
       RUSTFS_BUCKET: pipa
-      RUSTFS_REGION: us-east-1
+      RUSTFS_REGION: ap-southeast-3
       RUSTFS_ACCESS_KEY_ID: rustfsadmin
       RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
       RUSTFS_ALLOW_HTTP: "true"
@@ -68,28 +101,49 @@ services:
 
   # Standalone: no dependency on any other crate in this workspace (see the module doc on
   # crates/ingestion/src/main.rs), so it's a separate `build.target` here rather than
-  # something wired through pipa-storage/pipa-backend. INGESTION_SHARD_COUNT stays 1 (a single
-  # instance handles every registered source) until this is actually scaled out; add more
-  # `pipa-ingestion` services here with distinct INGESTION_SHARD_INDEX values to do that.
-  pipa-ingestion:
-    build:
-      context: .
-      target: ingestion
+  # something wired through pipa-storage/pipa-backend. Distributed across INGESTION_SHARD_COUNT
+  # instances below (a Postgres replication slot only tolerates one consumer, so each source's
+  # id is statically partitioned by shard — see shard_of() in main.rs); bump the shared
+  # INGESTION_SHARD_COUNT anchor and add matching ingestion-N services to scale further.
+  # All shards share one `image:` tag, so compose builds pipa-ingestion once and every
+  # shard's container just runs it — not one build per shard.
+  ingestion-0:
+    image: pipa-ingestion
+    build: *pipa-ingestion-build
     depends_on:
       rustfs:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
     environment:
-      RUSTFS_ENDPOINT: http://rustfs:9000
-      RUSTFS_BUCKET: pipa
-      RUSTFS_REGION: us-east-1
-      RUSTFS_ACCESS_KEY_ID: rustfsadmin
-      RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
-      RUSTFS_ALLOW_HTTP: "true"
+      <<: *pipa-ingestion-env
       INGESTION_SHARD_INDEX: "0"
-      INGESTION_SHARD_COUNT: "1"
-      RUST_LOG: info
+
+  ingestion-1:
+    image: pipa-ingestion
+    build: *pipa-ingestion-build
+    depends_on:
+      rustfs:
+        condition: service_healthy
+      create-bucket:
+        condition: service_completed_successfully
+    environment:
+      <<: *pipa-ingestion-env
+      INGESTION_SHARD_INDEX: "1"
+
+  # Trunk-built wasm32 SPA (crates/ui/), served statically via nginx — see the `ui-builder`/
+  # `ui` stages in Dockerfile. It talks to `backend` from the browser at the compile-time
+  # API_BASE (localhost:8080, published above), not container-to-container, so `depends_on`
+  # here is just for a sane startup order, not a network dependency.
+  ui:
+    build:
+      context: .
+      target: ui
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
 
 volumes:
   rustfs-data:
+  postgres-data:

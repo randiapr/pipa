@@ -7,6 +7,10 @@ native := "-p pipa-backend -p pipa-ingestion -p pipa-storage"
 # local RustFS storage volume, rooted in the project so it's easy to find/wipe (gitignored)
 rustfs_data := "rustfs-data"
 
+# some machines only have the standalone `docker-compose` binary, not the `docker compose`
+# CLI plugin (e.g. no ~/.docker/cli-plugins/docker-compose) — detect which works, once
+compose := `docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose"`
+
 # list available recipes
 default:
     just --list
@@ -94,3 +98,15 @@ upgrade-ui: ui-deps
 clean:
     cargo clean
     rm -rf crates/ui/dist
+
+# bring up the containerized stack (docker-compose.yml), building images first
+docker-up:
+    {{compose}} up --build
+
+# tear down the containerized stack, leaving its volumes (rustfs-data, postgres-data) intact
+docker-down:
+    {{compose}} down
+
+# tear down the containerized stack AND delete its volumes — irreversible, wipes rustfs-data/postgres-data
+docker-down-clean:
+    {{compose}} down --volumes
