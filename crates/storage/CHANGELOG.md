@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.4.1] - 2026-09-26
+
+### Changed
+
+- `ObjectStoreConfig::from_env()`'s default `RUSTFS_REGION` fallback (used when the env var
+  isn't set) changed from `us-east-1` to `ap-southeast-3`; `.env.example` updated to match.
+
 ## [0.4.0] - 2026-09-25
 
 ### Changed
