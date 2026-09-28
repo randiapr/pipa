@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     let project_service = Arc::new(ProjectService::new(project_repository));
 
     let query_service = Arc::new(QueryService::new(
-        IcebergCatalogConfig::from_env(),
+        IcebergCatalogConfig::from_env(&store_config.endpoint),
         store_config,
     ));
 

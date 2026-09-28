@@ -50,8 +50,10 @@ toolchain needed — `pipa-ui` isn't included, it's a static SPA, not a Rust ser
 docker compose up --build
 ```
 
-`POST /query` won't work yet in either setup — there's no Iceberg REST catalog server wired
-in (see the note at the top of `docker-compose.yml`).
+`POST /query` talks to RustFS's own embedded Iceberg REST Catalog ("S3 Tables" feature) by
+default now, but that feature is opt-in per bucket — until the `pipa` bucket has S3 Tables
+enabled on it manually, `POST /query` will fail (see the note at the top of
+`docker-compose.yml`).
 
 ## Commands
 

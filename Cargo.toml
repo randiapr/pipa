@@ -17,12 +17,12 @@ console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
 datafusion = "53.1.0"
 futures = "0.3.34"
-gloo-net = { version = "0.6.0", features = ["json"] }
+gloo-net = { version = "0.7.0", features = ["json"] }
 iceberg = "0.10.1"
 iceberg-catalog-rest = "0.10.1"
 iceberg-datafusion = "0.10.1"
-leptos = { version = "0.8.20", features = ["csr"] }
-leptos_router = "0.8.15"
+leptos = { version = "0.8.21", features = ["csr"] }
+leptos_router = "0.8.16"
 log = "0.4.34"
 object_store = { version = "0.14.2", features = ["aws"] }
 pgwire-replication = "0.4.1"
@@ -36,4 +36,4 @@ tower-http = { version = "0.7.1", features = ["cors", "trace"] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
-wasm-bindgen = "0.2.128"
+wasm-bindgen = "0.2.129"
