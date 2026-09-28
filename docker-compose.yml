@@ -1,10 +1,11 @@
 # Containerized equivalent of `just local::up` (see local.just).
 #
-# No Iceberg REST catalog service is included: apache/iceberg-rest-fixture (the
-# reference implementation's own dev/test image) is JVM-based, which this project
-# avoids, and its JVM-free replacement (e.g. lakekeeper) hasn't been wired in yet. Until
-# one is added, `POST /query` on pipa-backend has nothing to reach at
-# ICEBERG_CATALOG_URI and will fail.
+# No separate Iceberg REST catalog service is included, and none is needed: RustFS itself
+# serves an Iceberg REST Catalog natively via its "S3 Tables" feature, at the same host/port
+# as its S3 API under an /iceberg path prefix. pipa-backend's ICEBERG_CATALOG_URI below
+# defaults to exactly that. The catch: S3 Tables is opt-in per bucket, and the exact RustFS/rc
+# CLI incantation to enable it isn't confirmed, so it is NOT automated by create-bucket here —
+# enable it manually on the "pipa" bucket first, or `POST /query` on pipa-backend will fail.
 #
 # Quickstart: docker compose up --build
 
@@ -95,6 +96,7 @@ services:
       RUSTFS_ACCESS_KEY_ID: rustfsadmin
       RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
       RUSTFS_ALLOW_HTTP: "true"
+      ICEBERG_CATALOG_URI: http://rustfs:9000/iceberg
       RUST_LOG: info
     ports:
       - "8080:8080"

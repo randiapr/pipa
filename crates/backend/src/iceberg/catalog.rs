@@ -13,7 +13,8 @@ use iceberg_catalog_rest::{
 use pipa_storage::ObjectStoreConfig;
 use serde::{Deserialize, Serialize};
 
-/// Connection settings for the Iceberg REST catalog backing CDC target tables.
+/// Connection settings for the Iceberg REST catalog backing CDC target tables. Defaults to
+/// RustFS's own embedded "S3 Tables" Iceberg REST Catalog rather than a separately-run service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IcebergCatalogConfig {
     pub name: String,
@@ -22,13 +23,16 @@ pub struct IcebergCatalogConfig {
 }
 
 impl IcebergCatalogConfig {
-    /// Reads connection settings from `ICEBERG_CATALOG_*` environment variables, falling back
-    /// to defaults suited to a local REST catalog dev instance.
-    pub fn from_env() -> Self {
+    /// Reads connection settings from `ICEBERG_CATALOG_*` environment variables. `uri` defaults to
+    /// `store_endpoint`'s own `/iceberg` path: RustFS's "S3 Tables" feature embeds an Iceberg REST
+    /// Catalog directly into the object store itself (same host/port as its S3 API), so no
+    /// separate catalog service needs to be run — see the note in docker-compose.yml about
+    /// enabling it per-bucket.
+    pub fn from_env(store_endpoint: &str) -> Self {
         Self {
             name: std::env::var("ICEBERG_CATALOG_NAME").unwrap_or_else(|_| "pipa".to_string()),
             uri: std::env::var("ICEBERG_CATALOG_URI")
-                .unwrap_or_else(|_| "http://localhost:8181".to_string()),
+                .unwrap_or_else(|_| format!("{}/iceberg", store_endpoint.trim_end_matches('/'))),
             warehouse: std::env::var("ICEBERG_CATALOG_WAREHOUSE")
                 .unwrap_or_else(|_| "pipa".to_string()),
         }
