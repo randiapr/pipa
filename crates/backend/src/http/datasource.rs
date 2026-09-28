@@ -13,11 +13,31 @@ use pipa_storage::datasource::{
     ConnectionTestOutcome, DataSource, DataSourceError, DataSourceId, DataSourceService,
     NewDataSource,
 };
+use serde::Serialize;
 use uuid::Uuid;
 
-use super::error::error_response;
+use super::error::{BaseResponse, Empty, MessageResponse, ResponseCode, error_response};
 
 type SharedDataSourceService = Arc<DataSourceService>;
+
+#[derive(Serialize)]
+struct DataSources {
+    datasources: Vec<DataSource>,
+}
+
+#[derive(Serialize)]
+struct DataSourceData {
+    datasource: DataSource,
+}
+
+#[derive(Serialize)]
+struct ConnectionTest {
+    connection_test: ConnectionTestOutcome,
+}
+
+type DataSourcesResponse = BaseResponse<DataSources>;
+type DataSourceResponse = BaseResponse<DataSourceData>;
+type ConnectionTestResponse = BaseResponse<ConnectionTest>;
 
 pub fn routes() -> Router<SharedDataSourceService> {
     Router::new()
@@ -34,38 +54,56 @@ pub fn routes() -> Router<SharedDataSourceService> {
 
 async fn list_datasources(
     State(service): State<SharedDataSourceService>,
-) -> Result<Json<Vec<DataSource>>, ApiError> {
-    Ok(Json(service.list().await?))
+) -> Result<Json<DataSourcesResponse>, ApiError> {
+    let datasources = service.list().await?;
+    Ok(Json(BaseResponse::new(
+        ResponseCode::Ok,
+        DataSources { datasources },
+    )))
 }
 
 async fn register_datasource(
     State(service): State<SharedDataSourceService>,
     Json(new_source): Json<NewDataSource>,
-) -> Result<(StatusCode, Json<DataSource>), ApiError> {
-    let source = service.register(new_source).await?;
-    Ok((StatusCode::CREATED, Json(source)))
+) -> Result<(StatusCode, Json<DataSourceResponse>), ApiError> {
+    let datasource = service.register(new_source).await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(BaseResponse::new(
+            ResponseCode::Created,
+            DataSourceData { datasource },
+        )),
+    ))
 }
 
 async fn get_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
-) -> Result<Json<DataSource>, ApiError> {
-    Ok(Json(service.get(DataSourceId(id)).await?))
+) -> Result<Json<DataSourceResponse>, ApiError> {
+    let datasource = service.get(DataSourceId(id)).await?;
+    Ok(Json(BaseResponse::new(
+        ResponseCode::Ok,
+        DataSourceData { datasource },
+    )))
 }
 
 async fn delete_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<MessageResponse>, ApiError> {
     service.remove(DataSourceId(id)).await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(BaseResponse::new(ResponseCode::Deleted, Empty {})))
 }
 
 async fn test_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
-) -> Result<Json<ConnectionTestOutcome>, ApiError> {
-    Ok(Json(service.test_connection(DataSourceId(id)).await?))
+) -> Result<Json<ConnectionTestResponse>, ApiError> {
+    let connection_test = service.test_connection(DataSourceId(id)).await?;
+    Ok(Json(BaseResponse::new(
+        ResponseCode::Ok,
+        ConnectionTest { connection_test },
+    )))
 }
 
 struct ApiError(DataSourceError);
@@ -78,11 +116,14 @@ impl From<DataSourceError> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status = match &self.0 {
-            DataSourceError::NotFound(_) => StatusCode::NOT_FOUND,
-            DataSourceError::InvalidField(_) => StatusCode::BAD_REQUEST,
-            DataSourceError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        let (status, code) = match &self.0 {
+            DataSourceError::NotFound(_) => (StatusCode::NOT_FOUND, ResponseCode::NotFound),
+            DataSourceError::InvalidField(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
+            DataSourceError::Storage(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseCode::InternalError,
+            ),
         };
-        error_response(status, self.0)
+        error_response(status, code, self.0)
     }
 }

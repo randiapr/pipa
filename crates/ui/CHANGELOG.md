@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.1] - 2026-09-28
+
+### Changed
+
+- `src/api.rs` updated to match `pipa-backend` 0.5.2's new response envelope: list/single
+  project and data source responses are now unwrapped from their `projects`/`project`/
+  `datasources`/`datasource`/`connection_test` envelope fields instead of being read as bare
+  JSON. No user-visible behavior change — purely an internal wire-format adjustment.
+
 ## [0.3.0] - 2026-09-24
 
 ### Added

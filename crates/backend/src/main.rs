@@ -55,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({
+        "response_code": 1000,
+        "response_message": "OK",
         "status": "ok",
         "version": env!("CARGO_PKG_VERSION"),
     }))
