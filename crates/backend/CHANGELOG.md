@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.2] - 2026-09-28
+
+### Changed
+
+- **Every response body now follows a shared `{response_code, response_message, ...}`
+  envelope**: list endpoints nest their array under a plural resource key (e.g.
+  `GET /projects` → `{..., "projects": [...]}`), single-resource endpoints nest under the
+  singular key (e.g. `{..., "project": {...}}`), `/datasources/{id}/test` nests under
+  `connection_test`, `POST /query` nests result rows under `rows`, and `/healthz` gains the
+  same `response_code`/`response_message` pair flattened alongside its existing fields.
+  `response_code` is an application-level code from a new global registry, independent of
+  the real HTTP status still sent on the wire (e.g. a `404` can carry `response_code: 2001`).
+- Error bodies are now `{response_code, response_message, error}` instead of `{"error": ...}`.
+- **`DELETE /projects/{id}` and `DELETE /datasources/{id}` now return `200` with
+  `{response_code, response_message}`** instead of `204 No Content` — a body is now always
+  present, so the delete confirmation is no longer distinguished by an empty response.
+
 ## [0.5.1] - 2026-09-26
 
 ### Changed

@@ -5,15 +5,15 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::State,
-    http::{StatusCode, header},
+    http::StatusCode,
     response::{IntoResponse, Response},
     routing::post,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::iceberg::{QueryError, QueryService};
 
-use super::error::error_response;
+use super::error::{BaseResponse, ResponseCode, error_response};
 
 type SharedQueryService = Arc<QueryService>;
 
@@ -26,20 +26,25 @@ struct QueryRequest {
     sql: String,
 }
 
+#[derive(Serialize)]
+struct Rows {
+    rows: serde_json::Value,
+}
+
+type RowsResponse = BaseResponse<Rows>;
+
 /// Runs `sql` via DataFusion against the Iceberg tables the REST catalog exposes, returning the
-/// result rows as a raw JSON array — not wrapped in `Json<T>`, since the body is already the
-/// JSON bytes `QueryService` encoded from the Arrow result batches.
+/// result rows under the `rows` field of the shared envelope. `QueryService` hands back its
+/// result already JSON-encoded as bytes (from the Arrow result batches), so those are parsed
+/// back into a `serde_json::Value` here to nest under `rows`.
 async fn run_query(
     State(service): State<SharedQueryService>,
     Json(request): Json<QueryRequest>,
-) -> Result<Response, ApiError> {
+) -> Result<Json<RowsResponse>, ApiError> {
     let body = service.query(&request.sql).await?;
-    Ok((
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "application/json")],
-        body,
-    )
-        .into_response())
+    let rows: serde_json::Value =
+        serde_json::from_slice(&body).expect("QueryService always encodes a valid JSON array");
+    Ok(Json(BaseResponse::new(ResponseCode::Ok, Rows { rows })))
 }
 
 struct ApiError(QueryError);
@@ -52,11 +57,14 @@ impl From<QueryError> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status = match &self.0 {
-            QueryError::Catalog(_) => StatusCode::BAD_GATEWAY,
-            QueryError::Execution(_) => StatusCode::BAD_REQUEST,
-            QueryError::Encoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        let (status, code) = match &self.0 {
+            QueryError::Catalog(_) => (StatusCode::BAD_GATEWAY, ResponseCode::UpstreamError),
+            QueryError::Execution(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
+            QueryError::Encoding(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ResponseCode::InternalError,
+            ),
         };
-        error_response(status, self.0)
+        error_response(status, code, self.0)
     }
 }

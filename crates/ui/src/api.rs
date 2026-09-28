@@ -16,7 +16,36 @@ const API_BASE: &str = "http://localhost:8080";
 
 #[derive(Deserialize)]
 struct ErrorBody {
+    #[allow(dead_code)]
+    response_code: u32,
+    #[allow(dead_code)]
+    response_message: String,
     error: String,
+}
+
+#[derive(Deserialize)]
+struct DataSourcesEnvelope {
+    datasources: Vec<DataSourceView>,
+}
+
+#[derive(Deserialize)]
+struct DataSourceEnvelope {
+    datasource: DataSourceView,
+}
+
+#[derive(Deserialize)]
+struct ConnectionTestEnvelope {
+    connection_test: ConnectionTestOutcome,
+}
+
+#[derive(Deserialize)]
+struct ProjectsEnvelope {
+    projects: Vec<ProjectView>,
+}
+
+#[derive(Deserialize)]
+struct ProjectEnvelope {
+    project: ProjectView,
 }
 
 async fn error_message(response: Response) -> String {
@@ -35,8 +64,9 @@ pub async fn list_sources() -> Result<Vec<DataSourceView>, String> {
         return Err(error_message(response).await);
     }
     response
-        .json::<Vec<DataSourceView>>()
+        .json::<DataSourcesEnvelope>()
         .await
+        .map(|envelope| envelope.datasources)
         .map_err(|err| err.to_string())
 }
 
@@ -51,8 +81,9 @@ pub async fn register_source(new_source: &NewDataSource) -> Result<DataSourceVie
         return Err(error_message(response).await);
     }
     response
-        .json::<DataSourceView>()
+        .json::<DataSourceEnvelope>()
         .await
+        .map(|envelope| envelope.datasource)
         .map_err(|err| err.to_string())
 }
 
@@ -76,8 +107,9 @@ pub async fn test_source(id: &str) -> Result<ConnectionTestOutcome, String> {
         return Err(error_message(response).await);
     }
     response
-        .json::<ConnectionTestOutcome>()
+        .json::<ConnectionTestEnvelope>()
         .await
+        .map(|envelope| envelope.connection_test)
         .map_err(|err| err.to_string())
 }
 
@@ -90,8 +122,9 @@ pub async fn list_projects() -> Result<Vec<ProjectView>, String> {
         return Err(error_message(response).await);
     }
     response
-        .json::<Vec<ProjectView>>()
+        .json::<ProjectsEnvelope>()
         .await
+        .map(|envelope| envelope.projects)
         .map_err(|err| err.to_string())
 }
 
@@ -106,8 +139,9 @@ pub async fn register_project(new_project: &NewProject) -> Result<ProjectView, S
         return Err(error_message(response).await);
     }
     response
-        .json::<ProjectView>()
+        .json::<ProjectEnvelope>()
         .await
+        .map(|envelope| envelope.project)
         .map_err(|err| err.to_string())
 }
 
@@ -122,8 +156,9 @@ pub async fn update_project(id: &str, update: &ProjectUpdate) -> Result<ProjectV
         return Err(error_message(response).await);
     }
     response
-        .json::<ProjectView>()
+        .json::<ProjectEnvelope>()
         .await
+        .map(|envelope| envelope.project)
         .map_err(|err| err.to_string())
 }
 
