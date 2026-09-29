@@ -1,9 +1,9 @@
 //! Reads registered OLTP data sources back out of the shared RustFS/S3 object store.
 //!
-//! Deliberately duplicated (not imported) from `pipa-storage::datasource`: `pipa-ingestion` only
+//! Deliberately duplicated (not imported) from `pipa-backend::datasource`: `pipa-ingestion` only
 //! ever reads what `pipa-backend` writes there, via the same JSON-under-`datasources/` layout, so
 //! it needs just enough of the shape to deserialize it — not the write path, validation, or
-//! the `DataSourceRepository` port abstraction pipa-storage's side maintains for that.
+//! the `DataSourceRepository` port abstraction pipa-backend's side maintains for that.
 
 use futures::StreamExt;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};

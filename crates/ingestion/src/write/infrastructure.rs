@@ -5,7 +5,7 @@
 //! Reimplements (rather than imports) the catalog-access pattern `pipa-backend`'s own
 //! `crates/backend/src/iceberg/catalog.rs` uses — see the root `CLAUDE.md`'s note on why
 //! `pipa-ingestion` keeps its own independent copy of the `iceberg`/`iceberg-catalog-rest`
-//! dependency rather than sharing one through `pipa-storage`/`pipa-backend`.
+//! dependency rather than sharing one through `pipa-backend`.
 
 use std::collections::HashMap;
 use std::sync::Arc;

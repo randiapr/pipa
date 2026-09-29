@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.3] - 2026-09-29
+
+### Changed
+
+- **Merged the `pipa-storage` crate into this one.** Its `datasource`, `project` and
+  `storage` (`ObjectStoreConfig`) modules now live directly under `crates/backend/src/`
+  (as `crate::datasource`, `crate::project`, `crate::storage`), keeping the same
+  clean-architecture split; `pipa-storage` (last version 0.4.1) no longer exists as a
+  workspace member. No HTTP-facing or env-var behavior changes. `pipa-ingestion` was
+  already independent of it and is unaffected.
+- Dropped the now-unused `DbEngine::default_port` (only `pipa-ui`'s own copy uses it) and
+  trimmed re-exports that only made sense for a library crate.
+
 ## [0.5.2] - 2026-09-28
 
 ### Changed

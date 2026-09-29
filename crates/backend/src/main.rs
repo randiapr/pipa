@@ -1,23 +1,24 @@
 //! Axum REST API exposing DataFusion/Iceberg query access, plus OLTP data source and project
 //! management consumed by the `pipa-ui` dashboard. `pipa-ingestion` reads the same registered
 //! data sources back out of the shared object store (via its own standalone duplicate of this
-//! read path, not a dependency on `pipa-storage`) to drive CDC capture.
+//! read path, not a dependency on this crate) to drive CDC capture.
 
+mod datasource;
 mod http;
 mod iceberg;
+mod project;
+mod storage;
 
 use std::sync::Arc;
 
 use axum::{Json, Router, routing::get};
-use iceberg::{IcebergCatalogConfig, QueryService};
-use pipa_storage::{
-    ObjectStoreConfig,
-    datasource::{
-        DataSourceService,
-        infrastructure::{ObjectStoreDataSourceRepository, SqlxConnectionTester},
-    },
-    project::{ProjectService, infrastructure::ObjectStoreProjectRepository},
+use datasource::{
+    DataSourceService,
+    infrastructure::{ObjectStoreDataSourceRepository, SqlxConnectionTester},
 };
+use iceberg::{IcebergCatalogConfig, QueryService};
+use project::{ProjectService, infrastructure::ObjectStoreProjectRepository};
+use storage::ObjectStoreConfig;
 use tower_http::cors::CorsLayer;
 
 #[tokio::main]

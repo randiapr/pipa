@@ -2,15 +2,13 @@
 
 use std::sync::Arc;
 
+use crate::project::{NewProject, Project, ProjectError, ProjectId, ProjectService, ProjectUpdate};
 use axum::{
     Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
-};
-use pipa_storage::project::{
-    NewProject, Project, ProjectError, ProjectId, ProjectService, ProjectUpdate,
 };
 use serde::Serialize;
 use uuid::Uuid;

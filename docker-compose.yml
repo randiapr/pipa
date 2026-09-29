@@ -29,7 +29,7 @@ x-pipa-ingestion-env: &pipa-ingestion-env
 
 services:
   # S3-compatible object store backing both the Iceberg REST catalog's metadata files
-  # and pipa's own direct table data/metadata access (crates/storage/src/storage.rs).
+  # and pipa's own direct table data/metadata access (crates/backend/src/storage.rs).
   rustfs:
     image: rustfs/rustfs:latest
     environment:
@@ -107,7 +107,7 @@ services:
 
   # Standalone: no dependency on any other crate in this workspace (see the module doc on
   # crates/ingestion/src/main.rs), so it's a separate `build.target` here rather than
-  # something wired through pipa-storage/pipa-backend — it keeps its own independent copy of
+  # something wired through pipa-backend — it keeps its own independent copy of
   # the iceberg/iceberg-catalog-rest dependency (crates/ingestion/src/write/) to land captured
   # changes as changelog rows, separate from pipa-backend's own copy used for querying.
   # Distributed across INGESTION_SHARD_COUNT instances below (a Postgres replication slot only

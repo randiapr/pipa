@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
+use crate::storage::ObjectStoreConfig;
 use datafusion::arrow::json::writer::ArrayWriter;
 use datafusion::prelude::SessionContext;
 use iceberg_datafusion::IcebergCatalogProvider;
-use pipa_storage::ObjectStoreConfig;
 use thiserror::Error;
 
 use super::catalog::IcebergCatalogConfig;

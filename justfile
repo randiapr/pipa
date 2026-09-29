@@ -2,7 +2,7 @@
 mod local
 
 # native crates only (pipa-ui targets wasm32 and is excluded)
-native := "-p pipa-backend -p pipa-ingestion -p pipa-storage"
+native := "-p pipa-backend -p pipa-ingestion"
 
 # local RustFS storage volume, rooted in the project so it's easy to find/wipe (gitignored)
 rustfs_data := "rustfs-data"
@@ -15,7 +15,7 @@ compose := `docker compose version >/dev/null 2>&1 && echo "docker compose" || e
 default:
     just --list
 
-# check native crates (backend, ingestion, storage)
+# check native crates (backend, ingestion)
 check:
     cargo check {{native}}
 
@@ -33,7 +33,7 @@ build:
 # run a local RustFS server (S3 API on :9000, console on :9001, data under ./rustfs-data)
 rustfs:
     # Credentials match the RUSTFS_ACCESS_KEY_ID/RUSTFS_SECRET_ACCESS_KEY defaults
-    # `pipa-storage::ObjectStoreConfig::from_env()` (and `pipa-ingestion`'s own duplicate of it)
+    # `pipa-backend`'s `ObjectStoreConfig::from_env()` (and `pipa-ingestion`'s own duplicate of it)
     # use, so `just ingestion`/`just backend` connect with no extra setup. Still need the "pipa"
     # bucket created once — see `rustfs-init`, or just use `just local::up`, which does both
     # automatically.

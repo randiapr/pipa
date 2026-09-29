@@ -6,7 +6,7 @@
 //! - [`infrastructure`] — the concrete adapter, [`infrastructure::IcebergChangelogWriter`], on
 //!   `iceberg`/`iceberg-catalog-rest` — a second, independent copy of that dependency from
 //!   `pipa-backend`'s own `src/iceberg/` (kept separate deliberately; see the root
-//!   `CLAUDE.md`'s notes on why `pipa-ingestion` never depends on `pipa-storage`/
+//!   `CLAUDE.md`'s notes on why `pipa-ingestion` never depends on
 //!   `pipa-backend`).
 //!
 //! Driven by [`crate::capture::application::CaptureOrchestrator`], which owns batching,

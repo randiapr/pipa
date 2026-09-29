@@ -13,7 +13,4 @@ pub mod domain;
 pub mod infrastructure;
 
 pub use application::DataSourceService;
-pub use domain::{
-    ConnectionConfig, ConnectionTestOutcome, ConnectionTester, DataSource, DataSourceError,
-    DataSourceId, DataSourceRepository, DbEngine, NewDataSource,
-};
+pub use domain::{ConnectionTestOutcome, DataSource, DataSourceError, DataSourceId, NewDataSource};

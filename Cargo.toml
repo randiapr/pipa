@@ -1,14 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/backend", "crates/ingestion", "crates/storage", "crates/ui"]
+members = ["crates/backend", "crates/ingestion", "crates/ui"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 
 [workspace.dependencies]
-pipa-storage = { path = "crates/storage" }
-
 anyhow = "1.0.104"
 arrow-array = "58.4.0"
 arrow-schema = "58.4.0"
