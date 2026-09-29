@@ -4,6 +4,9 @@ mod local
 # native crates only (pipa-ui targets wasm32 and is excluded)
 native := "-p pipa-backend -p pipa-ingestion"
 
+# soft cap (GiB) on target/ — build recipes trim it back under this before compiling (see `_target-guard`)
+target_limit_gb := "10"
+
 # local RustFS storage volume, rooted in the project so it's easy to find/wipe (gitignored)
 rustfs_data := "rustfs-data"
 
@@ -15,19 +18,43 @@ compose := `docker compose version >/dev/null 2>&1 && echo "docker compose" || e
 default:
     just --list
 
+# keep target/ under `target_limit_gb`: first drop incremental caches (usually the biggest
+# chunk, and cheap to regenerate), then fall back to a full `cargo clean` if still over.
+# Runs as a dependency of every recipe that compiles, so target/ can't silently balloon.
+_target-guard:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -d target ] || exit 0
+    limit_kb=$(({{target_limit_gb}} * 1024 * 1024))
+    size_kb() { du -sk target | cut -f1; }
+    gib() { awk -v kb="$1" 'BEGIN { printf "%.1f", kb / 1024 / 1024 }'; }
+    used_kb=$(size_kb)
+    [ "$used_kb" -le "$limit_kb" ] && exit 0
+    echo "target/ is $(gib "$used_kb")GiB (limit {{target_limit_gb}}GiB) — removing incremental caches"
+    rm -rf target/*/incremental
+    used_kb=$(size_kb)
+    [ "$used_kb" -le "$limit_kb" ] && exit 0
+    echo "still $(gib "$used_kb")GiB — running cargo clean"
+    cargo clean
+
+# show how big target/ is against the limit
+target-size:
+    @du -sh target 2>/dev/null || echo "target/ does not exist"
+    @echo "limit: {{target_limit_gb}}GiB"
+
 # check native crates (backend, ingestion)
-check:
+check: _target-guard
     cargo check {{native}}
 
 # check the ui crate against wasm32
-check-ui:
+check-ui: _target-guard
     cargo check -p pipa-ui --target wasm32-unknown-unknown
 
 # check everything
 check-all: check check-ui
 
 # build native crates
-build:
+build: _target-guard
     cargo build {{native}}
 
 # run a local RustFS server (S3 API on :9000, console on :9001, data under ./rustfs-data)
@@ -46,11 +73,11 @@ rustfs-init:
     rc bucket create pipa-local/pipa --ignore-existing
 
 # run the CDC engine
-ingestion:
+ingestion: _target-guard
     cargo run -p pipa-ingestion
 
 # run the backend API (serves on 0.0.0.0:8080, GET /healthz)
-backend:
+backend: _target-guard
     cargo run -p pipa-backend
 
 # install crates/ui's npm deps (daisyui) if node_modules is missing; a no-op otherwise
@@ -58,15 +85,15 @@ ui-deps:
     cd crates/ui && [ -d node_modules ] || npm install
 
 # run the dashboard dev server
-ui: ui-deps
+ui: _target-guard ui-deps
     cd crates/ui && trunk serve
 
 # production build of the dashboard
-build-ui: ui-deps
+build-ui: _target-guard ui-deps
     cd crates/ui && trunk build
 
 # run tests for native crates
-test:
+test: _target-guard
     cargo test {{native}}
 
 # format all crates
@@ -74,7 +101,7 @@ fmt:
     cargo fmt --all
 
 # lint native crates
-clippy:
+clippy: _target-guard
     cargo clippy {{native}} -- -D warnings
 
 # check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
