@@ -1,174 +1,97 @@
 //! HTTP client for the `pipa-backend` data source and project APIs.
 //!
-//! This is the Model's I/O: it moves [`crate::model`] types to and from `pipa-backend` over
+//! This is the Model's I/O: it moves [`pipa_api`] contract types to and from `pipa-backend` over
 //! HTTP and nothing else. It is called only from `crate::viewmodel` — views never reach
 //! into this module directly.
 
+use gloo_net::Error as NetError;
 use gloo_net::http::{Request, Response};
-
-use crate::model::{
-    ConnectionTestOutcome, DataSourceView, NewDataSource, NewProject, ProjectUpdate, ProjectView,
+use pipa_api::{
+    ConnectionTestOutcome, ConnectionTestResponse, DataSourceResponse, DataSourceView,
+    DataSourcesResponse, ErrorResponse, NewDataSource, NewProject, ProjectResponse, ProjectUpdate,
+    ProjectView, ProjectsResponse, path,
 };
-use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
 /// Base URL of the `pipa-backend` API. Defaults to the local dev server.
 const API_BASE: &str = "http://localhost:8080";
 
-#[derive(Deserialize)]
-struct ErrorBody {
-    #[allow(dead_code)]
-    response_code: u32,
-    #[allow(dead_code)]
-    response_message: String,
-    error: String,
-}
-
-#[derive(Deserialize)]
-struct DataSourcesEnvelope {
-    datasources: Vec<DataSourceView>,
-}
-
-#[derive(Deserialize)]
-struct DataSourceEnvelope {
-    datasource: DataSourceView,
-}
-
-#[derive(Deserialize)]
-struct ConnectionTestEnvelope {
-    connection_test: ConnectionTestOutcome,
-}
-
-#[derive(Deserialize)]
-struct ProjectsEnvelope {
-    projects: Vec<ProjectView>,
-}
-
-#[derive(Deserialize)]
-struct ProjectEnvelope {
-    project: ProjectView,
+fn url(path: &str) -> String {
+    format!("{API_BASE}{path}")
 }
 
 async fn error_message(response: Response) -> String {
-    match response.json::<ErrorBody>().await {
-        Ok(body) => body.error,
+    match response.json::<ErrorResponse>().await {
+        Ok(body) => body.body.error,
         Err(_) => format!("request failed with status {}", response.status()),
     }
 }
 
-pub async fn list_sources() -> Result<Vec<DataSourceView>, String> {
-    let response = Request::get(&format!("{API_BASE}/datasources"))
+/// Sends the request `build`/`json` produced, turning a non-2xx status into the backend's
+/// `error` message and otherwise decoding the body as `T`.
+async fn send<T: DeserializeOwned>(request: Result<Request, NetError>) -> Result<T, String> {
+    let response = request
+        .map_err(|err| err.to_string())?
         .send()
         .await
         .map_err(|err| err.to_string())?;
     if !response.ok() {
         return Err(error_message(response).await);
     }
-    response
-        .json::<DataSourcesEnvelope>()
+    response.json::<T>().await.map_err(|err| err.to_string())
+}
+
+/// Like [`send`], for responses whose body carries nothing beyond the envelope.
+async fn send_discard(request: Result<Request, NetError>) -> Result<(), String> {
+    let response = request
+        .map_err(|err| err.to_string())?
+        .send()
         .await
-        .map(|envelope| envelope.datasources)
-        .map_err(|err| err.to_string())
+        .map_err(|err| err.to_string())?;
+    if !response.ok() {
+        return Err(error_message(response).await);
+    }
+    Ok(())
+}
+
+pub async fn list_sources() -> Result<Vec<DataSourceView>, String> {
+    let response: DataSourcesResponse = send(Request::get(&url(path::DATASOURCES)).build()).await?;
+    Ok(response.body.datasources)
 }
 
 pub async fn register_source(new_source: &NewDataSource) -> Result<DataSourceView, String> {
-    let response = Request::post(&format!("{API_BASE}/datasources"))
-        .json(new_source)
-        .map_err(|err| err.to_string())?
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    response
-        .json::<DataSourceEnvelope>()
-        .await
-        .map(|envelope| envelope.datasource)
-        .map_err(|err| err.to_string())
+    let request = Request::post(&url(path::DATASOURCES)).json(new_source);
+    let response: DataSourceResponse = send(request).await?;
+    Ok(response.body.datasource)
 }
 
 pub async fn delete_source(id: &str) -> Result<(), String> {
-    let response = Request::delete(&format!("{API_BASE}/datasources/{id}"))
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    Ok(())
+    send_discard(Request::delete(&url(&path::datasource(id))).build()).await
 }
 
 pub async fn test_source(id: &str) -> Result<ConnectionTestOutcome, String> {
-    let response = Request::post(&format!("{API_BASE}/datasources/{id}/test"))
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    response
-        .json::<ConnectionTestEnvelope>()
-        .await
-        .map(|envelope| envelope.connection_test)
-        .map_err(|err| err.to_string())
+    let response: ConnectionTestResponse =
+        send(Request::post(&url(&path::datasource_test(id))).build()).await?;
+    Ok(response.body.connection_test)
 }
 
 pub async fn list_projects() -> Result<Vec<ProjectView>, String> {
-    let response = Request::get(&format!("{API_BASE}/projects"))
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    response
-        .json::<ProjectsEnvelope>()
-        .await
-        .map(|envelope| envelope.projects)
-        .map_err(|err| err.to_string())
+    let response: ProjectsResponse = send(Request::get(&url(path::PROJECTS)).build()).await?;
+    Ok(response.body.projects)
 }
 
 pub async fn register_project(new_project: &NewProject) -> Result<ProjectView, String> {
-    let response = Request::post(&format!("{API_BASE}/projects"))
-        .json(new_project)
-        .map_err(|err| err.to_string())?
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    response
-        .json::<ProjectEnvelope>()
-        .await
-        .map(|envelope| envelope.project)
-        .map_err(|err| err.to_string())
+    let request = Request::post(&url(path::PROJECTS)).json(new_project);
+    let response: ProjectResponse = send(request).await?;
+    Ok(response.body.project)
 }
 
 pub async fn update_project(id: &str, update: &ProjectUpdate) -> Result<ProjectView, String> {
-    let response = Request::put(&format!("{API_BASE}/projects/{id}"))
-        .json(update)
-        .map_err(|err| err.to_string())?
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    response
-        .json::<ProjectEnvelope>()
-        .await
-        .map(|envelope| envelope.project)
-        .map_err(|err| err.to_string())
+    let request = Request::put(&url(&path::project(id))).json(update);
+    let response: ProjectResponse = send(request).await?;
+    Ok(response.body.project)
 }
 
 pub async fn delete_project(id: &str) -> Result<(), String> {
-    let response = Request::delete(&format!("{API_BASE}/projects/{id}"))
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(error_message(response).await);
-    }
-    Ok(())
+    send_discard(Request::delete(&url(&path::project(id))).build()).await
 }

@@ -1,8 +1,8 @@
 # local dev stack orchestration (`just local::up` brings up everything at once)
 mod local
 
-# native crates only (pipa-ui targets wasm32 and is excluded)
-native := "-p pipa-backend -p pipa-ingestion"
+# native crates only (pipa-ui targets wasm32 and is excluded; pipa-api also builds for wasm32 via pipa-ui)
+native := "-p pipa-api -p pipa-backend -p pipa-ingestion"
 
 # soft cap (GiB) on target/ — build recipes trim it back under this before compiling (see `_target-guard`)
 target_limit_gb := "10"

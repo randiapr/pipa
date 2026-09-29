@@ -1,8 +1,8 @@
 //! Dashboard for setting up and connecting OLTP databases to pipa CDC pipelines.
 //!
 //! Organized as MVVM:
-//! - [`model`] — wire/domain types shared between the API client and the views.
-//! - [`api`] — the HTTP client talking to `pipa-backend`; the Model's I/O.
+//! - [`api`] — the HTTP client talking to `pipa-backend`; the Model's I/O. Its request/response
+//!   types come from the `pipa-api` contract crate shared with the backend.
 //! - [`viewmodel`] — reactive state (`RwSignal`s) plus the commands that mutate it; the only
 //!   layer that calls `api`.
 //! - [`view`] — Leptos components that render from a ViewModel's signals and call its
@@ -10,7 +10,6 @@
 //!   directly.
 
 mod api;
-mod model;
 mod view;
 mod viewmodel;
 

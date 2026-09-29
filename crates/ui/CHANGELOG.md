@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.2] - 2026-09-29
+
+### Changed
+
+- **`src/api.rs` and the viewmodels/views now use the `pipa-api` contract crate** for every
+  request/response type and route path; `src/model.rs` (a hand-maintained mirror of the
+  backend's wire types) is removed. `src/api.rs` also shares `send`/`send_discard` helpers
+  across endpoints. No user-visible behavior change.
+- `DbEngine::Mysql` is now `DbEngine::MySql`, matching the contract crate.
+
 ## [0.3.1] - 2026-09-28
 
 ### Changed

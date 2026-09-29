@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.4] - 2026-09-29
+
+### Changed
+
+- **Request/response types and route paths now come from the new `pipa-api` contract crate**
+  (shared with `pipa-ui`) instead of route-local structs. `src/http/convert.rs` maps between
+  those wire types and the domain types; the domain layer is unchanged. The response envelope
+  (`BaseResponse`, `ResponseCode`) moved into `pipa-api`.
+- `POST /datasources` with a malformed `project_id` now returns `400` with the standard error
+  envelope instead of axum's `422` JSON-rejection response.
+
 ## [0.5.3] - 2026-09-29
 
 ### Changed

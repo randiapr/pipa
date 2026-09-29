@@ -5,8 +5,8 @@
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
+use pipa_api::{ConnectionTestOutcome, DataSourceView, DbEngine};
 
-use crate::model::{ConnectionTestOutcome, DataSourceView, DbEngine};
 use crate::view::Pagination;
 use crate::viewmodel::SourcesViewModel;
 
@@ -151,10 +151,10 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                         <legend class="fieldset-legend">"Engine"</legend>
                         <select
                             class="select w-full"
-                            prop:value=move || vm.engine.get().wire_value()
+                            prop:value=move || vm.engine.get().as_str()
                             on:change:target=move |ev| {
                                 let value = ev.target().value();
-                                vm.engine.set(if value == "mysql" { DbEngine::Mysql } else { DbEngine::Postgres });
+                                vm.engine.set(if value == "mysql" { DbEngine::MySql } else { DbEngine::Postgres });
                             }
                         >
                             <option value="postgres">"PostgreSQL"</option>
@@ -306,7 +306,7 @@ fn SourceRow(
             <td>
                 <strong>{source.name.clone()}</strong>
             </td>
-            <td>{source.engine.label()}</td>
+            <td>{engine_label(source.engine)}</td>
             <td>
                 {format!(
                     "{}:{}/{}",
@@ -365,5 +365,12 @@ fn SourceRow(
                 </div>
             </td>
         </tr>
+    }
+}
+
+fn engine_label(engine: DbEngine) -> &'static str {
+    match engine {
+        DbEngine::Postgres => "PostgreSQL",
+        DbEngine::MySql => "MySQL",
     }
 }
