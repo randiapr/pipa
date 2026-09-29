@@ -59,6 +59,24 @@ pub enum CaptureError {
     Decode(String),
     #[error("data source read error: {0}")]
     Stream(String),
+    #[error("failed to read back or confirm a source's Iceberg checkpoint: {0}")]
+    Checkpoint(String),
+}
+
+/// A running change stream: the events themselves, plus a back-channel the caller uses to
+/// report how far it has durably persisted.
+///
+/// Decoupling "advance the source's own checkpoint" (e.g. a Postgres replication slot's
+/// `confirmed_flush_lsn`) from decoding is what makes exactly-once (in practice,
+/// effectively-once) delivery possible: an adapter must never treat an event as consumed until
+/// the caller sends its position — or a later one — on [`ChangeStream::confirm`]. See
+/// [`crate::capture::application::CaptureOrchestrator`], which owns computing a safe confirm
+/// floor across every table a batch of events fans out to.
+pub struct ChangeStream {
+    pub events: mpsc::Receiver<Result<ChangeEvent, CaptureError>>,
+    /// Send the highest position durably persisted so far; the adapter advances the source's
+    /// checkpoint only in response, never on decode.
+    pub confirm: mpsc::Sender<String>,
 }
 
 /// Port: streams row-level changes out of an OLTP data source's change log (WAL, binlog, …).
@@ -68,8 +86,14 @@ pub enum CaptureError {
 /// implement without pinning/boxing — the same shape a Debezium-style connector uses.
 #[async_trait]
 pub trait CdcSource: Send + Sync {
+    /// `resume_from`, when `Some`, is the last position the caller durably committed for
+    /// every target this source's stream feeds — read back out of Iceberg itself (see
+    /// [`crate::write::domain::IcebergWriter::last_committed_position`]), not a separate
+    /// checkpoint store. `None` means start from the source's own default (e.g. wherever a
+    /// freshly created Postgres replication slot naturally begins).
     async fn stream_changes(
         &self,
         source: &DataSource,
-    ) -> Result<mpsc::Receiver<Result<ChangeEvent, CaptureError>>, CaptureError>;
+        resume_from: Option<&str>,
+    ) -> Result<ChangeStream, CaptureError>;
 }

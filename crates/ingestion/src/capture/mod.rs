@@ -5,13 +5,15 @@
 //!   port infrastructure adapters implement.
 //! - [`infrastructure`] — one adapter per OLTP engine (currently `PostgresWalSource`; a
 //!   MySQL binlog adapter follows the same shape).
-//!
-//! There's no `application` layer yet: `main.rs` drives `CdcSource` directly. Once captured
-//! changes are actually written into Iceberg, that orchestration (picking the adapter for a
-//! source's `DbEngine`, checkpointing position, retrying) belongs in one.
+//! - [`application`] — `CaptureOrchestrator`, which drives a `CdcSource` and
+//!   [`crate::write::IcebergWriter`] together: batching, per-table dedup, and confirming
+//!   consumed positions back to the adapter only once a batch durably commits to Iceberg. See
+//!   its module doc for the exactly-once design.
 
+pub mod application;
 pub mod domain;
 pub mod infrastructure;
 
+pub use application::{BatchConfig, CaptureOrchestrator};
 pub use domain::CdcSource;
 pub use infrastructure::PostgresWalSource;

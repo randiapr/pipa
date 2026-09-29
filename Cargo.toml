@@ -10,9 +10,12 @@ license = "MIT"
 pipa-storage = { path = "crates/storage" }
 
 anyhow = "1.0.104"
+arrow-array = "58.4.0"
+arrow-schema = "58.4.0"
 async-trait = "0.1.92"
 axum = "0.8.9"
 bytes = "1.12.1"
+chrono = "0.4.45"
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
 datafusion = "53.1.0"
@@ -25,6 +28,7 @@ leptos = { version = "0.8.21", features = ["csr"] }
 leptos_router = "0.8.16"
 log = "0.4.34"
 object_store = { version = "0.14.2", features = ["aws"] }
+parquet = "58.4.0"
 pgwire-replication = "0.4.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

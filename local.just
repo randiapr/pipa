@@ -15,10 +15,10 @@ up:
     set -euo pipefail
 
     wait_for_port() {
-        local port="$1" tries=0
+        local port="$1" max_tries="${2:-60}" tries=0
         until (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; do
             tries=$((tries + 1))
-            if [ "$tries" -ge 60 ]; then
+            if [ "$tries" -ge "$max_tries" ]; then
                 echo "timed out waiting for port $port" >&2
                 exit 1
             fi
@@ -65,8 +65,10 @@ up:
       nohup trunk serve > "../../{{logs_dir}}/ui.log" 2>&1 &
       disown )
 
-    echo "waiting for dashboard on :3000..."
-    wait_for_port 3000
+    # `trunk serve` only starts listening once its first wasm build finishes, and a cold
+    # one (empty target/wasm32-unknown-unknown) takes minutes — allow up to 10 minutes.
+    echo "waiting for dashboard on :3000 (first wasm build can take a few minutes)..."
+    wait_for_port 3000 1200
 
     echo "local stack is up — logs: just local::log, stop: just local::down"
 
