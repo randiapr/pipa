@@ -6,7 +6,7 @@ use leptos::task::spawn_local;
 
 use crate::api;
 use crate::model::{NewProject, ProjectUpdate, ProjectView};
-use crate::viewmodel::{StatusMessage, PAGE_SIZE};
+use crate::viewmodel::{PAGE_SIZE, StatusMessage};
 
 /// Reactive state for the Projects feature, plus the commands that mutate it via
 /// [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is cheap to
@@ -44,7 +44,9 @@ impl ProjectsViewModel {
         spawn_local(async move {
             match api::list_projects().await {
                 Ok(list) => projects.set(list),
-                Err(err) => status.set(Some(StatusMessage::Error(format!("Failed to load projects: {err}")))),
+                Err(err) => status.set(Some(StatusMessage::Error(format!(
+                    "Failed to load projects: {err}"
+                )))),
             }
         });
     }
@@ -94,9 +96,9 @@ impl ProjectsViewModel {
                     this.description.set(String::new());
                     this.refresh();
                 }
-                Err(err) => this
-                    .status
-                    .set(Some(StatusMessage::Error(format!("Failed to create project: {err}")))),
+                Err(err) => this.status.set(Some(StatusMessage::Error(format!(
+                    "Failed to create project: {err}"
+                )))),
             }
         });
     }
@@ -123,9 +125,9 @@ impl ProjectsViewModel {
                     this.editing_id.set(None);
                     this.refresh();
                 }
-                Err(err) => this
-                    .status
-                    .set(Some(StatusMessage::Error(format!("Failed to update project: {err}")))),
+                Err(err) => this.status.set(Some(StatusMessage::Error(format!(
+                    "Failed to update project: {err}"
+                )))),
             }
         });
     }
@@ -143,9 +145,9 @@ impl ProjectsViewModel {
                         .set(Some(StatusMessage::Success("Project removed.".to_string())));
                     this.refresh();
                 }
-                Err(err) => this
-                    .status
-                    .set(Some(StatusMessage::Error(format!("Failed to remove project: {err}")))),
+                Err(err) => this.status.set(Some(StatusMessage::Error(format!(
+                    "Failed to remove project: {err}"
+                )))),
             }
         });
     }

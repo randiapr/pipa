@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - run: cargo fmt --all -- --check
+
+  native:
+    name: Clippy & test (backend, ingestion)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Same package set as the justfile's `native` variable. Tests marked #[ignore] (the live
+      # Postgres WAL test) need a real database and are skipped by default.
+      - run: cargo clippy -p pipa-backend -p pipa-ingestion --all-targets -- -D warnings
+
+      - run: cargo test -p pipa-backend -p pipa-ingestion
+
+  ui:
+    name: Clippy (ui, wasm32)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # pipa-ui only compiles for wasm32 (see CLAUDE.md), so it's checked separately; a full
+      # Trunk build isn't needed to catch compile/lint errors.
+      - run: cargo clippy -p pipa-ui --target wasm32-unknown-unknown -- -D warnings
