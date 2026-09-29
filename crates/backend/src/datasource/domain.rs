@@ -40,15 +40,6 @@ pub enum DbEngine {
     MySql,
 }
 
-impl DbEngine {
-    pub fn default_port(self) -> u16 {
-        match self {
-            DbEngine::Postgres => 5432,
-            DbEngine::MySql => 3306,
-        }
-    }
-}
-
 /// Connection parameters for an OLTP data source (value object).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {

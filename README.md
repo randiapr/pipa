@@ -9,7 +9,7 @@ planned but not implemented yet.
 
 ## Workspace
 
-A Cargo workspace of four crates, each versioned independently (see each crate's own
+A Cargo workspace of three crates, each versioned independently (see each crate's own
 `CHANGELOG.md`):
 
 - **`pipa-ingestion`** — the CDC engine. Streams row-level changes out of a registered
@@ -17,12 +17,11 @@ A Cargo workspace of four crates, each versioned independently (see each crate's
   standalone service with no dependency on any other crate here — it reads registered
   sources directly from the shared object store, and is designed to run distributed
   (`INGESTION_SHARD_INDEX`/`INGESTION_SHARD_COUNT` split sources across instances).
-- **`pipa-storage`** — shared RustFS/S3 access layer, and the OLTP data source and
-  project domains (registering/testing sources) used by `pipa-backend`.
-- **`pipa-backend`** — the HTTP API: OLTP data source/project management backed by
-  `pipa-storage`, plus its own Apache Iceberg catalog and query integration (REST catalog
-  client, DataFusion SQL execution). Every external caller (the dashboard, any future
-  client) talks to this, never to `pipa-storage`/`pipa-ingestion` directly.
+- **`pipa-backend`** — the HTTP API: OLTP data source/project management (registering/
+  testing sources, over the shared RustFS/S3 object store), plus its own Apache Iceberg
+  catalog and query integration (REST catalog client, DataFusion SQL execution). Every
+  external caller (the dashboard, any future client) talks to this, never to
+  `pipa-ingestion` directly.
 - **`pipa-ui`** — a Leptos dashboard (Tailwind CSS v4 + daisyUI) for registering and
   managing OLTP data sources.
 

@@ -1,13 +1,13 @@
 //! Ingestion engine: connects to OLTP databases and streams captured changes into Iceberg.
 //!
 //! Standalone service: it takes no dependency on any other crate in this workspace — not even
-//! `pipa-storage`/`pipa-backend`'s own `iceberg`/`iceberg-catalog-rest` access (`write/`
+//! `pipa-backend`'s own `iceberg`/`iceberg-catalog-rest` access (`write/`
 //! keeps its own independent copy of that dependency; see the root `CLAUDE.md`). Data sources
 //! are registered through the `pipa-ui` dashboard, which submits them via `pipa-backend`;
 //! `pipa-ingestion` only ever reads what that writes, via the shared RustFS/S3 object store's
 //! `datasources/` JSON layout (`datasource.rs` duplicates just enough of the shape to
 //! deserialize it), never through a shared Rust crate. That keeps its release and deploy cycle
-//! fully independent of `pipa-storage`/`pipa-backend`'s.
+//! fully independent of `pipa-backend`'s.
 //!
 //! Designed to run as multiple independent instances: `INGESTION_SHARD_INDEX`/
 //! `INGESTION_SHARD_COUNT` (default `0`/`1`, i.e. a single instance handling everything) split

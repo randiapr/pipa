@@ -1,6 +1,6 @@
 //! Change capture: streams row-level changes out of a registered OLTP data source.
 //!
-//! Same clean-architecture split `pipa-storage`'s bounded contexts use:
+//! Same clean-architecture split `pipa-backend`'s bounded contexts use:
 //! - [`domain`] — the engine-agnostic `ChangeEvent`/`Operation` shape and the `CdcSource`
 //!   port infrastructure adapters implement.
 //! - [`infrastructure`] — one adapter per OLTP engine (currently `PostgresWalSource`; a

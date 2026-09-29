@@ -10,4 +10,4 @@ pub mod domain;
 pub mod infrastructure;
 
 pub use application::ProjectService;
-pub use domain::{NewProject, Project, ProjectError, ProjectId, ProjectRepository, ProjectUpdate};
+pub use domain::{NewProject, Project, ProjectError, ProjectId, ProjectUpdate};

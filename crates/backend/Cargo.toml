@@ -1,19 +1,22 @@
 [package]
 name = "pipa-backend"
-version = "0.5.2"
+version = "0.5.3"
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 axum.workspace = true
 datafusion.workspace = true
+futures.workspace = true
 iceberg.workspace = true
 iceberg-catalog-rest.workspace = true
 iceberg-datafusion.workspace = true
-pipa-storage.workspace = true
+object_store.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tower.workspace = true

@@ -1,9 +1,9 @@
 //! RustFS / S3-compatible object storage access — reads the same shared store `pipa-backend`
 //! writes registered data sources into.
 //!
-//! Deliberately duplicated from `pipa-storage::storage` rather than imported: `pipa-ingestion`
+//! Deliberately duplicated from `pipa-backend::storage` rather than imported: `pipa-ingestion`
 //! takes no dependency on any other crate in this workspace (see the module doc on `main`),
-//! so its release cycle and deployment are fully decoupled from `pipa-storage`/`pipa-backend`'s.
+//! so its release cycle and deployment are fully decoupled from `pipa-backend`'s.
 
 use std::sync::Arc;
 

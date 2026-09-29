@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::storage::ObjectStoreConfig;
 use iceberg::io::{
     S3_ACCESS_KEY_ID, S3_ENDPOINT, S3_PATH_STYLE_ACCESS, S3_REGION, S3_SECRET_ACCESS_KEY,
 };
@@ -10,7 +11,6 @@ use iceberg::{Catalog, CatalogBuilder};
 use iceberg_catalog_rest::{
     REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE, RestCatalogBuilder,
 };
-use pipa_storage::ObjectStoreConfig;
 use serde::{Deserialize, Serialize};
 
 /// Connection settings for the Iceberg REST catalog backing CDC target tables. Defaults to
