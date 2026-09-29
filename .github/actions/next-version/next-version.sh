@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Computes the next vX.Y.Z tag from Conventional Commits since the last
 # release: any "!:" or "BREAKING CHANGE" bumps major, any "feat:" bumps
-# minor, any "fix:" or "refactor:" bumps patch. No matching commits means
+# minor, any "fix:", "refactor:" or "chore:" bumps patch. No matching commits means
 # no release.
 
 last_release=""
@@ -53,7 +53,7 @@ bump="none"
 
 breaking_re='^[a-zA-Z]+(\([^)]*\))?!:'
 feat_re='^feat(\([^)]*\))?:'
-fix_re='^(fix|refactor)(\([^)]*\))?:'
+fix_re='^(fix|refactor|chore)(\([^)]*\))?:'
 
 for subject in "${subjects[@]+"${subjects[@]}"}"; do
     if [[ "$subject" =~ $breaking_re ]]; then
