@@ -6,6 +6,15 @@ members = ["crates/backend", "crates/ingestion", "crates/ui"]
 edition = "2024"
 license = "MIT"
 
+# Debug info is the bulk of target/ (the datafusion/iceberg/sqlx graph is huge). Keep line
+# tables for the workspace's own crates so panics/backtraces still show file:line, and drop
+# debug info entirely for third-party deps. Applies to the test profile too (it inherits dev).
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [workspace.dependencies]
 anyhow = "1.0.104"
 arrow-array = "58.4.0"
