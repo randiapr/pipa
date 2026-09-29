@@ -2,6 +2,7 @@
 //! `crate::datasource`/`crate::project`/`crate::iceberg` application services. Keeps those layers free of any HTTP
 //! concerns — `pipa-backend` is the only crate that should grow HTTP-facing surface area, so all of it lives here, one module per resource.
 
+mod convert;
 mod datasource;
 mod error;
 mod project;

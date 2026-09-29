@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::project::{NewProject, Project, ProjectError, ProjectId, ProjectService, ProjectUpdate};
+use crate::project::{ProjectError, ProjectId, ProjectService};
 use axum::{
     Json, Router,
     extract::{Path, State},
@@ -10,31 +10,20 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use serde::Serialize;
+use pipa_api::{
+    NewProject, ProjectData, ProjectResponse, ProjectUpdate, Projects, ProjectsResponse, path,
+};
 use uuid::Uuid;
 
 use super::error::{BaseResponse, Empty, MessageResponse, ResponseCode, error_response};
 
 type SharedProjectService = Arc<ProjectService>;
 
-#[derive(Serialize)]
-struct Projects {
-    projects: Vec<Project>,
-}
-
-#[derive(Serialize)]
-struct ProjectData {
-    project: Project,
-}
-
-type ProjectsResponse = BaseResponse<Projects>;
-type ProjectResponse = BaseResponse<ProjectData>;
-
 pub fn routes() -> Router<SharedProjectService> {
     Router::new()
-        .route("/projects", get(list_projects).post(register_project))
+        .route(path::PROJECTS, get(list_projects).post(register_project))
         .route(
-            "/projects/{id}",
+            path::PROJECT,
             get(get_project).put(update_project).delete(delete_project),
         )
 }
@@ -42,7 +31,7 @@ pub fn routes() -> Router<SharedProjectService> {
 async fn list_projects(
     State(service): State<SharedProjectService>,
 ) -> Result<Json<ProjectsResponse>, ApiError> {
-    let projects = service.list().await?;
+    let projects = service.list().await?.into_iter().map(Into::into).collect();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         Projects { projects },
@@ -53,7 +42,7 @@ async fn register_project(
     State(service): State<SharedProjectService>,
     Json(new_project): Json<NewProject>,
 ) -> Result<(StatusCode, Json<ProjectResponse>), ApiError> {
-    let project = service.register(new_project).await?;
+    let project = service.register(new_project.into()).await?.into();
     Ok((
         StatusCode::CREATED,
         Json(BaseResponse::new(
@@ -67,7 +56,7 @@ async fn get_project(
     State(service): State<SharedProjectService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ProjectResponse>, ApiError> {
-    let project = service.get(ProjectId(id)).await?;
+    let project = service.get(ProjectId(id)).await?.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         ProjectData { project },
@@ -79,7 +68,7 @@ async fn update_project(
     Path(id): Path<Uuid>,
     Json(update): Json<ProjectUpdate>,
 ) -> Result<Json<ProjectResponse>, ApiError> {
-    let project = service.update(ProjectId(id), update).await?;
+    let project = service.update(ProjectId(id), update.into()).await?.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         ProjectData { project },

@@ -3,9 +3,9 @@
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use pipa_api::{NewProject, ProjectUpdate, ProjectView};
 
 use crate::api;
-use crate::model::{NewProject, ProjectUpdate, ProjectView};
 use crate::viewmodel::{PAGE_SIZE, StatusMessage};
 
 /// Reactive state for the Projects feature, plus the commands that mutate it via

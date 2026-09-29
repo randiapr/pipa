@@ -42,9 +42,9 @@ jobs:
 
       # Same package set as the justfile's `native` variable. Tests marked #[ignore] (the live
       # Postgres WAL test) need a real database and are skipped by default.
-      - run: cargo clippy -p pipa-backend -p pipa-ingestion --all-targets -- -D warnings
+      - run: cargo clippy -p pipa-api -p pipa-backend -p pipa-ingestion --all-targets -- -D warnings
 
-      - run: cargo test -p pipa-backend -p pipa-ingestion
+      - run: cargo test -p pipa-api -p pipa-backend -p pipa-ingestion
 
   ui:
     name: Clippy (ui, wasm32)

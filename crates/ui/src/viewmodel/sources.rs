@@ -3,11 +3,11 @@
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-
-use crate::api;
-use crate::model::{
+use pipa_api::{
     ConnectionConfig, ConnectionTestOutcome, DataSourceView, DbEngine, NewDataSource, ProjectView,
 };
+
+use crate::api;
 use crate::viewmodel::{PAGE_SIZE, StatusMessage};
 
 /// Reactive state for the data source registration form and table, plus the commands that

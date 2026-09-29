@@ -9,7 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use serde::{Deserialize, Serialize};
+use pipa_api::{QueryRequest, Rows, RowsResponse, path};
 
 use crate::iceberg::{QueryError, QueryService};
 
@@ -18,20 +18,8 @@ use super::error::{BaseResponse, ResponseCode, error_response};
 type SharedQueryService = Arc<QueryService>;
 
 pub fn routes() -> Router<SharedQueryService> {
-    Router::new().route("/query", post(run_query))
+    Router::new().route(path::QUERY, post(run_query))
 }
-
-#[derive(Deserialize)]
-struct QueryRequest {
-    sql: String,
-}
-
-#[derive(Serialize)]
-struct Rows {
-    rows: serde_json::Value,
-}
-
-type RowsResponse = BaseResponse<Rows>;
 
 /// Runs `sql` via DataFusion against the Iceberg tables the REST catalog exposes, returning the
 /// result rows under the `rows` field of the shared envelope. `QueryService` hands back its

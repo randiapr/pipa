@@ -2,10 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::datasource::{
-    ConnectionTestOutcome, DataSource, DataSourceError, DataSourceId, DataSourceService,
-    NewDataSource,
-};
+use crate::datasource::{DataSourceError, DataSourceId, DataSourceService};
 use axum::{
     Json, Router,
     extract::{Path, State},
@@ -13,49 +10,33 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use serde::Serialize;
+use pipa_api::{
+    ConnectionTest, ConnectionTestResponse, DataSourceData, DataSourceResponse, DataSources,
+    DataSourcesResponse, NewDataSource, path,
+};
 use uuid::Uuid;
 
 use super::error::{BaseResponse, Empty, MessageResponse, ResponseCode, error_response};
 
 type SharedDataSourceService = Arc<DataSourceService>;
 
-#[derive(Serialize)]
-struct DataSources {
-    datasources: Vec<DataSource>,
-}
-
-#[derive(Serialize)]
-struct DataSourceData {
-    datasource: DataSource,
-}
-
-#[derive(Serialize)]
-struct ConnectionTest {
-    connection_test: ConnectionTestOutcome,
-}
-
-type DataSourcesResponse = BaseResponse<DataSources>;
-type DataSourceResponse = BaseResponse<DataSourceData>;
-type ConnectionTestResponse = BaseResponse<ConnectionTest>;
-
 pub fn routes() -> Router<SharedDataSourceService> {
     Router::new()
         .route(
-            "/datasources",
+            path::DATASOURCES,
             get(list_datasources).post(register_datasource),
         )
         .route(
-            "/datasources/{id}",
+            path::DATASOURCE,
             get(get_datasource).delete(delete_datasource),
         )
-        .route("/datasources/{id}/test", post(test_datasource))
+        .route(path::DATASOURCE_TEST, post(test_datasource))
 }
 
 async fn list_datasources(
     State(service): State<SharedDataSourceService>,
 ) -> Result<Json<DataSourcesResponse>, ApiError> {
-    let datasources = service.list().await?;
+    let datasources = service.list().await?.into_iter().map(Into::into).collect();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         DataSources { datasources },
@@ -66,7 +47,7 @@ async fn register_datasource(
     State(service): State<SharedDataSourceService>,
     Json(new_source): Json<NewDataSource>,
 ) -> Result<(StatusCode, Json<DataSourceResponse>), ApiError> {
-    let datasource = service.register(new_source).await?;
+    let datasource = service.register(new_source.try_into()?).await?.into();
     Ok((
         StatusCode::CREATED,
         Json(BaseResponse::new(
@@ -80,7 +61,7 @@ async fn get_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DataSourceResponse>, ApiError> {
-    let datasource = service.get(DataSourceId(id)).await?;
+    let datasource = service.get(DataSourceId(id)).await?.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         DataSourceData { datasource },
@@ -99,7 +80,7 @@ async fn test_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ConnectionTestResponse>, ApiError> {
-    let connection_test = service.test_connection(DataSourceId(id)).await?;
+    let connection_test = service.test_connection(DataSourceId(id)).await?.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         ConnectionTest { connection_test },
