@@ -4054,13 +4054,19 @@ dependencies = [
 
 [[package]]
 name = "pipa-ingestion"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
+ "arrow-array",
+ "arrow-schema",
  "async-trait",
  "bytes",
+ "chrono",
  "futures",
+ "iceberg",
+ "iceberg-catalog-rest",
  "object_store 0.14.2",
+ "parquet",
  "pgwire-replication",
  "serde",
  "serde_json",

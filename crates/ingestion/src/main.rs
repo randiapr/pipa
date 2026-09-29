@@ -1,7 +1,9 @@
 //! Ingestion engine: connects to OLTP databases and streams captured changes into Iceberg.
 //!
-//! Standalone service: it takes no dependency on any other crate in this workspace. Data
-//! sources are registered through the `pipa-ui` dashboard, which submits them via `pipa-backend`;
+//! Standalone service: it takes no dependency on any other crate in this workspace — not even
+//! `pipa-storage`/`pipa-backend`'s own `iceberg`/`iceberg-catalog-rest` access (`write/`
+//! keeps its own independent copy of that dependency; see the root `CLAUDE.md`). Data sources
+//! are registered through the `pipa-ui` dashboard, which submits them via `pipa-backend`;
 //! `pipa-ingestion` only ever reads what that writes, via the shared RustFS/S3 object store's
 //! `datasources/` JSON layout (`datasource.rs` duplicates just enough of the shape to
 //! deserialize it), never through a shared Rust crate. That keeps its release and deploy cycle
@@ -14,18 +16,23 @@
 //! consumed by one client at a time, so two instances must never both attach to the same
 //! source. This is static sharding, not consistent hashing: changing `INGESTION_SHARD_COUNT`
 //! reassigns most sources to a different shard, briefly interrupting their capture as the old
-//! shard's slot is released and the new shard's instance reattaches.
+//! shard's slot is released and the new shard's instance reattaches. That reassignment is safe
+//! for delivery guarantees because checkpoint state lives durably in Iceberg itself (see
+//! `write::domain::IcebergWriter`), not in-process — a source moving to a different instance
+//! behaves exactly like a cold restart of the old one.
 
 mod capture;
 mod datasource;
 mod storage;
+mod write;
 
 use std::sync::Arc;
 
 use datasource::{DataSource, DbEngine};
 use storage::ObjectStoreConfig;
 
-use crate::capture::{CdcSource, PostgresWalSource};
+use crate::capture::{BatchConfig, CaptureOrchestrator, CdcSource, PostgresWalSource};
+use crate::write::{IcebergCatalogConfig, IcebergChangelogWriter, IcebergWriter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -48,7 +55,8 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(shard_index, shard_count, "pipa-ingestion starting");
 
-    let store = ObjectStoreConfig::from_env().build_store()?;
+    let store_config = ObjectStoreConfig::from_env();
+    let store = store_config.build_store()?;
     let sources: Vec<DataSource> = datasource::list_registered(store.as_ref())
         .await?
         .into_iter()
@@ -59,7 +67,16 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("no OLTP data sources assigned to this shard");
     }
 
+    let catalog = IcebergCatalogConfig::from_env(&store_config.endpoint)
+        .build_catalog(&store_config)
+        .await?;
+    let writer: Arc<dyn IcebergWriter> = Arc::new(IcebergChangelogWriter::new(catalog));
     let postgres_source: Arc<dyn CdcSource> = Arc::new(PostgresWalSource::new());
+    let orchestrator = Arc::new(CaptureOrchestrator::new(
+        Arc::clone(&postgres_source),
+        Arc::clone(&writer),
+        BatchConfig::from_env(),
+    ));
 
     for source in sources {
         tracing::info!(
@@ -70,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
         );
 
         match source.engine {
-            DbEngine::Postgres => spawn_capture(Arc::clone(&postgres_source), source),
+            DbEngine::Postgres => spawn_capture(Arc::clone(&orchestrator), source),
             DbEngine::MySql => {
                 tracing::warn!(id = %source.id, "MySQL change capture is not implemented yet, skipping");
             }
@@ -89,32 +106,9 @@ fn shard_of(source: &DataSource, shard_count: u32) -> u32 {
     (source.id.0.as_u128() % u128::from(shard_count)) as u32
 }
 
-/// Streams changes from `source` and logs each one. Placeholder for the eventual Iceberg
-/// writer — the point today is proving capture works end to end, not landing rows yet.
-fn spawn_capture(cdc_source: Arc<dyn CdcSource>, source: DataSource) {
+/// Drives capture + write for `source` on its own task via `orchestrator`.
+fn spawn_capture(orchestrator: Arc<CaptureOrchestrator>, source: DataSource) {
     tokio::spawn(async move {
-        let mut changes = match cdc_source.stream_changes(&source).await {
-            Ok(changes) => changes,
-            Err(err) => {
-                tracing::error!(id = %source.id, error = %err, "failed to start change capture");
-                return;
-            }
-        };
-
-        while let Some(change) = changes.recv().await {
-            match change {
-                Ok(event) => tracing::info!(
-                    id = %source.id,
-                    schema = %event.schema,
-                    table = %event.table,
-                    position = %event.position,
-                    "captured change: {:?}",
-                    event.operation
-                ),
-                Err(err) => tracing::error!(id = %source.id, error = %err, "change capture error"),
-            }
-        }
-
-        tracing::warn!(id = %source.id, "change capture stream ended");
+        orchestrator.run(source).await;
     });
 }

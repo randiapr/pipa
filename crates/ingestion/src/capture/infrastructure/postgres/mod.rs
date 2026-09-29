@@ -13,10 +13,11 @@ use pgwire_replication::{Lsn, ReplicationClient, ReplicationConfig, ReplicationE
 use sqlx::{Connection, PgConnection, postgres::PgConnectOptions};
 use tokio::sync::mpsc;
 
-use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, Operation};
+use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, ChangeStream, Operation};
 use crate::datasource::DataSource;
 
 const CHANGE_CHANNEL_CAPACITY: usize = 256;
+const CONFIRM_CHANNEL_CAPACITY: usize = 16;
 
 /// Streams changes out of a Postgres data source's write-ahead log via `pgoutput` logical
 /// replication.
@@ -109,14 +110,15 @@ impl CdcSource for PostgresWalSource {
     async fn stream_changes(
         &self,
         source: &DataSource,
-    ) -> Result<mpsc::Receiver<Result<ChangeEvent, CaptureError>>, CaptureError> {
+        resume_from: Option<&str>,
+    ) -> Result<ChangeStream, CaptureError> {
         let slot = replication_slot_name(source);
         let publication = replication_publication_name(source);
 
         self.ensure_replication_objects(source, &publication, &slot)
             .await?;
 
-        let config = ReplicationConfig::new(
+        let mut config = ReplicationConfig::new(
             source.connection.host.clone(),
             source.connection.username.clone(),
             source.connection.password.clone(),
@@ -126,18 +128,53 @@ impl CdcSource for PostgresWalSource {
         )
         .with_port(source.connection.port);
 
+        if let Some(resume_from) = resume_from {
+            let start_lsn = resume_from.parse::<Lsn>().map_err(|err| {
+                CaptureError::Connect(format!("invalid resume position {resume_from:?}: {err}"))
+            })?;
+            config = config.with_start_lsn(start_lsn);
+        }
+
         let mut client = ReplicationClient::connect(config)
             .await
             .map_err(|err| CaptureError::Connect(err.to_string()))?;
 
         let (tx, rx) = mpsc::channel(CHANGE_CHANNEL_CAPACITY);
+        let (confirm_tx, mut confirm_rx) = mpsc::channel::<String>(CONFIRM_CHANNEL_CAPACITY);
 
         tokio::spawn(async move {
             let mut relations: HashMap<u32, RelationInfo> = HashMap::new();
             let mut commit_timestamp_unix_micros = 0i64;
 
             loop {
-                let event = match client.recv().await {
+                let event = tokio::select! {
+                    biased;
+
+                    confirmed = confirm_rx.recv() => {
+                        match confirmed {
+                            Some(position) => {
+                                match position.parse::<Lsn>() {
+                                    Ok(lsn) => client.update_applied_lsn(lsn),
+                                    Err(err) => {
+                                        tracing::error!(
+                                            position = %position,
+                                            error = %err,
+                                            "received an unparseable confirm position, ignoring",
+                                        );
+                                    }
+                                }
+                                continue;
+                            }
+                            // The caller (CaptureOrchestrator) is gone; keep streaming isn't
+                            // useful without anyone to confirm positions, so stop.
+                            None => break,
+                        }
+                    }
+
+                    event = client.recv() => event,
+                };
+
+                let event = match event {
                     Ok(Some(event)) => event,
                     Ok(None) => break,
                     Err(err) => {
@@ -152,12 +189,13 @@ impl CdcSource for PostgresWalSource {
                     } => {
                         commit_timestamp_unix_micros = commit_time_micros;
                     }
-                    ReplicationEvent::Commit { end_lsn, .. } => {
-                        client.update_applied_lsn(end_lsn);
-                    }
-                    ReplicationEvent::KeepAlive { wal_end, .. } => {
-                        client.update_applied_lsn(wal_end);
-                    }
+                    // `Commit`/`KeepAlive` used to unconditionally call `update_applied_lsn`
+                    // here, before any consumer durably persisted the events it covers —
+                    // `pgwire-replication`'s own doc comment for that method says to call it
+                    // "only once you have durably persisted all events up to `lsn`". Advancing
+                    // is now driven exclusively by `confirm_rx`, above.
+                    ReplicationEvent::Commit { .. } => {}
+                    ReplicationEvent::KeepAlive { .. } => {}
                     ReplicationEvent::XLogData { wal_end, data, .. } => {
                         if data.is_empty() {
                             continue;
@@ -203,8 +241,6 @@ impl CdcSource for PostgresWalSource {
                                 break;
                             }
                         }
-
-                        client.update_applied_lsn(wal_end);
                     }
                     ReplicationEvent::Message { .. } => {}
                     ReplicationEvent::StoppedAt { .. } => break,
@@ -214,7 +250,10 @@ impl CdcSource for PostgresWalSource {
             let _ = client.shutdown().await;
         });
 
-        Ok(rx)
+        Ok(ChangeStream {
+            events: rx,
+            confirm: confirm_tx,
+        })
     }
 }
 
@@ -290,8 +329,8 @@ mod live_tests {
         };
 
         let cdc_source = PostgresWalSource::new();
-        let mut changes = cdc_source
-            .stream_changes(&source)
+        let mut stream = cdc_source
+            .stream_changes(&source, None)
             .await
             .expect("stream_changes should establish the replication connection");
 
@@ -323,11 +362,16 @@ mod live_tests {
 
         let mut seen = Vec::new();
         for _ in 0..3 {
-            let event = tokio::time::timeout(Duration::from_secs(10), changes.recv())
+            let event = tokio::time::timeout(Duration::from_secs(10), stream.events.recv())
                 .await
                 .expect("timed out waiting for a change event")
                 .expect("change channel closed unexpectedly")
                 .expect("capture reported an error");
+            stream
+                .confirm
+                .send(event.position.clone())
+                .await
+                .expect("confirm channel should still be open");
             seen.push(event);
         }
 

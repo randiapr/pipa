@@ -2,10 +2,13 @@
 #
 # No separate Iceberg REST catalog service is included, and none is needed: RustFS itself
 # serves an Iceberg REST Catalog natively via its "S3 Tables" feature, at the same host/port
-# as its S3 API under an /iceberg path prefix. pipa-backend's ICEBERG_CATALOG_URI below
-# defaults to exactly that. The catch: S3 Tables is opt-in per bucket, and the exact RustFS/rc
-# CLI incantation to enable it isn't confirmed, so it is NOT automated by create-bucket here —
-# enable it manually on the "pipa" bucket first, or `POST /query` on pipa-backend will fail.
+# as its S3 API under an /iceberg path prefix. Both pipa-backend (querying, POST /query) and
+# pipa-ingestion (writing captured changes, crates/ingestion/src/write/) point their own
+# independent ICEBERG_CATALOG_URI at exactly that — see backend's explicit setting below and
+# ingestion's env anchor, which mirrors it. The catch: S3 Tables is opt-in per bucket, and the
+# exact RustFS/rc CLI incantation to enable it isn't confirmed, so it is NOT automated by
+# create-bucket here — enable it manually on the "pipa" bucket first, or both `POST /query` on
+# pipa-backend and pipa-ingestion's Iceberg writes will fail.
 #
 # Quickstart: docker compose up --build
 
@@ -20,6 +23,7 @@ x-pipa-ingestion-env: &pipa-ingestion-env
   RUSTFS_ACCESS_KEY_ID: rustfsadmin
   RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
   RUSTFS_ALLOW_HTTP: "true"
+  ICEBERG_CATALOG_URI: http://rustfs:9000/iceberg
   INGESTION_SHARD_COUNT: "2"
   RUST_LOG: info
 
@@ -103,12 +107,15 @@ services:
 
   # Standalone: no dependency on any other crate in this workspace (see the module doc on
   # crates/ingestion/src/main.rs), so it's a separate `build.target` here rather than
-  # something wired through pipa-storage/pipa-backend. Distributed across INGESTION_SHARD_COUNT
-  # instances below (a Postgres replication slot only tolerates one consumer, so each source's
-  # id is statically partitioned by shard — see shard_of() in main.rs); bump the shared
-  # INGESTION_SHARD_COUNT anchor and add matching ingestion-N services to scale further.
-  # All shards share one `image:` tag, so compose builds pipa-ingestion once and every
-  # shard's container just runs it — not one build per shard.
+  # something wired through pipa-storage/pipa-backend — it keeps its own independent copy of
+  # the iceberg/iceberg-catalog-rest dependency (crates/ingestion/src/write/) to land captured
+  # changes as changelog rows, separate from pipa-backend's own copy used for querying.
+  # Distributed across INGESTION_SHARD_COUNT instances below (a Postgres replication slot only
+  # tolerates one consumer, so each source's id is statically partitioned by shard — see
+  # shard_of() in main.rs); bump the shared INGESTION_SHARD_COUNT anchor and add matching
+  # ingestion-N services to scale further. All shards share one `image:` tag, so compose
+  # builds pipa-ingestion once and every shard's container just runs it — not one build per
+  # shard.
   ingestion-0:
     image: pipa-ingestion
     build: *pipa-ingestion-build
