@@ -29,7 +29,7 @@ jobs:
       - run: cargo fmt --all -- --check
 
   native:
-    name: Clippy & test (api, backend, ingestion)
+    name: Clippy & test (backend, ingestion)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
