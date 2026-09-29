@@ -8,7 +8,7 @@ use crate::api;
 use crate::model::{
     ConnectionConfig, ConnectionTestOutcome, DataSourceView, DbEngine, NewDataSource, ProjectView,
 };
-use crate::viewmodel::{StatusMessage, PAGE_SIZE};
+use crate::viewmodel::{PAGE_SIZE, StatusMessage};
 
 /// Reactive state for the data source registration form and table, plus the commands that
 /// mutate it via [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is
@@ -114,8 +114,9 @@ impl SourcesViewModel {
         let port_value: u16 = match self.port.get().trim().parse() {
             Ok(parsed) => parsed,
             Err(_) => {
-                self.status
-                    .set(Some(StatusMessage::Error("Port must be a valid number.".to_string())));
+                self.status.set(Some(StatusMessage::Error(
+                    "Port must be a valid number.".to_string(),
+                )));
                 return;
             }
         };
