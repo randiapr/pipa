@@ -1,4 +1,5 @@
-//! `/projects` routes: register/list/get/update/delete.
+//! `/projects` routes: register/list/get/update/delete. Registering, updating and deleting are
+//! admin-only; listing and reading are limited to the projects the caller may access.
 
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ use pipa_api::{
 };
 use uuid::Uuid;
 
+use super::auth::{AdminOnly, AuthError, AuthUser};
 use super::error::{BaseResponse, Empty, MessageResponse, ResponseCode, error_response};
 
 type SharedProjectService = Arc<ProjectService>;
@@ -29,9 +31,16 @@ pub fn routes() -> Router<SharedProjectService> {
 }
 
 async fn list_projects(
+    auth: AuthUser,
     State(service): State<SharedProjectService>,
 ) -> Result<Json<ProjectsResponse>, ApiError> {
-    let projects = service.list().await?.into_iter().map(Into::into).collect();
+    let projects = service
+        .list()
+        .await?
+        .into_iter()
+        .filter(|project| auth.can_access(project.id))
+        .map(Into::into)
+        .collect();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         Projects { projects },
@@ -39,6 +48,7 @@ async fn list_projects(
 }
 
 async fn register_project(
+    _admin: AdminOnly,
     State(service): State<SharedProjectService>,
     Json(new_project): Json<NewProject>,
 ) -> Result<(StatusCode, Json<ProjectResponse>), ApiError> {
@@ -53,9 +63,11 @@ async fn register_project(
 }
 
 async fn get_project(
+    auth: AuthUser,
     State(service): State<SharedProjectService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ProjectResponse>, ApiError> {
+    auth.require_project(Some(ProjectId(id)))?;
     let project = service.get(ProjectId(id)).await?.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
@@ -64,6 +76,7 @@ async fn get_project(
 }
 
 async fn update_project(
+    _admin: AdminOnly,
     State(service): State<SharedProjectService>,
     Path(id): Path<Uuid>,
     Json(update): Json<ProjectUpdate>,
@@ -76,6 +89,7 @@ async fn update_project(
 }
 
 async fn delete_project(
+    _admin: AdminOnly,
     State(service): State<SharedProjectService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<MessageResponse>, ApiError> {
@@ -83,17 +97,30 @@ async fn delete_project(
     Ok(Json(BaseResponse::new(ResponseCode::Deleted, Empty {})))
 }
 
-struct ApiError(ProjectError);
+enum ApiError {
+    Project(ProjectError),
+    Auth(AuthError),
+}
 
 impl From<ProjectError> for ApiError {
     fn from(err: ProjectError) -> Self {
-        Self(err)
+        Self::Project(err)
+    }
+}
+
+impl From<AuthError> for ApiError {
+    fn from(err: AuthError) -> Self {
+        Self::Auth(err)
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, code) = match &self.0 {
+        let err = match self {
+            Self::Project(err) => err,
+            Self::Auth(err) => return err.into_response(),
+        };
+        let (status, code) = match &err {
             ProjectError::NotFound(_) => (StatusCode::NOT_FOUND, ResponseCode::NotFound),
             ProjectError::InvalidField(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
             ProjectError::DuplicateName(_) => (StatusCode::CONFLICT, ResponseCode::Conflict),
@@ -102,6 +129,6 @@ impl IntoResponse for ApiError {
                 ResponseCode::InternalError,
             ),
         };
-        error_response(status, code, self.0)
+        error_response(status, code, err)
     }
 }

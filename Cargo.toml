@@ -17,6 +17,7 @@ debug = false
 
 [workspace.dependencies]
 anyhow = "1.0.104"
+argon2 = "0.6.0"
 arrow-array = "58.4.0"
 arrow-schema = "58.4.0"
 async-trait = "0.1.92"
@@ -31,6 +32,7 @@ gloo-net = { version = "0.7.0", features = ["json"] }
 iceberg = "0.10.1"
 iceberg-catalog-rest = "0.10.1"
 iceberg-datafusion = "0.10.1"
+jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
 leptos = { version = "0.8.21", features = ["csr"] }
 leptos_router = "0.8.16"
 log = "0.4.34"
@@ -49,3 +51,4 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 wasm-bindgen = "0.2.129"
+web-sys = { version = "0.3.106", features = ["Storage", "Window"] }

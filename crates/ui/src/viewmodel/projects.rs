@@ -25,9 +25,14 @@ pub struct ProjectsViewModel {
 }
 
 impl ProjectsViewModel {
-    pub fn new(status: RwSignal<Option<StatusMessage>>) -> Self {
+    /// `projects` is the session's project list, shared so the nav-bar project switcher stays in
+    /// step with what is created or deleted here.
+    pub fn new(
+        projects: RwSignal<Vec<ProjectView>>,
+        status: RwSignal<Option<StatusMessage>>,
+    ) -> Self {
         Self {
-            projects: RwSignal::new(Vec::new()),
+            projects,
             page: RwSignal::new(0),
             name: RwSignal::new(String::new()),
             description: RwSignal::new(String::new()),

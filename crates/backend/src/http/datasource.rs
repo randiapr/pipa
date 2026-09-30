@@ -1,11 +1,14 @@
-//! `/datasources` routes: register/list/get/delete OLTP data sources, test connectivity.
+//! `/datasources` routes: register/list/get/delete OLTP data sources, test connectivity. Every
+//! route is limited to data sources in projects the caller may access; project-less data sources
+//! are admin-only.
 
 use std::sync::Arc;
 
 use crate::datasource::{DataSourceError, DataSourceId, DataSourceService};
+use crate::project::ProjectId;
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -14,8 +17,10 @@ use pipa_api::{
     ConnectionTest, ConnectionTestResponse, DataSourceData, DataSourceResponse, DataSources,
     DataSourcesResponse, NewDataSource, path,
 };
+use serde::Deserialize;
 use uuid::Uuid;
 
+use super::auth::{AuthError, AuthUser};
 use super::error::{BaseResponse, Empty, MessageResponse, ResponseCode, error_response};
 
 type SharedDataSourceService = Arc<DataSourceService>;
@@ -33,10 +38,30 @@ pub fn routes() -> Router<SharedDataSourceService> {
         .route(path::DATASOURCE_TEST, post(test_datasource))
 }
 
+/// Query string of `GET /datasources`.
+#[derive(Debug, Deserialize)]
+struct ListParams {
+    /// Only return data sources of this project.
+    project_id: Option<Uuid>,
+}
+
 async fn list_datasources(
+    auth: AuthUser,
     State(service): State<SharedDataSourceService>,
+    Query(params): Query<ListParams>,
 ) -> Result<Json<DataSourcesResponse>, ApiError> {
-    let datasources = service.list().await?.into_iter().map(Into::into).collect();
+    let wanted = params.project_id.map(ProjectId);
+    if let Some(project) = wanted {
+        auth.require_project(Some(project))?;
+    }
+    let datasources = service
+        .list()
+        .await?
+        .into_iter()
+        .filter(|source| wanted.is_none_or(|project| source.project_id == Some(project)))
+        .filter(|source| auth.require_project(source.project_id).is_ok())
+        .map(Into::into)
+        .collect();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         DataSources { datasources },
@@ -44,10 +69,13 @@ async fn list_datasources(
 }
 
 async fn register_datasource(
+    auth: AuthUser,
     State(service): State<SharedDataSourceService>,
     Json(new_source): Json<NewDataSource>,
 ) -> Result<(StatusCode, Json<DataSourceResponse>), ApiError> {
-    let datasource = service.register(new_source.try_into()?).await?.into();
+    let new_source: crate::datasource::domain::NewDataSource = new_source.try_into()?;
+    auth.require_project(new_source.project_id)?;
+    let datasource = service.register(new_source).await?.into();
     Ok((
         StatusCode::CREATED,
         Json(BaseResponse::new(
@@ -58,10 +86,13 @@ async fn register_datasource(
 }
 
 async fn get_datasource(
+    auth: AuthUser,
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DataSourceResponse>, ApiError> {
-    let datasource = service.get(DataSourceId(id)).await?.into();
+    let datasource = service.get(DataSourceId(id)).await?;
+    auth.require_project(datasource.project_id)?;
+    let datasource = datasource.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
         DataSourceData { datasource },
@@ -69,17 +100,23 @@ async fn get_datasource(
 }
 
 async fn delete_datasource(
+    auth: AuthUser,
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<MessageResponse>, ApiError> {
+    let datasource = service.get(DataSourceId(id)).await?;
+    auth.require_project(datasource.project_id)?;
     service.remove(DataSourceId(id)).await?;
     Ok(Json(BaseResponse::new(ResponseCode::Deleted, Empty {})))
 }
 
 async fn test_datasource(
+    auth: AuthUser,
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ConnectionTestResponse>, ApiError> {
+    let datasource = service.get(DataSourceId(id)).await?;
+    auth.require_project(datasource.project_id)?;
     let connection_test = service.test_connection(DataSourceId(id)).await?.into();
     Ok(Json(BaseResponse::new(
         ResponseCode::Ok,
@@ -87,17 +124,30 @@ async fn test_datasource(
     )))
 }
 
-struct ApiError(DataSourceError);
+enum ApiError {
+    DataSource(DataSourceError),
+    Auth(AuthError),
+}
 
 impl From<DataSourceError> for ApiError {
     fn from(err: DataSourceError) -> Self {
-        Self(err)
+        Self::DataSource(err)
+    }
+}
+
+impl From<AuthError> for ApiError {
+    fn from(err: AuthError) -> Self {
+        Self::Auth(err)
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let (status, code) = match &self.0 {
+        let err = match self {
+            Self::DataSource(err) => err,
+            Self::Auth(err) => return err.into_response(),
+        };
+        let (status, code) = match &err {
             DataSourceError::NotFound(_) => (StatusCode::NOT_FOUND, ResponseCode::NotFound),
             DataSourceError::InvalidField(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
             DataSourceError::Storage(_) => (
@@ -105,6 +155,6 @@ impl IntoResponse for ApiError {
                 ResponseCode::InternalError,
             ),
         };
-        error_response(status, code, self.0)
+        error_response(status, code, err)
     }
 }

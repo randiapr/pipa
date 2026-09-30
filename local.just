@@ -52,6 +52,12 @@ up:
     # invalidates and recompiles shared deps all over again.
     cargo build -p pipa-backend -p pipa-ingestion
 
+    # Local-only login defaults (like the rustfsadmin credentials above), overridable from the
+    # environment: the backend refuses to start without a JWT secret and a first admin.
+    export JWT_SECRET="${JWT_SECRET:-pipa-local-dev-secret-do-not-use-in-production}"
+    export PIPA_ADMIN_USERNAME="${PIPA_ADMIN_USERNAME:-admin}"
+    export PIPA_ADMIN_PASSWORD="${PIPA_ADMIN_PASSWORD:-admin-password}"
+
     nohup ./target/debug/pipa-backend > {{logs_dir}}/backend.log 2>&1 &
     disown
     nohup ./target/debug/pipa-ingestion > {{logs_dir}}/ingestion.log 2>&1 &
@@ -70,7 +76,8 @@ up:
     echo "waiting for dashboard on :3000 (first wasm build can take a few minutes)..."
     wait_for_port 3000 1200
 
-    echo "local stack is up — logs: just local::log, stop: just local::down"
+    echo "local stack is up — sign in at http://localhost:3000 as $PIPA_ADMIN_USERNAME (first run only creates it)"
+    echo "logs: just local::log, stop: just local::down"
 
 # tail every service's log from the background stack `up` started (Ctrl+C just stops
 # tailing, it doesn't stop the services — use `just local::down` for that)

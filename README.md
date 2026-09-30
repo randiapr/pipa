@@ -42,12 +42,21 @@ just local::up      # rustfs + pipa-backend + pipa-ingestion + dashboard, all in
 Open `http://localhost:3000` for the dashboard and `http://localhost:8080/healthz` for the
 API. `just local::log` tails every service's output; `just local::down` stops everything.
 
+With `just local::up`, sign in as the first admin, `admin` / `admin-password` by default (local-only defaults;
+override with `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD`, and `JWT_SECRET` for the token
+secret). Admins create further accounts on the Users page and assign each `user`-role
+account the projects it may see; a `user` never sees the Users menu.
+
 Alternatively, containerized (`pipa-ingestion` + `pipa-backend` + RustFS, no local Rust
 toolchain needed — `pipa-ui` isn't included, it's a static SPA, not a Rust service):
 
 ```sh
-docker compose up --build
+just docker-up   # first run creates .env with a random JWT secret and admin password
 ```
+
+`just docker-up` does not use those defaults: it prints the generated admin login once (it stays in the gitignored `.env`, which
+you can edit). Without `just`, `cp .env.example .env`, set `PIPA_JWT_SECRET` and
+`PIPA_ADMIN_PASSWORD`, then `docker compose up --build`.
 
 `POST /query` talks to RustFS's own embedded Iceberg REST Catalog ("S3 Tables" feature) by
 default now, but that feature is opt-in per bucket — until the `pipa` bucket has S3 Tables

@@ -8,6 +8,10 @@ use crate::envelope::BaseResponse;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryRequest {
     pub sql: String,
+    /// Project whose data the query may read. Required for `user` accounts; an `admin` may omit
+    /// it to query every table.
+    #[serde(default)]
+    pub project_id: Option<String>,
 }
 
 /// Payload of `POST /query`: the result rows as a JSON array of objects.

@@ -1,0 +1,84 @@
+//! ViewModel: the SQL query page. Queries run against the selected project's tables only.
+
+use leptos::ev::SubmitEvent;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
+
+use crate::api;
+use crate::viewmodel::SessionViewModel;
+
+#[derive(Copy, Clone)]
+pub struct QueryViewModel {
+    pub sql: RwSignal<String>,
+    /// The rows of the last successful run; `None` before the first one.
+    pub rows: RwSignal<Option<Vec<serde_json::Value>>>,
+    pub error: RwSignal<Option<String>>,
+    pub running: RwSignal<bool>,
+    session: SessionViewModel,
+}
+
+impl QueryViewModel {
+    pub fn new(session: SessionViewModel) -> Self {
+        Self {
+            sql: RwSignal::new(String::new()),
+            rows: RwSignal::new(None),
+            error: RwSignal::new(None),
+            running: RwSignal::new(false),
+            session,
+        }
+    }
+
+    /// Column names of the last result, in order of first appearance across its rows.
+    pub fn columns(&self) -> Vec<String> {
+        let mut columns: Vec<String> = Vec::new();
+        self.rows.with(|rows| {
+            for row in rows.iter().flatten() {
+                if let Some(object) = row.as_object() {
+                    for key in object.keys() {
+                        if !columns.contains(key) {
+                            columns.push(key.clone());
+                        }
+                    }
+                }
+            }
+        });
+        columns
+    }
+
+    pub fn run(&self, ev: SubmitEvent) {
+        ev.prevent_default();
+
+        let project_id = self.session.current_project_id.get_untracked();
+        if project_id.is_none() && !self.session.is_admin() {
+            self.error.set(Some(
+                "Select a project first to query its tables.".to_string(),
+            ));
+            return;
+        }
+
+        let this = *self;
+        let sql = this.sql.get();
+        this.running.set(true);
+        this.error.set(None);
+        spawn_local(async move {
+            match api::query(&sql, project_id.as_deref()).await {
+                Ok(serde_json::Value::Array(rows)) => this.rows.set(Some(rows)),
+                Ok(other) => this.rows.set(Some(vec![other])),
+                Err(err) => {
+                    this.rows.set(None);
+                    this.error.set(Some(err));
+                }
+            }
+            this.running.set(false);
+        });
+    }
+}
+
+/// A result cell as plain text: strings unquoted, `null` empty, anything else as JSON.
+pub fn cell_text(value: Option<&serde_json::Value>) -> String {
+    match value {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(serde_json::Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+    }
+}

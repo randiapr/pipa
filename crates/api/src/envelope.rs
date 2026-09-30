@@ -16,6 +16,8 @@ pub enum ResponseCode {
     Conflict,
     InternalError,
     UpstreamError,
+    Unauthorized,
+    Forbidden,
 }
 
 impl ResponseCode {
@@ -29,6 +31,8 @@ impl ResponseCode {
             Self::Conflict => 2002,
             Self::InternalError => 2003,
             Self::UpstreamError => 2004,
+            Self::Unauthorized => 2005,
+            Self::Forbidden => 2006,
         }
     }
 
@@ -42,6 +46,8 @@ impl ResponseCode {
             Self::Conflict => "Conflict",
             Self::InternalError => "Internal Server Error",
             Self::UpstreamError => "Upstream Error",
+            Self::Unauthorized => "Unauthorized",
+            Self::Forbidden => "Forbidden",
         }
     }
 }
@@ -102,6 +108,13 @@ mod tests {
                 "error": "gone",
             })
         );
+    }
+
+    #[test]
+    fn auth_failures_have_their_own_codes() {
+        assert_eq!(ResponseCode::Unauthorized.code(), 2005);
+        assert_eq!(ResponseCode::Forbidden.code(), 2006);
+        assert_eq!(ResponseCode::Forbidden.message(), "Forbidden");
     }
 
     #[test]
