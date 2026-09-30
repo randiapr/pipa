@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.4.0] - 2026-09-30
+
+### Added
+
+- **Sign-in** page and session handling: the token is kept in `localStorage`, sent on every
+  request, and dropped when the backend answers 401. Routes redirect to `/login` when signed
+  out.
+- **Roles.** The **Users** page (create, edit role/password/projects, delete) and its nav
+  entry are admin-only; `user` accounts don't see the menu and are redirected away from
+  `/users`. Creating, editing and deleting projects is likewise admin-only.
+- **Project context.** A project switcher in the nav bar (desktop and drawer) scopes the
+  dashboard's data sources, the register form's default project, and the new **Query** page
+  to the selected project. Admins also get "All projects". The selection persists across
+  reloads. The landing page's "Manage" button selects that project.
+- **Query** page: read-only SQL over the selected project's tables.
+
+### Changed
+
+- The container image (`Dockerfile`'s `ui` stage) is now served by static-web-server instead of
+  nginx, with an SPA fallback to `index.html`, so reloading or deep-linking a client route
+  (`/login`, `/users`, `/query`, ...) no longer 404s.
+
 ## [0.3.2] - 2026-09-29
 
 ### Changed

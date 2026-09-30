@@ -16,6 +16,7 @@ pub mod envelope;
 pub mod path;
 pub mod project;
 pub mod query;
+pub mod user;
 
 pub use datasource::{
     ConnectionConfig, ConnectionTest, ConnectionTestOutcome, ConnectionTestResponse,
@@ -28,3 +29,7 @@ pub use project::{
     ProjectsResponse,
 };
 pub use query::{QueryRequest, Rows, RowsResponse};
+pub use user::{
+    LoginData, LoginRequest, LoginResponse, MeData, MeResponse, NewUser, Role, UserData,
+    UserResponse, UserUpdate, UserView, Users, UsersResponse,
+};

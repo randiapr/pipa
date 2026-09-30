@@ -8,15 +8,17 @@ use leptos::prelude::*;
 use pipa_api::{ConnectionTestOutcome, DataSourceView, DbEngine};
 
 use crate::view::Pagination;
-use crate::viewmodel::SourcesViewModel;
+use crate::viewmodel::{SessionViewModel, SourcesViewModel};
 
 #[component]
 pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
     let register_dialog = NodeRef::<html::Dialog>::new();
     let delete_dialog = NodeRef::<html::Dialog>::new();
     let pending_delete = RwSignal::new(Option::<String>::None);
 
     let open_register = move |_| {
+        vm.prefill_project();
         if let Some(dialog) = register_dialog.get() {
             let _ = dialog.show_modal();
         }
@@ -136,7 +138,10 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                             prop:value=move || vm.selected_project_id.get()
                             on:change:target=move |ev| vm.selected_project_id.set(ev.target().value())
                         >
-                            <option value="">"(none)"</option>
+                            // Only an admin may register a data source outside any project.
+                            <Show when=move || session.is_admin()>
+                                <option value="">"(none)"</option>
+                            </Show>
                             {move || {
                                 vm.projects()
                                     .into_iter()

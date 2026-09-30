@@ -50,12 +50,12 @@ RUN rustup target add wasm32-unknown-unknown
 # Prebuilt binary rather than `cargo install trunk`: trunk's own dependency tree is large
 # enough that compiling it from source can OOM a memory-constrained build host.
 RUN case "$TARGETARCH" in \
-      amd64) trunk_arch=x86_64-unknown-linux-gnu ;; \
-      arm64) trunk_arch=aarch64-unknown-linux-gnu ;; \
-      *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
+    amd64) trunk_arch=x86_64-unknown-linux-gnu ;; \
+    arm64) trunk_arch=aarch64-unknown-linux-gnu ;; \
+    *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
     esac && \
     curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-${trunk_arch}.tar.gz" \
-      | tar -xz -C /usr/local/bin trunk
+    | tar -xz -C /usr/local/bin trunk
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
@@ -66,6 +66,15 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # browser (crates/ui/src/api.rs's API_BASE is a compile-time localhost:8080 constant, so it
 # reaches pipa-backend via the host port mapping — no container-to-container wiring needed),
 # so serving it needs nothing beyond a static file server.
-FROM nginx:alpine AS ui
-COPY --from=ui-builder /build/crates/ui/dist /usr/share/nginx/html
+#
+# static-web-server's `2` image is `FROM scratch` (a single ~4MB binary, no shell or package
+# manager, multi-arch amd64/arm64 like the other stages) and listens on port 80. The dashboard
+# is a client-routed SPA (/login, /users, /query, ...), so SERVER_FALLBACK_PAGE serves
+# index.html, with a 200, for any path that isn't a file — otherwise reloading or deep-linking
+# to a client route would 404. Unlike SERVER_ROOT it must be an absolute path (it is not
+# resolved against the root).
+FROM joseluisq/static-web-server:2 AS ui
+COPY --from=ui-builder /build/crates/ui/dist /public
+ENV SERVER_ROOT=/public \
+    SERVER_FALLBACK_PAGE=/public/index.html
 EXPOSE 80

@@ -6,6 +6,9 @@ use crate::datasource::domain::{
     ConnectionConfig, ConnectionTestOutcome, DataSource, DataSourceError, DbEngine, NewDataSource,
 };
 use crate::project::{NewProject, Project, ProjectId, ProjectUpdate};
+use crate::user::{
+    NewUser as NewUserAccount, Role, User, UserError, UserUpdate as UserAccountUpdate,
+};
 use uuid::Uuid;
 
 impl From<pipa_api::DbEngine> for DbEngine {
@@ -123,9 +126,117 @@ impl From<pipa_api::ProjectUpdate> for ProjectUpdate {
     }
 }
 
+impl From<pipa_api::Role> for Role {
+    fn from(role: pipa_api::Role) -> Self {
+        match role {
+            pipa_api::Role::Admin => Self::Admin,
+            pipa_api::Role::User => Self::User,
+        }
+    }
+}
+
+impl From<Role> for pipa_api::Role {
+    fn from(role: Role) -> Self {
+        match role {
+            Role::Admin => Self::Admin,
+            Role::User => Self::User,
+        }
+    }
+}
+
+impl From<User> for pipa_api::UserView {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id.to_string(),
+            username: user.username,
+            role: user.role.into(),
+            project_ids: user.project_ids.iter().map(ToString::to_string).collect(),
+            created_at_unix: user.created_at_unix,
+        }
+    }
+}
+
+/// Fails with `InvalidField` if any project id isn't a UUID — the wire carries them as strings.
+fn parse_project_ids(ids: Vec<String>) -> Result<Vec<ProjectId>, UserError> {
+    ids.iter()
+        .map(|id| {
+            Uuid::parse_str(id)
+                .map(ProjectId)
+                .map_err(|_| UserError::InvalidField("project_ids must be valid UUIDs".to_string()))
+        })
+        .collect()
+}
+
+impl TryFrom<pipa_api::NewUser> for NewUserAccount {
+    type Error = UserError;
+
+    fn try_from(new: pipa_api::NewUser) -> Result<Self, Self::Error> {
+        Ok(Self {
+            username: new.username,
+            password: new.password,
+            role: new.role.into(),
+            project_ids: parse_project_ids(new.project_ids)?,
+        })
+    }
+}
+
+impl TryFrom<pipa_api::UserUpdate> for UserAccountUpdate {
+    type Error = UserError;
+
+    fn try_from(update: pipa_api::UserUpdate) -> Result<Self, Self::Error> {
+        Ok(Self {
+            role: update.role.map(Into::into),
+            password: update.password,
+            project_ids: update.project_ids.map(parse_project_ids).transpose()?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_user_parses_project_ids_and_role() {
+        let id = Uuid::now_v7();
+        let new = NewUserAccount::try_from(pipa_api::NewUser {
+            username: "alice".to_string(),
+            password: "correct horse".to_string(),
+            role: pipa_api::Role::User,
+            project_ids: vec![id.to_string()],
+        })
+        .unwrap();
+        assert_eq!(new.role, Role::User);
+        assert_eq!(new.project_ids, vec![ProjectId(id)]);
+    }
+
+    #[test]
+    fn new_user_rejects_malformed_project_ids() {
+        let err = NewUserAccount::try_from(pipa_api::NewUser {
+            username: "alice".to_string(),
+            password: "correct horse".to_string(),
+            role: pipa_api::Role::User,
+            project_ids: vec!["nope".to_string()],
+        })
+        .unwrap_err();
+        assert!(matches!(err, UserError::InvalidField(_)));
+    }
+
+    #[test]
+    fn user_view_never_carries_the_password_hash() {
+        let user = User::register(
+            NewUserAccount {
+                username: "alice".to_string(),
+                password: "correct horse".to_string(),
+                role: Role::Admin,
+                project_ids: Vec::new(),
+            },
+            "secret-hash".to_string(),
+        );
+        let json = serde_json::to_string(&pipa_api::UserView::from(user)).unwrap();
+        assert!(!json.contains("secret-hash"));
+        assert!(json.contains("\"role\":\"admin\""));
+    }
 
     fn new_source(project_id: Option<&str>) -> pipa_api::NewDataSource {
         pipa_api::NewDataSource {
@@ -144,7 +255,7 @@ mod tests {
 
     #[test]
     fn new_data_source_parses_project_id() {
-        let id = Uuid::new_v4();
+        let id = Uuid::now_v7();
         let new = NewDataSource::try_from(new_source(Some(&id.to_string()))).unwrap();
         assert_eq!(new.project_id, Some(ProjectId(id)));
         assert_eq!(new.engine, DbEngine::MySql);

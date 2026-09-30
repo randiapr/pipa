@@ -6,10 +6,12 @@ use leptos::html;
 use leptos::prelude::*;
 
 use crate::view::Pagination;
-use crate::viewmodel::ProjectsViewModel;
+use crate::viewmodel::{ProjectsViewModel, SessionViewModel};
 
 #[component]
 pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
+    // Creating, editing and deleting projects is admin-only (the backend enforces it too).
+    let session = expect_context::<SessionViewModel>();
     let create_dialog = NodeRef::<html::Dialog>::new();
     let edit_dialog = NodeRef::<html::Dialog>::new();
     let delete_dialog = NodeRef::<html::Dialog>::new();
@@ -63,9 +65,11 @@ pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
             <div class="card-body">
                 <div class="flex items-center justify-between">
                     <h2 class="card-title">"Projects"</h2>
-                    <button class="btn btn-primary btn-sm" type="button" on:click=open_create>
-                        "New Project"
-                    </button>
+                    <Show when=move || session.is_admin()>
+                        <button class="btn btn-primary btn-sm" type="button" on:click=open_create>
+                            "New Project"
+                        </button>
+                    </Show>
                 </div>
 
                 <Show
@@ -78,7 +82,9 @@ pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
                                 <tr>
                                     <th>"Name"</th>
                                     <th>"Description"</th>
-                                    <th class="text-right">"Actions"</th>
+                                    <Show when=move || session.is_admin()>
+                                        <th class="text-right">"Actions"</th>
+                                    </Show>
                                 </tr>
                             </thead>
                             <tbody>
@@ -273,6 +279,7 @@ fn ProjectRow(
     pending_delete: RwSignal<Option<String>>,
     id: String,
 ) -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
     let id_for_edit = id.clone();
     let id_for_delete = id.clone();
     let id_for_name = id.clone();
@@ -289,7 +296,12 @@ fn ProjectRow(
                     .and_then(|p| p.description)
                     .unwrap_or_default()
             }}</td>
-            <td class="text-right">
+            {move || {
+                // Cloned per render: the click handlers below take ownership of the ids.
+                let id_for_edit = id_for_edit.clone();
+                let id_for_delete = id_for_delete.clone();
+                session.is_admin().then(|| view! {
+                <td class="text-right">
                 <div class="join">
                     <button
                         class="join-item btn btn-sm btn-square"
@@ -345,6 +357,7 @@ fn ProjectRow(
                     </button>
                 </div>
             </td>
+            }) }}
         </tr>
     }
 }

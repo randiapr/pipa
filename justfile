@@ -76,8 +76,12 @@ rustfs-init:
 ingestion: _target-guard
     cargo run -p pipa-ingestion
 
-# run the backend API (serves on 0.0.0.0:8080, GET /healthz)
+# run the backend API (serves on 0.0.0.0:8080, GET /healthz). Login needs a JWT secret and a
+# first admin; these local-only defaults apply unless already set in the environment.
 backend: _target-guard
+    JWT_SECRET="${JWT_SECRET:-pipa-local-dev-secret-do-not-use-in-production}" \
+    PIPA_ADMIN_USERNAME="${PIPA_ADMIN_USERNAME:-admin}" \
+    PIPA_ADMIN_PASSWORD="${PIPA_ADMIN_PASSWORD:-admin-password}" \
     cargo run -p pipa-backend
 
 # install crates/ui's npm deps (daisyui) if node_modules is missing; a no-op otherwise
@@ -126,14 +130,73 @@ clean:
     cargo clean
     rm -rf crates/ui/dist
 
-# bring up the containerized stack (docker-compose.yml), building images first
-docker-up:
+# make sure the mandatory compose secrets exist (PIPA_JWT_SECRET, PIPA_ADMIN_PASSWORD; see
+# docker-compose.yml): creates `.env` from `.env.example` if missing, then fills any of them that is
+# neither exported in the shell nor already set in `.env` with a random value. Values you set
+# yourself are never touched, so tokens survive restarts and the admin password stays stable.
+_docker-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v openssl >/dev/null || { echo "openssl is required to generate the secrets in .env" >&2; exit 1; }
+    [ -f .env ] || { cp .env.example .env; chmod 600 .env; }
+
+    # KEY's value in .env, without spaces or quotes ("" when missing or blank)
+    env_value() { { grep -E "^$1=" .env || true; } | tail -n1 | cut -d= -f2- | tr -d " \"'"; }
+
+    # set KEY=VALUE in .env, replacing an existing (e.g. blank) line in place, else appending
+    set_env() {
+        if grep -qE "^$1=" .env; then
+            awk -v k="$1" -v v="$2" 'BEGIN { FS = OFS = "=" } $1 == k { print k "=" v; next } { print }' .env > .env.tmp
+            mv .env.tmp .env
+            chmod 600 .env
+        else
+            [ -z "$(tail -c1 .env)" ] || echo >> .env  # don't glue onto an unterminated last line
+            printf '%s=%s\n' "$1" "$2" >> .env
+        fi
+    }
+
+    # KEY's value in .env as compose reads it (one pair of surrounding quotes removed)
+    raw_value() { { grep -E "^$1=" .env || true; } | tail -n1 | cut -d= -f2- | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\\(.*\\)'\$/\\1/"; }
+
+    # A secret you set yourself is kept as-is, but pipa-backend exits at startup on a JWT secret
+    # under 32 bytes while compose keeps the rest of the stack (and the login page) running —
+    # so refuse it here rather than leave a dashboard nobody can sign in to.
+    secret=${PIPA_JWT_SECRET:-$(raw_value PIPA_JWT_SECRET)}
+    if [ -n "$secret" ] && [ "$(printf '%s' "$secret" | wc -c | tr -d ' ')" -lt 32 ]; then
+        echo "PIPA_JWT_SECRET is only $(printf '%s' "$secret" | wc -c | tr -d ' ') bytes; pipa-backend needs at least 32." >&2
+        echo "Set a longer one in .env (openssl rand -base64 48), or blank the value to have it generated." >&2
+        exit 1
+    fi
+
+    password=""
+    for key in PIPA_JWT_SECRET PIPA_ADMIN_PASSWORD; do
+        [ -n "${!key:-}" ] && continue
+        [ -n "$(env_value "$key")" ] && continue
+        case "$key" in
+            PIPA_JWT_SECRET) set_env "$key" "$(openssl rand -base64 48 | tr -d '\n')" ;;
+            PIPA_ADMIN_PASSWORD) password=$(openssl rand -hex 16); set_env "$key" "$password" ;;
+        esac
+        echo "generated $key in .env"
+    done
+
+    if [ -n "$password" ]; then
+        user=${PIPA_ADMIN_USERNAME:-$(env_value PIPA_ADMIN_USERNAME)}
+        echo "first admin — username: ${user:-admin}  password: $password  (kept in .env)"
+        echo "sign in at http://localhost:3000 once the stack is up"
+    fi
+
+# bring up the containerized stack (docker-compose.yml), building images first; creates .env with random secrets on first run
+docker-up: _docker-env
     {{compose}} up --build
+
+# `down` still interpolates docker-compose.yml, so the two required secrets get throwaway values
+# in the recipes below (they never reach a running container) instead of demanding a real `.env`.
 
 # tear down the containerized stack, leaving its volumes (rustfs-data, postgres-data) intact
 docker-down:
-    {{compose}} down
+    PIPA_JWT_SECRET=unused PIPA_ADMIN_PASSWORD=unused {{compose}} down
 
 # tear down the containerized stack AND delete its volumes — irreversible, wipes rustfs-data/postgres-data
 docker-down-clean:
-    {{compose}} down --volumes
+    PIPA_JWT_SECRET=unused PIPA_ADMIN_PASSWORD=unused {{compose}} down --volumes

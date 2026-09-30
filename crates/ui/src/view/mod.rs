@@ -5,31 +5,47 @@
 //! `crate::api` directly — that boundary belongs to the ViewModel.
 
 mod landing;
+mod login;
 mod pagination;
 mod projects_card;
+mod query;
 mod sources_card;
+mod users;
 
 use leptos::prelude::*;
 use leptos_router::{
     components::{Route, Router, Routes},
+    hooks::use_navigate,
     path,
 };
 
 use landing::Landing;
+use login::Login;
 pub use pagination::Pagination;
 use projects_card::ProjectsCard;
+use query::Query;
 use sources_card::SourcesCard;
+use users::Users;
 
-use crate::viewmodel::AppViewModel;
+use crate::viewmodel::{AppViewModel, SessionViewModel};
 
 /// Nav destinations shared between the desktop navbar menu and the mobile sidebar drawer.
 /// Entries pointing into the dashboard carry the route (`/dashboard`) rather than a bare
 /// `#anchor`, since the landing page (`/`) is now a separate route. The "Home" entry that used
 /// to lead this list has been replaced by [`ThemeToggle`] (the brand link covers going home).
-const NAV_LINKS: &[(&str, &str)] = &[
-    ("/dashboard#projects", "Projects"),
-    ("/dashboard#sources", "Sources"),
-];
+/// The Users page is admin-only, so it is left out for everyone else (the route is guarded
+/// too, and the backend is what actually refuses non-admins).
+fn nav_links(is_admin: bool) -> Vec<(&'static str, &'static str)> {
+    let mut links = vec![
+        ("/dashboard#projects", "Projects"),
+        ("/dashboard#sources", "Sources"),
+        ("/query", "Query"),
+    ];
+    if is_admin {
+        links.push(("/users", "Users"));
+    }
+    links
+}
 
 /// The two daisyUI themes registered in `tailwind.css` (`themes: light --default, dark
 /// --prefersdark`).
@@ -84,6 +100,10 @@ fn ThemeToggle(theme: RwSignal<Theme>) -> impl IntoView {
 
 #[component]
 pub fn App() -> impl IntoView {
+    let session = SessionViewModel::new();
+    provide_context(session);
+    session.init();
+
     // daisyUI's drawer only closes when the checkbox is unchecked — clicking the hamburger
     // or the overlay does that natively via their `<label for="app-drawer">`, but tapping a
     // sidebar nav link wouldn't, since it's a separate element. Track the checkbox state
@@ -134,12 +154,18 @@ pub fn App() -> impl IntoView {
                             <a href="/">"pipa"</a>
                         </div>
                         <div class="hidden flex-none items-center gap-2 lg:flex">
-                            <ul class="menu menu-horizontal">
-                                {NAV_LINKS
-                                    .iter()
-                                    .map(|(href, label)| view! { <li><a href=*href>{*label}</a></li> })
-                                    .collect_view()}
-                            </ul>
+                            <Show when=move || session.is_authenticated()>
+                                <ul class="menu menu-horizontal">
+                                    {move || {
+                                        nav_links(session.is_admin())
+                                            .into_iter()
+                                            .map(|(href, label)| view! { <li><a href=href>{label}</a></li> })
+                                            .collect_view()
+                                    }}
+                                </ul>
+                                <ProjectSwitcher />
+                                <UserMenu />
+                            </Show>
                             <ThemeToggle theme=theme />
                         </div>
                     </div>
@@ -147,8 +173,29 @@ pub fn App() -> impl IntoView {
                         <div class="card card-border bg-base-100 shadow-xl w-full">
                             <div class="card-body">
                                 <Routes fallback=|| "not found">
-                                    <Route path=path!("/") view=Landing />
-                                    <Route path=path!("/dashboard") view=Dashboard />
+                                    <Route path=path!("/login") view=Login />
+                                    <Route
+                                        path=path!("/")
+                                        view=|| view! { <RequireAuth><Landing /></RequireAuth> }
+                                    />
+                                    <Route
+                                        path=path!("/dashboard")
+                                        view=|| view! { <RequireAuth><Dashboard /></RequireAuth> }
+                                    />
+                                    <Route
+                                        path=path!("/query")
+                                        view=|| view! { <RequireAuth><Query /></RequireAuth> }
+                                    />
+                                    <Route
+                                        path=path!("/users")
+                                        view=|| {
+                                            view! {
+                                                <RequireAuth admin_only=true>
+                                                    <Users />
+                                                </RequireAuth>
+                                            }
+                                        }
+                                    />
                                 </Routes>
                             </div>
                         </div>
@@ -160,22 +207,133 @@ pub fn App() -> impl IntoView {
                         <li>
                             <ThemeToggle theme=theme />
                         </li>
-                        {NAV_LINKS
-                            .iter()
-                            .map(|(href, label)| {
-                                view! {
-                                    <li>
-                                        <a href=*href on:click=move |_| drawer_open.set(false)>
-                                            {*label}
-                                        </a>
-                                    </li>
-                                }
-                            })
-                            .collect_view()}
+                        <Show when=move || session.is_authenticated()>
+                            <li class="mb-2">
+                                <ProjectSwitcher />
+                            </li>
+                            {move || {
+                                nav_links(session.is_admin())
+                                    .into_iter()
+                                    .map(|(href, label)| {
+                                        view! {
+                                            <li>
+                                                <a href=href on:click=move |_| drawer_open.set(false)>
+                                                    {label}
+                                                </a>
+                                            </li>
+                                        }
+                                    })
+                                    .collect_view()
+                            }}
+                            <li class="mt-2">
+                                <UserMenu />
+                            </li>
+                        </Show>
                     </ul>
                 </div>
             </div>
         </Router>
+    }
+}
+
+/// The project the whole app is scoped to. An admin may also pick "All projects"; anyone else
+/// only sees the projects an admin assigned to them.
+#[component]
+fn ProjectSwitcher() -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+
+    view! {
+        <Show
+            when=move || session.is_admin() || !session.projects.get().is_empty()
+            fallback=|| view! { <span class="text-sm text-base-content/70">"No projects assigned"</span> }
+        >
+            <select
+                class="select select-sm w-48"
+                aria-label="Current project"
+                on:change:target=move |ev| {
+                    session.select_project(Some(ev.target().value()).filter(|id| !id.is_empty()))
+                }
+            >
+                <Show when=move || session.is_admin()>
+                    <option value="" prop:selected=move || session.current_project_id.get().is_none()>
+                        "All projects"
+                    </option>
+                </Show>
+                <For
+                    each=move || session.projects.get()
+                    key=|project| (project.id.clone(), project.name.clone())
+                    children=move |project| {
+                        let id = project.id.clone();
+                        view! {
+                            <option
+                                value=project.id
+                                prop:selected=move || {
+                                    session.current_project_id.get().as_deref() == Some(id.as_str())
+                                }
+                            >
+                                {project.name}
+                            </option>
+                        }
+                    }
+                />
+            </select>
+        </Show>
+    }
+}
+
+/// Who is signed in, and the way out.
+#[component]
+fn UserMenu() -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+    let navigate = use_navigate();
+
+    view! {
+        <div class="flex items-center gap-2">
+            <span class="text-sm">
+                {move || session.user.get().map(|user| user.username).unwrap_or_default()}
+            </span>
+            <span class="badge badge-sm badge-outline">
+                {move || if session.is_admin() { "admin" } else { "user" }}
+            </span>
+            <button
+                class="btn btn-sm btn-ghost"
+                type="button"
+                on:click=move |_| {
+                    session.logout();
+                    navigate("/login", Default::default());
+                }
+            >
+                "Sign out"
+            </button>
+        </div>
+    }
+}
+
+/// Route guard: renders `children` only for a signed-in user (an admin, with `admin_only`).
+/// Anyone else is redirected — to the login page when signed out, to the dashboard when merely
+/// not an admin. Waits for the stored token to be checked first, so a reload doesn't flash the
+/// login page at someone who is still signed in.
+#[component]
+fn RequireAuth(#[prop(optional)] admin_only: bool, children: ChildrenFn) -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+    let navigate = use_navigate();
+
+    Effect::new(move |_| {
+        if !session.checked.get() {
+            return;
+        }
+        if !session.is_authenticated() {
+            navigate("/login", Default::default());
+        } else if admin_only && !session.is_admin() {
+            navigate("/dashboard", Default::default());
+        }
+    });
+
+    move || {
+        let allowed = session.checked.get()
+            && session.is_authenticated()
+            && (!admin_only || session.is_admin());
+        allowed.then(|| children())
     }
 }
 
@@ -185,6 +343,7 @@ pub(crate) const STATUS_TOAST_DURATION: std::time::Duration = std::time::Duratio
 #[component]
 fn Dashboard() -> impl IntoView {
     let vm = AppViewModel::new();
+    // Re-runs when the selected project changes, since `refresh_all` reads it.
     Effect::new(move |_| vm.refresh_all());
 
     // Auto-dismiss the status toast so it doesn't linger on screen forever.
@@ -199,6 +358,7 @@ fn Dashboard() -> impl IntoView {
             <p class="text-base-content/70">
                 "Connect and manage OLTP database sources for CDC capture."
             </p>
+            <ProjectScopeNote />
 
             {move || {
                 vm.status
@@ -217,5 +377,20 @@ fn Dashboard() -> impl IntoView {
             <ProjectsCard vm=vm.projects />
             <SourcesCard vm=vm.sources />
         </div>
+    }
+}
+
+/// Says which project the sources below are limited to.
+#[component]
+fn ProjectScopeNote() -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+
+    view! {
+        <p class="text-sm text-base-content/70">
+            {move || match session.current_project() {
+                Some(project) => format!("Showing data sources of \"{}\".", project.name),
+                None => "Showing data sources of all projects.".to_string(),
+            }}
+        </p>
     }
 }

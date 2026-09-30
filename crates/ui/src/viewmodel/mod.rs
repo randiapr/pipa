@@ -7,12 +7,18 @@
 //! their own beyond purely ephemeral, per-row UI state (see `view::sources_card::SourceRow`).
 
 mod projects;
+mod query;
+mod session;
 mod sources;
+mod users;
 
 use leptos::prelude::*;
 
 pub use projects::ProjectsViewModel;
+pub use query::{QueryViewModel, cell_text};
+pub use session::SessionViewModel;
 pub use sources::SourcesViewModel;
+pub use users::{UsersViewModel, parse_role, role_value};
 
 /// Rows shown per page in a paginated data table.
 pub const PAGE_SIZE: usize = 5;
@@ -43,7 +49,8 @@ impl StatusMessage {
 
 /// Composition root for the app's ViewModels and the status message they share. Used by
 /// every route (`Landing`, `Dashboard`) that needs project/source data — each route
-/// constructs its own instance and fetches independently on mount.
+/// constructs its own instance and fetches independently on mount. Must be created below
+/// `App`, which provides the shared [`SessionViewModel`] through context.
 #[derive(Copy, Clone)]
 pub struct AppViewModel {
     pub status: RwSignal<Option<StatusMessage>>,
@@ -53,9 +60,10 @@ pub struct AppViewModel {
 
 impl AppViewModel {
     pub fn new() -> Self {
+        let session = expect_context::<SessionViewModel>();
         let status = RwSignal::new(None);
-        let projects = ProjectsViewModel::new(status);
-        let sources = SourcesViewModel::new(projects.projects, status);
+        let projects = ProjectsViewModel::new(session.projects, status);
+        let sources = SourcesViewModel::new(session, status);
         Self {
             status,
             projects,
@@ -63,6 +71,7 @@ impl AppViewModel {
         }
     }
 
+    /// Reloads projects and the data sources of the selected project.
     pub fn refresh_all(&self) {
         self.projects.refresh();
         self.sources.refresh();

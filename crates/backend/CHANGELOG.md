@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.6.0] - 2026-09-30
+
+### Added
+
+- **Authentication and roles.** New `user` bounded context (`src/user/`): accounts persisted
+  under `users/` in the object store, Argon2id password hashes, HS256 JWTs (8h) as bearer
+  tokens. `POST /auth/login`, `GET /auth/me`, and admin-only `/users` CRUD. The token carries
+  only the user id and the account is re-read on every request, so role and project changes
+  (and deletions) apply immediately. The last admin cannot be deleted or demoted.
+- Every route except `/healthz` and `/auth/login` now requires `Authorization: Bearer <token>`
+  (401 otherwise, 403 when the role or project assignment doesn't allow it).
+- **Project-scoped access.** `admin` sees every project; `user` only the projects assigned to
+  it. Creating, editing and deleting projects is admin-only. Data sources are limited to
+  accessible projects (project-less ones are admin-only), and `GET /datasources` accepts
+  `?project_id=`.
+- **Project-scoped queries.** `POST /query` takes a `project_id`; the SQL only sees the
+  Iceberg namespaces of that project's data sources. A non-admin must name one of their
+  projects; an admin may omit it. Queries are now read-only: DDL, DML and session statements
+  are rejected.
+- Config: `JWT_SECRET` (required, at least 32 bytes), `PIPA_ADMIN_USERNAME`/
+  `PIPA_ADMIN_PASSWORD` (create the first admin while no user exists; startup fails with no
+  users), `CORS_ALLOWED_ORIGINS`.
+
+### Changed
+
+- CORS is no longer permissive: only `CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`),
+  the `GET/POST/PUT/DELETE` methods, and the `Authorization`/`Content-Type` headers.
+- **Breaking:** the backend refuses to start without `JWT_SECRET` and a first admin.
+- A `JWT_SECRET` shorter than 32 bytes now fails startup with `invalid JWT_SECRET` (it used to
+  surface as an unnamed "token secret" error), so a misconfigured container's log points at the
+  variable.
+
 ## [0.5.4] - 2026-09-29
 
 ### Changed

@@ -3,6 +3,7 @@
 //! Organized as MVVM:
 //! - [`api`] — the HTTP client talking to `pipa-backend`; the Model's I/O. Its request/response
 //!   types come from the `pipa-api` contract crate shared with the backend.
+//! - [`storage`] — `localStorage` access for the login token and the selected project.
 //! - [`viewmodel`] — reactive state (`RwSignal`s) plus the commands that mutate it; the only
 //!   layer that calls `api`.
 //! - [`view`] — Leptos components that render from a ViewModel's signals and call its
@@ -10,6 +11,7 @@
 //!   directly.
 
 mod api;
+mod storage;
 mod view;
 mod viewmodel;
 

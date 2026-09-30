@@ -8,7 +8,7 @@ use pipa_api::{
 };
 
 use crate::api;
-use crate::viewmodel::{PAGE_SIZE, StatusMessage};
+use crate::viewmodel::{PAGE_SIZE, SessionViewModel, StatusMessage};
 
 /// Reactive state for the data source registration form and table, plus the commands that
 /// mutate it via [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is
@@ -28,15 +28,14 @@ pub struct SourcesViewModel {
     /// The Projects list, shared with [`crate::viewmodel::ProjectsViewModel`] — used for the
     /// project picker and for labeling each row with its project's current name.
     projects: RwSignal<Vec<ProjectView>>,
+    /// Which project the dashboard is scoped to.
+    session: SessionViewModel,
     /// Shared with the rest of the dashboard, so failures here surface in the same banner.
     status: RwSignal<Option<StatusMessage>>,
 }
 
 impl SourcesViewModel {
-    pub fn new(
-        projects: RwSignal<Vec<ProjectView>>,
-        status: RwSignal<Option<StatusMessage>>,
-    ) -> Self {
+    pub fn new(session: SessionViewModel, status: RwSignal<Option<StatusMessage>>) -> Self {
         Self {
             sources: RwSignal::new(Vec::new()),
             page: RwSignal::new(0),
@@ -48,16 +47,30 @@ impl SourcesViewModel {
             password: RwSignal::new(String::new()),
             database: RwSignal::new(String::new()),
             selected_project_id: RwSignal::new(String::new()),
-            projects,
+            projects: session.projects,
+            session,
             status,
         }
     }
 
+    /// Reloads the data sources of the selected project (every accessible one when none is
+    /// selected). Reads the selection reactively, so calling this from an `Effect` re-runs it
+    /// when the project is switched.
     pub fn refresh(&self) {
+        self.load(self.session.current_project_id.get());
+    }
+
+    /// Reloads every data source the user may see, whatever project is selected. For overviews
+    /// that show all projects side by side.
+    pub fn refresh_unscoped(&self) {
+        self.load(None);
+    }
+
+    fn load(&self, project_id: Option<String>) {
         let sources = self.sources;
         let status = self.status;
         spawn_local(async move {
-            match api::list_sources().await {
+            match api::list_sources(project_id.as_deref()).await {
                 Ok(list) => sources.set(list),
                 Err(err) => status.set(Some(StatusMessage::Error(format!(
                     "Failed to load data sources: {err}"
@@ -106,6 +119,16 @@ impl SourcesViewModel {
             .into_iter()
             .find(|p| &p.id == id)
             .map(|p| p.name)
+    }
+
+    /// Starts the registration form on the selected project.
+    pub fn prefill_project(&self) {
+        self.selected_project_id.set(
+            self.session
+                .current_project_id
+                .get_untracked()
+                .unwrap_or_default(),
+        );
     }
 
     pub fn submit_new(&self, ev: SubmitEvent) {

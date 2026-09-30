@@ -6,4 +6,4 @@ pub mod catalog;
 pub mod query;
 
 pub use catalog::IcebergCatalogConfig;
-pub use query::{QueryError, QueryService};
+pub use query::{QueryError, QueryService, namespace_for_source};

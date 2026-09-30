@@ -4,12 +4,17 @@
 use leptos::prelude::*;
 
 use crate::view::STATUS_TOAST_DURATION;
-use crate::viewmodel::AppViewModel;
+use crate::viewmodel::{AppViewModel, SessionViewModel};
 
 #[component]
 pub fn Landing() -> impl IntoView {
     let vm = AppViewModel::new();
-    Effect::new(move |_| vm.refresh_all());
+    // Every project's card shows its own data-source count, so load all sources rather than
+    // only those of the selected project.
+    Effect::new(move |_| {
+        vm.projects.refresh();
+        vm.sources.refresh_unscoped();
+    });
 
     // Auto-dismiss the status toast so it doesn't linger on screen forever.
     Effect::new(move |_| {
@@ -49,7 +54,7 @@ pub fn Landing() -> impl IntoView {
                             <div class="card-body items-center text-center">
                                 <h2 class="card-title">"No projects yet"</h2>
                                 <p class="text-base-content/70">
-                                    "Create a project on the dashboard to start grouping data sources."
+                                    "Create a project on the dashboard (or ask an admin to assign you one) to start grouping data sources."
                                 </p>
                                 <div class="card-actions">
                                     <a class="btn btn-primary" href="/dashboard#projects">
@@ -80,6 +85,11 @@ fn ProjectCard(
     name: String,
     description: Option<String>,
 ) -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+    let id_for_selected = id.clone();
+    let id_for_manage = id.clone();
+    let is_selected =
+        move || session.current_project_id.get().as_deref() == Some(id_for_selected.as_str());
     let source_count = move || {
         vm.sources
             .sources
@@ -90,7 +100,10 @@ fn ProjectCard(
     };
 
     view! {
-        <div class="card card-border bg-base-100 shadow-xl">
+        <div
+            class="card card-border bg-base-100 shadow-xl"
+            class=("border-primary", is_selected)
+        >
             <div class="card-body">
                 <h2 class="card-title">{name}</h2>
                 <p class="text-base-content/70">
@@ -98,7 +111,11 @@ fn ProjectCard(
                 </p>
                 <div class="badge badge-neutral">{move || format!("{} data source(s)", source_count())}</div>
                 <div class="card-actions justify-end">
-                    <a class="btn btn-sm btn-primary" href="/dashboard#sources">
+                    <a
+                        class="btn btn-sm btn-primary"
+                        href="/dashboard#sources"
+                        on:click=move |_| session.select_project(Some(id_for_manage.clone()))
+                    >
                         "Manage"
                     </a>
                 </div>
