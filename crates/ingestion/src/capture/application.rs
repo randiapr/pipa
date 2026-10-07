@@ -369,7 +369,7 @@ mod tests {
 
     fn test_source() -> DataSource {
         DataSource {
-            id: DataSourceId(Uuid::new_v4()),
+            id: DataSourceId(Uuid::now_v7()),
             name: "test".to_string(),
             engine: DbEngine::Postgres,
             connection: ConnectionConfig {

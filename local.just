@@ -66,6 +66,9 @@ up:
     echo "waiting for pipa-backend on :8080..."
     wait_for_port 8080
 
+    # trunk's wasm build fails (yet it still opens :3000) without the wasm32 target
+    rustup target list --installed | grep -qx wasm32-unknown-unknown || rustup target add wasm32-unknown-unknown
+
     ( cd crates/ui
       [ -d node_modules ] || npm install
       nohup trunk serve > "../../{{logs_dir}}/ui.log" 2>&1 &

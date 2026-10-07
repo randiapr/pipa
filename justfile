@@ -84,8 +84,9 @@ backend: _target-guard
     PIPA_ADMIN_PASSWORD="${PIPA_ADMIN_PASSWORD:-admin-password}" \
     cargo run -p pipa-backend
 
-# install crates/ui's npm deps (daisyui) if node_modules is missing; a no-op otherwise
+# install crates/ui's prerequisites if missing (the wasm32 Rust target, daisyui's npm deps); a no-op otherwise
 ui-deps:
+    rustup target list --installed | grep -qx wasm32-unknown-unknown || rustup target add wasm32-unknown-unknown
     cd crates/ui && [ -d node_modules ] || npm install
 
 # run the dashboard dev server
@@ -95,6 +96,10 @@ ui: _target-guard ui-deps
 # production build of the dashboard
 build-ui: _target-guard ui-deps
     cd crates/ui && trunk build
+
+# optimized build of the dashboard with the host's native Trunk, for the `ui` Docker image to package
+build-ui-release: _target-guard ui-deps
+    cd crates/ui && trunk build --release
 
 # run tests for native crates
 test: _target-guard
@@ -186,8 +191,8 @@ _docker-env:
         echo "sign in at http://localhost:3000 once the stack is up"
     fi
 
-# bring up the containerized stack (docker-compose.yml), building images first; creates .env with random secrets on first run
-docker-up: _docker-env
+# bring up the containerized stack (docker-compose.yml), building the dashboard on the host and images first; creates .env with random secrets on first run
+docker-up: _docker-env build-ui-release
     {{compose}} up --build
 
 # `down` still interpolates docker-compose.yml, so the two required secrets get throwaway values

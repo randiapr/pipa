@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.1] - 2026-10-07
+
+### Changed
+
+- Test fixtures build source ids with UUIDv7 (`Uuid::now_v7`), matching `pipa-backend`'s id
+  generation. Bumped `tokio` to 1.53.2.
+
 ## [0.3.0] - 2026-09-29
 
 ### Added

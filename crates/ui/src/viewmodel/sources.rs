@@ -24,9 +24,8 @@ pub struct SourcesViewModel {
     pub username: RwSignal<String>,
     pub password: RwSignal<String>,
     pub database: RwSignal<String>,
-    pub selected_project_id: RwSignal<String>,
-    /// The Projects list, shared with [`crate::viewmodel::ProjectsViewModel`] — used for the
-    /// project picker and for labeling each row with its project's current name.
+    /// The Projects list, shared with [`crate::viewmodel::ProjectsViewModel`] — used for
+    /// labeling each row with its project's current name.
     projects: RwSignal<Vec<ProjectView>>,
     /// Which project the dashboard is scoped to.
     session: SessionViewModel,
@@ -46,7 +45,6 @@ impl SourcesViewModel {
             username: RwSignal::new(String::new()),
             password: RwSignal::new(String::new()),
             database: RwSignal::new(String::new()),
-            selected_project_id: RwSignal::new(String::new()),
             projects: session.projects,
             session,
             status,
@@ -96,11 +94,6 @@ impl SourcesViewModel {
         Signal::derive(move || sources.get().len())
     }
 
-    /// The projects available for the registration form's project picker.
-    pub fn projects(&self) -> Vec<ProjectView> {
-        self.projects.get()
-    }
-
     /// Looks up a data source's current display name by id — used by the delete confirmation
     /// dialog, which only holds an id.
     pub fn name_of(&self, id: &str) -> Option<String> {
@@ -119,16 +112,6 @@ impl SourcesViewModel {
             .into_iter()
             .find(|p| &p.id == id)
             .map(|p| p.name)
-    }
-
-    /// Starts the registration form on the selected project.
-    pub fn prefill_project(&self) {
-        self.selected_project_id.set(
-            self.session
-                .current_project_id
-                .get_untracked()
-                .unwrap_or_default(),
-        );
     }
 
     pub fn submit_new(&self, ev: SubmitEvent) {
@@ -154,7 +137,8 @@ impl SourcesViewModel {
                 password: self.password.get(),
                 database: self.database.get(),
             },
-            project_id: Some(self.selected_project_id.get()).filter(|id| !id.is_empty()),
+            // Registered into whichever project the nav-bar switcher has selected.
+            project_id: self.session.current_project_id.get_untracked(),
         };
 
         let this = *self;
@@ -170,7 +154,6 @@ impl SourcesViewModel {
                     this.username.set(String::new());
                     this.password.set(String::new());
                     this.database.set(String::new());
-                    this.selected_project_id.set(String::new());
                     this.refresh();
                 }
                 Err(err) => this.status.set(Some(StatusMessage::Error(format!(

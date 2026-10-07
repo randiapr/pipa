@@ -15,7 +15,7 @@ pub struct DataSourceId(pub Uuid);
 
 impl DataSourceId {
     pub fn new() -> Self {
-        Self(Uuid::new_v4())
+        Self(Uuid::now_v7())
     }
 }
 

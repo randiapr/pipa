@@ -312,7 +312,7 @@ mod live_tests {
     #[ignore]
     async fn postgres_wal_source_streams_real_changes() {
         let source = DataSource {
-            id: DataSourceId(Uuid::new_v4()),
+            id: DataSourceId(Uuid::now_v7()),
             name: "smoke-test".to_string(),
             engine: DbEngine::Postgres,
             connection: ConnectionConfig {
