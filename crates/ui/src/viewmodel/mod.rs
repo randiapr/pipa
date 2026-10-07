@@ -48,7 +48,7 @@ impl StatusMessage {
 }
 
 /// Composition root for the app's ViewModels and the status message they share. Used by
-/// every route (`Landing`, `Dashboard`) that needs project/source data — each route
+/// every route (`Landing`, `ProjectsPage`, `SourcesPage`) that needs project/source data — each route
 /// constructs its own instance and fetches independently on mount. Must be created below
 /// `App`, which provides the shared [`SessionViewModel`] through context.
 #[derive(Copy, Clone)]

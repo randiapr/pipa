@@ -15,7 +15,7 @@ mod users;
 use leptos::prelude::*;
 use leptos_router::{
     components::{Route, Router, Routes},
-    hooks::use_navigate,
+    hooks::{use_location, use_navigate},
     path,
 };
 
@@ -30,15 +30,14 @@ use users::Users;
 use crate::viewmodel::{AppViewModel, SessionViewModel};
 
 /// Nav destinations shared between the desktop navbar menu and the mobile sidebar drawer.
-/// Entries pointing into the dashboard carry the route (`/dashboard`) rather than a bare
-/// `#anchor`, since the landing page (`/`) is now a separate route. The "Home" entry that used
-/// to lead this list has been replaced by [`ThemeToggle`] (the brand link covers going home).
+/// The "Home" entry that used to lead this list has been replaced by [`ThemeToggle`] (the
+/// brand link covers going home).
 /// The Users page is admin-only, so it is left out for everyone else (the route is guarded
 /// too, and the backend is what actually refuses non-admins).
 fn nav_links(is_admin: bool) -> Vec<(&'static str, &'static str)> {
     let mut links = vec![
-        ("/dashboard#projects", "Projects"),
-        ("/dashboard#sources", "Sources"),
+        ("/projects", "Projects"),
+        ("/sources", "Sources"),
         ("/query", "Query"),
     ];
     if is_admin {
@@ -98,6 +97,31 @@ fn ThemeToggle(theme: RwSignal<Theme>) -> impl IntoView {
     }
 }
 
+/// Renders its children everywhere except the sign-in page, which stands alone without the navbar.
+#[component]
+fn HideOnLogin(children: ChildrenFn) -> impl IntoView {
+    let location = use_location();
+
+    view! { <Show when=move || location.pathname.get() != "/login">{children()}</Show> }
+}
+
+/// The card every page renders inside — except the sign-in page, which draws its own card and
+/// would otherwise sit as a card in a card. The wrapper elements stay mounted and only their
+/// classes change, so navigating to/from `/login` doesn't remount the routes.
+#[component]
+fn PageFrame(children: Children) -> impl IntoView {
+    let location = use_location();
+    let on_login = move || location.pathname.get() == "/login";
+
+    view! {
+        <div class=move || {
+            if on_login() { "flex w-full flex-1 items-center justify-center" } else { "card card-border bg-base-100 shadow-xl w-full" }
+        }>
+            <div class=move || if on_login() { "" } else { "card-body" }>{children()}</div>
+        </div>
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     let session = SessionViewModel::new();
@@ -127,7 +151,8 @@ pub fn App() -> impl IntoView {
                     prop:checked=move || drawer_open.get()
                     on:change:target=move |ev| drawer_open.set(ev.target().checked())
                 />
-                <div class="drawer-content flex flex-col">
+                <div class="drawer-content flex min-h-screen flex-col">
+                    <HideOnLogin>
                     <div class="navbar bg-base-300 w-full">
                         <div class="flex-none lg:hidden">
                             <label
@@ -169,9 +194,9 @@ pub fn App() -> impl IntoView {
                             <ThemeToggle theme=theme />
                         </div>
                     </div>
-                    <main class="p-6">
-                        <div class="card card-border bg-base-100 shadow-xl w-full">
-                            <div class="card-body">
+                    </HideOnLogin>
+                    <main class="flex flex-1 flex-col p-6">
+                        <PageFrame>
                                 <Routes fallback=|| "not found">
                                     <Route path=path!("/login") view=Login />
                                     <Route
@@ -179,8 +204,12 @@ pub fn App() -> impl IntoView {
                                         view=|| view! { <RequireAuth><Landing /></RequireAuth> }
                                     />
                                     <Route
-                                        path=path!("/dashboard")
-                                        view=|| view! { <RequireAuth><Dashboard /></RequireAuth> }
+                                        path=path!("/projects")
+                                        view=|| view! { <RequireAuth><ProjectsPage /></RequireAuth> }
+                                    />
+                                    <Route
+                                        path=path!("/sources")
+                                        view=|| view! { <RequireAuth><SourcesPage /></RequireAuth> }
                                     />
                                     <Route
                                         path=path!("/query")
@@ -197,8 +226,7 @@ pub fn App() -> impl IntoView {
                                         }
                                     />
                                 </Routes>
-                            </div>
-                        </div>
+                        </PageFrame>
                     </main>
                 </div>
                 <div class="drawer-side">
@@ -310,7 +338,7 @@ fn UserMenu() -> impl IntoView {
 }
 
 /// Route guard: renders `children` only for a signed-in user (an admin, with `admin_only`).
-/// Anyone else is redirected — to the login page when signed out, to the dashboard when merely
+/// Anyone else is redirected — to the login page when signed out, to the landing page when merely
 /// not an admin. Waits for the stored token to be checked first, so a reload doesn't flash the
 /// login page at someone who is still signed in.
 #[component]
@@ -325,7 +353,7 @@ fn RequireAuth(#[prop(optional)] admin_only: bool, children: ChildrenFn) -> impl
         if !session.is_authenticated() {
             navigate("/login", Default::default());
         } else if admin_only && !session.is_admin() {
-            navigate("/dashboard", Default::default());
+            navigate("/", Default::default());
         }
     });
 
@@ -340,18 +368,49 @@ fn RequireAuth(#[prop(optional)] admin_only: bool, children: ChildrenFn) -> impl
 /// How long a status toast stays on screen before it auto-dismisses.
 pub(crate) const STATUS_TOAST_DURATION: std::time::Duration = std::time::Duration::from_secs(4);
 
-#[component]
-fn Dashboard() -> impl IntoView {
+/// Fetches on mount and whenever the selected project changes (`refresh_all` reads it), and
+/// auto-dismisses the status toast so it doesn't linger on screen forever.
+fn page_view_model() -> AppViewModel {
     let vm = AppViewModel::new();
-    // Re-runs when the selected project changes, since `refresh_all` reads it.
     Effect::new(move |_| vm.refresh_all());
-
-    // Auto-dismiss the status toast so it doesn't linger on screen forever.
     Effect::new(move |_| {
         if vm.status.get().is_some() {
             set_timeout(move || vm.status.set(None), STATUS_TOAST_DURATION);
         }
     });
+    vm
+}
+
+#[component]
+fn StatusToast(vm: AppViewModel) -> impl IntoView {
+    move || {
+        vm.status.get().map(|msg| {
+            view! {
+                <div class="toast toast-top toast-end">
+                    <div role="alert" class=msg.alert_class()>
+                        <span>{msg.text().to_string()}</span>
+                    </div>
+                </div>
+            }
+        })
+    }
+}
+
+#[component]
+fn ProjectsPage() -> impl IntoView {
+    let vm = page_view_model();
+
+    view! {
+        <div class="flex flex-col gap-6">
+            <StatusToast vm=vm />
+            <ProjectsCard vm=vm.projects />
+        </div>
+    }
+}
+
+#[component]
+fn SourcesPage() -> impl IntoView {
+    let vm = page_view_model();
 
     view! {
         <div class="flex flex-col gap-6">
@@ -359,22 +418,7 @@ fn Dashboard() -> impl IntoView {
                 "Connect and manage OLTP database sources for CDC capture."
             </p>
             <ProjectScopeNote />
-
-            {move || {
-                vm.status
-                    .get()
-                    .map(|msg| {
-                        view! {
-                            <div class="toast toast-top toast-end">
-                                <div role="alert" class=msg.alert_class()>
-                                    <span>{msg.text().to_string()}</span>
-                                </div>
-                            </div>
-                        }
-                    })
-            }}
-
-            <ProjectsCard vm=vm.projects />
+            <StatusToast vm=vm />
             <SourcesCard vm=vm.sources />
         </div>
     }

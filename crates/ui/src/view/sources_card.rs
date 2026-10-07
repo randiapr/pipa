@@ -8,17 +8,15 @@ use leptos::prelude::*;
 use pipa_api::{ConnectionTestOutcome, DataSourceView, DbEngine};
 
 use crate::view::Pagination;
-use crate::viewmodel::{SessionViewModel, SourcesViewModel};
+use crate::viewmodel::SourcesViewModel;
 
 #[component]
 pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
-    let session = expect_context::<SessionViewModel>();
     let register_dialog = NodeRef::<html::Dialog>::new();
     let delete_dialog = NodeRef::<html::Dialog>::new();
     let pending_delete = RwSignal::new(Option::<String>::None);
 
     let open_register = move |_| {
-        vm.prefill_project();
         if let Some(dialog) = register_dialog.get() {
             let _ = dialog.show_modal();
         }
@@ -42,7 +40,6 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
         vm.username.set(String::new());
         vm.password.set(String::new());
         vm.database.set(String::new());
-        vm.selected_project_id.set(String::new());
     };
 
     let on_confirm_delete = move |_| {
@@ -130,27 +127,6 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                             prop:value=move || vm.name.get()
                             on:input:target=move |ev| vm.name.set(ev.target().value())
                         />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Project"</legend>
-                        <select
-                            class="select w-full"
-                            prop:value=move || vm.selected_project_id.get()
-                            on:change:target=move |ev| vm.selected_project_id.set(ev.target().value())
-                        >
-                            // Only an admin may register a data source outside any project.
-                            <Show when=move || session.is_admin()>
-                                <option value="">"(none)"</option>
-                            </Show>
-                            {move || {
-                                vm.projects()
-                                    .into_iter()
-                                    .map(|project| {
-                                        view! { <option value=project.id.clone()>{project.name.clone()}</option> }
-                                    })
-                                    .collect_view()
-                            }}
-                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">"Engine"</legend>

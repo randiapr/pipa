@@ -31,7 +31,7 @@ services:
   # S3-compatible object store backing both the Iceberg REST catalog's metadata files
   # and pipa's own direct table data/metadata access (crates/backend/src/storage.rs).
   rustfs:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:1.0.1
     environment:
       RUSTFS_ACCESS_KEY: rustfsadmin
       RUSTFS_SECRET_KEY: rustfsadmin
@@ -73,7 +73,7 @@ services:
   # rustfs/rc ships the `rc` CLI (RustFS's mc-equivalent, also used by `just rustfs-init`) —
   # not curl — so this ensures the bucket the same way, rather than hand-rolling sigv4 requests.
   create-bucket:
-    image: rustfs/rc:latest
+    image: rustfs/rc:v0.1.36
     depends_on:
       rustfs:
         condition: service_healthy
@@ -149,8 +149,10 @@ services:
       <<: *pipa-ingestion-env
       INGESTION_SHARD_INDEX: "1"
 
-  # Trunk-built wasm32 SPA (crates/ui/), served statically by static-web-server — see the `ui-builder`/
-  # `ui` stages in Dockerfile. It talks to `backend` from the browser at the compile-time
+  # Trunk-built wasm32 SPA (crates/ui/), served statically by static-web-server. The host's native
+  # Trunk does the build (`just build-ui-release`, which `just docker-up` runs first — plain
+  # `docker compose up --build` needs it done beforehand); the `ui` stage in Dockerfile only
+  # packages crates/ui/dist/. It talks to `backend` from the browser at the compile-time
   # API_BASE (localhost:8080, published above), not container-to-container, so `depends_on`
   # here is just for a sane startup order, not a network dependency.
   ui:

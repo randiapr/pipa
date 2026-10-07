@@ -1,5 +1,5 @@
 //! View: the landing page — a card gallery giving a quick overview of each project and how
-//! many data sources are grouped under it, with a way into the full dashboard.
+//! many data sources are grouped under it, with a way into the projects and sources pages.
 
 use leptos::prelude::*;
 
@@ -54,11 +54,11 @@ pub fn Landing() -> impl IntoView {
                             <div class="card-body items-center text-center">
                                 <h2 class="card-title">"No projects yet"</h2>
                                 <p class="text-base-content/70">
-                                    "Create a project on the dashboard (or ask an admin to assign you one) to start grouping data sources."
+                                    "Create a project (or ask an admin to assign you one) to start grouping data sources."
                                 </p>
                                 <div class="card-actions">
-                                    <a class="btn btn-primary" href="/dashboard#projects">
-                                        "Go to dashboard"
+                                    <a class="btn btn-primary" href="/projects">
+                                        "Go to projects"
                                     </a>
                                 </div>
                             </div>
@@ -113,7 +113,7 @@ fn ProjectCard(
                 <div class="card-actions justify-end">
                     <a
                         class="btn btn-sm btn-primary"
-                        href="/dashboard#sources"
+                        href="/sources"
                         on:click=move |_| session.select_project(Some(id_for_manage.clone()))
                     >
                         "Manage"

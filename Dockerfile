@@ -3,11 +3,12 @@
 # Builds pipa-ingestion and pipa-backend (native crates) in one builder stage so their
 # shared workspace dependencies (datafusion, iceberg, sqlx, ...) are compiled once,
 # then copies each release binary into its own minimal distroless runtime image. pipa-ui
-# targets wasm32 instead and gets its own `ui-builder` stage below (Trunk, not `cargo build`).
+# targets wasm32 instead and is built on the host with Trunk; the `ui` stage below just
+# packages its crates/ui/dist/ output.
 #
 # Build a single service with: docker build --target ingestion -t pipa-ingestion .
 #                               docker build --target backend -t pipa-backend .
-#                               docker build --target ui -t pipa-ui .
+#                               (just build-ui-release first)  docker build --target ui -t pipa-ui .
 # (docker-compose.yml does this via each service's `build.target`.)
 
 FROM rust:slim-trixie AS builder
@@ -37,35 +38,17 @@ COPY --from=builder /tmp/pipa-backend /usr/local/bin/pipa-backend
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/pipa-backend"]
 
-# Separate stage: pipa-ui is a Trunk-built wasm32 SPA (crates/ui/), not a `cargo build`
-# binary, so it needs the wasm32 target, Trunk, and Node/npm (Tailwind v4's standalone CLI
-# resolves `@plugin "daisyui"` via node_modules — see crates/ui/package.json) instead of
-# anything the shared `builder` stage above already has.
-FROM rust:slim-trixie AS ui-builder
-WORKDIR /build
-ARG TARGETARCH
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm curl \
-    && rm -rf /var/lib/apt/lists/*
-RUN rustup target add wasm32-unknown-unknown
-# Prebuilt binary rather than `cargo install trunk`: trunk's own dependency tree is large
-# enough that compiling it from source can OOM a memory-constrained build host.
-RUN case "$TARGETARCH" in \
-    amd64) trunk_arch=x86_64-unknown-linux-gnu ;; \
-    arm64) trunk_arch=aarch64-unknown-linux-gnu ;; \
-    *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
-    esac && \
-    curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-${trunk_arch}.tar.gz" \
-    | tar -xz -C /usr/local/bin trunk
-COPY . .
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
-    cd crates/ui && npm install && trunk build --release
-
-# The build output (crates/ui/dist/) is a static SPA that talks to pipa-backend from the
-# browser (crates/ui/src/api.rs's API_BASE is a compile-time localhost:8080 constant, so it
-# reaches pipa-backend via the host port mapping — no container-to-container wiring needed),
-# so serving it needs nothing beyond a static file server.
+# pipa-ui is a Trunk-built wasm32 SPA (crates/ui/), not a `cargo build` binary, and it is
+# deliberately NOT compiled inside Docker: the wasm build runs on the host with its native
+# Trunk instead (`just build-ui-release`, which `just docker-up` runs for you), so the
+# container VM's memory limit isn't a factor and the host's warm target/ and node_modules
+# are reused. This image only packages the resulting crates/ui/dist/ — which is why
+# .dockerignore must not exclude it.
+#
+# The build output is a static SPA that talks to pipa-backend from the browser
+# (crates/ui/src/api.rs's API_BASE is a compile-time localhost:8080 constant, so it reaches
+# pipa-backend via the host port mapping — no container-to-container wiring needed), so
+# serving it needs nothing beyond a static file server.
 #
 # static-web-server's `2` image is `FROM scratch` (a single ~4MB binary, no shell or package
 # manager, multi-arch amd64/arm64 like the other stages) and listens on port 80. The dashboard
@@ -74,7 +57,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # to a client route would 404. Unlike SERVER_ROOT it must be an absolute path (it is not
 # resolved against the root).
 FROM joseluisq/static-web-server:2 AS ui
-COPY --from=ui-builder /build/crates/ui/dist /public
+COPY crates/ui/dist /public
 ENV SERVER_ROOT=/public \
     SERVER_FALLBACK_PAGE=/public/index.html
 EXPOSE 80

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.4.1] - 2026-10-07
+
+### Changed
+
+- The `/dashboard` route is gone: its Projects and Sources cards now live on their own
+  routes, `/projects` and `/sources` (previously `/dashboard#projects` and
+  `/dashboard#sources`). Nav links and the landing page's links point at them.
+- The **Register a data source** form no longer has a project picker; the data source is
+  registered into the project selected in the nav-bar switcher (none for an admin on
+  "All projects").
+
+### Dependencies
+
+- Bumped `leptos` to 0.8.22 and `leptos_router` to 0.8.17.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added
