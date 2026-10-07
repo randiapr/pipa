@@ -1,6 +1,6 @@
 [package]
 name = "pipa-ingestion"
-version = "0.3.1"
+version = "0.4.0"
 edition.workspace = true
 license.workspace = true
 
@@ -14,6 +14,7 @@ chrono.workspace = true
 futures.workspace = true
 iceberg.workspace = true
 iceberg-catalog-rest.workspace = true
+iceberg-storage-opendal.workspace = true
 object_store.workspace = true
 parquet.workspace = true
 pgwire-replication.workspace = true

@@ -32,6 +32,7 @@ use iceberg::{
 use iceberg_catalog_rest::{
     REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE, RestCatalogBuilder,
 };
+use iceberg_storage_opendal::OpenDalStorageFactory;
 use parquet::file::properties::WriterProperties;
 use sqlx::{Connection, PgConnection, Row, postgres::PgConnectOptions};
 use tokio::sync::Mutex;
@@ -98,7 +99,12 @@ impl IcebergCatalogConfig {
             (S3_PATH_STYLE_ACCESS.to_string(), "true".to_string()),
         ]);
 
+        // iceberg 0.10 ships no S3 FileIO of its own: the REST catalog needs an explicit storage
+        // factory to read/write table data and metadata files.
         let catalog = RestCatalogBuilder::default()
+            .with_storage_factory(Arc::new(OpenDalStorageFactory::S3 {
+                customized_credential_load: None,
+            }))
             .load(self.name.clone(), props)
             .await?;
         Ok(Arc::new(catalog))
@@ -229,8 +235,13 @@ impl IcebergWriter for IcebergChangelogWriter {
 
         let location_generator = DefaultLocationGenerator::new(table.metadata())
             .map_err(|err| WriteError::Commit(err.to_string()))?;
-        let file_name_generator =
-            DefaultFileNameGenerator::new("pipa-cdc".to_string(), None, DataFileFormat::Parquet);
+        // The generator's counter restarts at 0 for every batch, so a fixed prefix would name each
+        // batch's file `pipa-cdc-00000.parquet` and the second commit would collide with the first.
+        let file_name_generator = DefaultFileNameGenerator::new(
+            format!("pipa-cdc-{}", uuid::Uuid::now_v7().simple()),
+            None,
+            DataFileFormat::Parquet,
+        );
         let parquet_writer_builder = ParquetWriterBuilder::new(
             WriterProperties::default(),
             table.metadata().current_schema().clone(),

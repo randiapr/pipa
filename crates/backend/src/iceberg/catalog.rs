@@ -11,6 +11,7 @@ use iceberg::{Catalog, CatalogBuilder};
 use iceberg_catalog_rest::{
     REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE, RestCatalogBuilder,
 };
+use iceberg_storage_opendal::OpenDalStorageFactory;
 use serde::{Deserialize, Serialize};
 
 /// Connection settings for the Iceberg REST catalog backing CDC target tables. Defaults to
@@ -61,7 +62,12 @@ impl IcebergCatalogConfig {
             (S3_PATH_STYLE_ACCESS.to_string(), "true".to_string()),
         ]);
 
+        // iceberg 0.10 ships no S3 FileIO of its own: the REST catalog needs an explicit storage
+        // factory to read/write table data and metadata files.
         let catalog = RestCatalogBuilder::default()
+            .with_storage_factory(Arc::new(OpenDalStorageFactory::S3 {
+                customized_credential_load: None,
+            }))
             .load(self.name.clone(), props)
             .await?;
 
