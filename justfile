@@ -6,7 +6,7 @@ set dotenv-load
 mod local
 
 # native crates only (pipa-ui targets wasm32 and is excluded; pipa-api also builds for wasm32 via pipa-ui)
-native := "-p pipa-api -p pipa-backend -p pipa-ingestion"
+native := "-p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion"
 
 # soft cap (GiB) on target/ — build recipes trim it back under this before compiling (see `_target-guard`)
 target_limit_gb := "10"
@@ -46,7 +46,7 @@ target-size:
     @du -sh target 2>/dev/null || echo "target/ does not exist"
     @echo "limit: {{ target_limit_gb }}GiB"
 
-# check native crates (backend, ingestion)
+# check native crates (api, backend, catalog-proxy, ingestion)
 check: _target-guard
     cargo check {{ native }}
 
