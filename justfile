@@ -1,8 +1,12 @@
+# export `.env` (the compose secrets, see `.env.example`) to every recipe, so `just docker-up` and
+# friends pick up what's in it without sourcing it by hand; a missing `.env` is fine
+set dotenv-load
+
 # local dev stack orchestration (`just local::up` brings up everything at once)
 mod local
 
 # native crates only (pipa-ui targets wasm32 and is excluded; pipa-api also builds for wasm32 via pipa-ui)
-native := "-p pipa-api -p pipa-backend -p pipa-ingestion"
+native := "-p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion"
 
 # soft cap (GiB) on target/ — build recipes trim it back under this before compiling (see `_target-guard`)
 target_limit_gb := "10"
@@ -25,12 +29,12 @@ _target-guard:
     #!/usr/bin/env bash
     set -euo pipefail
     [ -d target ] || exit 0
-    limit_kb=$(({{target_limit_gb}} * 1024 * 1024))
+    limit_kb=$(({{ target_limit_gb }} * 1024 * 1024))
     size_kb() { du -sk target | cut -f1; }
     gib() { awk -v kb="$1" 'BEGIN { printf "%.1f", kb / 1024 / 1024 }'; }
     used_kb=$(size_kb)
     [ "$used_kb" -le "$limit_kb" ] && exit 0
-    echo "target/ is $(gib "$used_kb")GiB (limit {{target_limit_gb}}GiB) — removing incremental caches"
+    echo "target/ is $(gib "$used_kb")GiB (limit {{ target_limit_gb }}GiB) — removing incremental caches"
     rm -rf target/*/incremental
     used_kb=$(size_kb)
     [ "$used_kb" -le "$limit_kb" ] && exit 0
@@ -40,11 +44,11 @@ _target-guard:
 # show how big target/ is against the limit
 target-size:
     @du -sh target 2>/dev/null || echo "target/ does not exist"
-    @echo "limit: {{target_limit_gb}}GiB"
+    @echo "limit: {{ target_limit_gb }}GiB"
 
-# check native crates (backend, ingestion)
+# check native crates (api, backend, catalog-proxy, ingestion)
 check: _target-guard
-    cargo check {{native}}
+    cargo check {{ native }}
 
 # check the ui crate against wasm32
 check-ui: _target-guard
@@ -55,7 +59,7 @@ check-all: check check-ui
 
 # build native crates
 build: _target-guard
-    cargo build {{native}}
+    cargo build {{ native }}
 
 # run a local RustFS server (S3 API on :9000, console on :9001, data under ./rustfs-data)
 rustfs:
@@ -64,8 +68,8 @@ rustfs:
     # use, so `just ingestion`/`just backend` connect with no extra setup. Still need the "pipa"
     # bucket created once — see `rustfs-init`, or just use `just local::up`, which does both
     # automatically.
-    mkdir -p {{rustfs_data}}
-    rustfs server --console-enable --access-key rustfsadmin --secret-key rustfsadmin {{rustfs_data}}
+    mkdir -p {{ rustfs_data }}
+    rustfs server --console-enable --access-key rustfsadmin --secret-key rustfsadmin {{ rustfs_data }}
 
 # one-time (idempotent) setup: point `rc` at the local RustFS and ensure the "pipa" bucket exists
 rustfs-init:
@@ -103,7 +107,7 @@ build-ui-release: _target-guard ui-deps
 
 # run tests for native crates
 test: _target-guard
-    cargo test {{native}}
+    cargo test {{ native }}
 
 # format all crates
 fmt:
@@ -111,7 +115,7 @@ fmt:
 
 # lint native crates
 clippy: _target-guard
-    cargo clippy {{native}} -- -D warnings
+    cargo clippy {{ native }} -- -D warnings
 
 # check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
 outdated:
@@ -174,6 +178,14 @@ _docker-env:
         exit 1
     fi
 
+    # Likewise for the first admin's password: pipa-backend rejects one under 8 characters and exits.
+    admin_password=${PIPA_ADMIN_PASSWORD:-$(raw_value PIPA_ADMIN_PASSWORD)}
+    if [ -n "$admin_password" ] && [ "$(printf '%s' "$admin_password" | wc -c | tr -d ' ')" -lt 8 ]; then
+        echo "PIPA_ADMIN_PASSWORD is only $(printf '%s' "$admin_password" | wc -c | tr -d ' ') characters; pipa-backend needs at least 8." >&2
+        echo "Set a longer one in .env, or blank the value to have it generated." >&2
+        exit 1
+    fi
+
     password=""
     for key in PIPA_JWT_SECRET PIPA_ADMIN_PASSWORD; do
         [ -n "${!key:-}" ] && continue
@@ -193,15 +205,15 @@ _docker-env:
 
 # bring up the containerized stack (docker-compose.yml), building the dashboard on the host and images first; creates .env with random secrets on first run
 docker-up: _docker-env build-ui-release
-    {{compose}} up --build
+    {{ compose }} up --build
 
 # `down` still interpolates docker-compose.yml, so the two required secrets get throwaway values
 # in the recipes below (they never reach a running container) instead of demanding a real `.env`.
 
 # tear down the containerized stack, leaving its volumes (rustfs-data, postgres-data) intact
 docker-down:
-    PIPA_JWT_SECRET=unused PIPA_ADMIN_PASSWORD=unused {{compose}} down
+    {{ compose }} down
 
 # tear down the containerized stack AND delete its volumes — irreversible, wipes rustfs-data/postgres-data
 docker-down-clean:
-    PIPA_JWT_SECRET=unused PIPA_ADMIN_PASSWORD=unused {{compose}} down --volumes
+    {{ compose }} down --volumes

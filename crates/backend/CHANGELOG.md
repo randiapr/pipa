@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.7.0] - 2026-10-07
+
+### Fixed
+
+- `POST /query` failed with `StorageFactory must be provided for RestCatalog` against iceberg 0.10,
+  which ships no S3 file IO of its own. The REST catalog is now built with an explicit
+  `OpenDalStorageFactory::S3` (new `iceberg-storage-opendal` dependency).
+
+### Changed
+
+- The Iceberg catalog is now reached through `pipa-catalog-proxy` in the compose stack
+  (`ICEBERG_CATALOG_URI=http://catalog:8080/iceberg`): RustFS's embedded catalog rejects unsigned
+  requests and `iceberg-catalog-rest` cannot sign. Pointing `ICEBERG_CATALOG_URI` at RustFS's
+  `/iceberg` directly (the unset default) no longer works; set it to the proxy.
+
 ## [0.6.1] - 2026-10-07
 
 ### Changed

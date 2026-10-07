@@ -58,10 +58,10 @@ just docker-up   # first run creates .env with a random JWT secret and admin pas
 you can edit). Without `just`, `cp .env.example .env`, set `PIPA_JWT_SECRET` and
 `PIPA_ADMIN_PASSWORD`, then `docker compose up --build`.
 
-`POST /query` talks to RustFS's own embedded Iceberg REST Catalog ("S3 Tables" feature) by
-default now, but that feature is opt-in per bucket — until the `pipa` bucket has S3 Tables
-enabled on it manually, `POST /query` will fail (see the note at the top of
-`docker-compose.yml`).
+`POST /query` and `pipa-ingestion` talk to RustFS's own embedded Iceberg REST Catalog ("S3 Tables"
+feature). That catalog requires SigV4-signed requests, which `iceberg-catalog-rest` can't send, so
+compose runs `pipa-catalog-proxy` (`catalog`, `crates/catalog-proxy`) in front of it, which also enables
+S3 Tables on the `pipa` bucket at startup — all automatic (see the note at the top of `docker-compose.yml`).
 
 ## Commands
 
