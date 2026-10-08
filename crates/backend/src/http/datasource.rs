@@ -1,6 +1,7 @@
 //! `/datasources` routes: register/list/get/delete OLTP data sources, test connectivity. Every
-//! route is limited to data sources in projects the caller may access; project-less data sources
-//! are admin-only.
+//! route needs a developer or admin (a data source carries its connection password, so view-only
+//! users never see one) and is limited to data sources in projects the caller may access;
+//! project-less data sources are admin-only.
 
 use std::sync::Arc;
 
@@ -50,6 +51,7 @@ async fn list_datasources(
     State(service): State<SharedDataSourceService>,
     Query(params): Query<ListParams>,
 ) -> Result<Json<DataSourcesResponse>, ApiError> {
+    auth.require_developer()?;
     let wanted = params.project_id.map(ProjectId);
     if let Some(project) = wanted {
         auth.require_project(Some(project))?;
@@ -73,6 +75,7 @@ async fn register_datasource(
     State(service): State<SharedDataSourceService>,
     Json(new_source): Json<NewDataSource>,
 ) -> Result<(StatusCode, Json<DataSourceResponse>), ApiError> {
+    auth.require_developer()?;
     let new_source: crate::datasource::domain::NewDataSource = new_source.try_into()?;
     auth.require_project(new_source.project_id)?;
     let datasource = service.register(new_source).await?.into();
@@ -90,6 +93,7 @@ async fn get_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DataSourceResponse>, ApiError> {
+    auth.require_developer()?;
     let datasource = service.get(DataSourceId(id)).await?;
     auth.require_project(datasource.project_id)?;
     let datasource = datasource.into();
@@ -104,6 +108,7 @@ async fn delete_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<MessageResponse>, ApiError> {
+    auth.require_developer()?;
     let datasource = service.get(DataSourceId(id)).await?;
     auth.require_project(datasource.project_id)?;
     service.remove(DataSourceId(id)).await?;
@@ -115,6 +120,7 @@ async fn test_datasource(
     State(service): State<SharedDataSourceService>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ConnectionTestResponse>, ApiError> {
+    auth.require_developer()?;
     let datasource = service.get(DataSourceId(id)).await?;
     auth.require_project(datasource.project_id)?;
     let connection_test = service.test_connection(DataSourceId(id)).await?.into();

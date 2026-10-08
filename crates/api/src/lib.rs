@@ -16,6 +16,7 @@ pub mod envelope;
 pub mod path;
 pub mod project;
 pub mod query;
+pub mod table;
 pub mod user;
 
 pub use datasource::{
@@ -29,6 +30,7 @@ pub use project::{
     ProjectsResponse,
 };
 pub use query::{QueryRequest, Rows, RowsResponse};
+pub use table::{ReadTableRequest, TableView, Tables, TablesResponse};
 pub use user::{
     LoginData, LoginRequest, LoginResponse, MeData, MeResponse, NewUser, Role, UserData,
     UserResponse, UserUpdate, UserView, Users, UsersResponse,

@@ -1,6 +1,6 @@
 //! Domain layer: the `User` aggregate, its `Role`, and the ports the application layer depends
 //! on (`UserRepository`, `PasswordHasher`, `TokenService`). A user is an account that signs in to
-//! the dashboard; `Role::User` accounts only see the projects an admin assigned to them.
+//! the dashboard; non-admin accounts only see the projects an admin assigned to them.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -36,10 +36,13 @@ impl std::fmt::Display for UserId {
 }
 
 /// What an account may do: `Admin` manages users and projects and sees every project.
+/// `Developer` can do everything inside its assigned projects except manage users or projects.
+/// `User` can only browse the tables of its assigned projects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Admin,
+    Developer,
     User,
 }
 
@@ -51,7 +54,7 @@ pub struct User {
     /// PHC-format password hash; the plaintext is never stored.
     pub password_hash: String,
     pub role: Role,
-    /// Projects an account with `Role::User` may access. Ignored for admins, who see everything.
+    /// Projects a non-admin account may access. Ignored for admins, who see everything.
     pub project_ids: Vec<ProjectId>,
     pub created_at_unix: u64,
 }

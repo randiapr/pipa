@@ -1,5 +1,6 @@
 //! `/query` route: ad-hoc SQL over Iceberg tables via `crate::iceberg`'s `QueryService`, limited
-//! to the tables of one project.
+//! to the tables of one project. Free SQL is for developers and admins; view-only users
+//! browse tables instead (see `table.rs`).
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -14,6 +15,7 @@ use axum::{
 use pipa_api::{QueryRequest, Rows, RowsResponse, path};
 use uuid::Uuid;
 
+use crate::datasource::domain::DataSource;
 use crate::datasource::{DataSourceError, DataSourceService};
 use crate::iceberg::{QueryError, QueryService, namespace_for_source};
 use crate::project::ProjectId;
@@ -39,13 +41,14 @@ pub fn routes() -> Router<SharedQueryApi> {
 /// already JSON-encoded as bytes (from the Arrow result batches), so those are parsed back into
 /// a `serde_json::Value` here to nest under `rows`.
 ///
-/// Non-admins must name a project they may access. An admin may omit `project_id` to query
-/// every table.
+/// Needs a developer or admin. A developer must name a project they may access. An admin may
+/// omit `project_id` to query every table.
 async fn run_query(
     auth: AuthUser,
     State(api): State<SharedQueryApi>,
     Json(request): Json<QueryRequest>,
 ) -> Result<Json<RowsResponse>, ApiError> {
+    auth.require_developer()?;
     let project = request
         .project_id
         .as_deref()
@@ -61,15 +64,7 @@ async fn run_query(
     }
 
     let namespaces = match project {
-        Some(project) => Some(
-            api.datasources
-                .list()
-                .await?
-                .into_iter()
-                .filter(|source| source.project_id == Some(project))
-                .map(|source| namespace_for_source(source.id))
-                .collect::<HashSet<_>>(),
-        ),
+        Some(project) => Some(project_namespaces(&api.datasources, project).await?),
         None => None,
     };
 
@@ -77,6 +72,31 @@ async fn run_query(
     let rows: serde_json::Value =
         serde_json::from_slice(&body).expect("QueryService always encodes a valid JSON array");
     Ok(Json(BaseResponse::new(ResponseCode::Ok, Rows { rows })))
+}
+
+/// The data sources registered in `project`.
+pub(super) async fn project_sources(
+    datasources: &DataSourceService,
+    project: ProjectId,
+) -> Result<Vec<DataSource>, DataSourceError> {
+    Ok(datasources
+        .list()
+        .await?
+        .into_iter()
+        .filter(|source| source.project_id == Some(project))
+        .collect())
+}
+
+/// The Iceberg namespaces of every data source in `project`.
+pub(super) async fn project_namespaces(
+    datasources: &DataSourceService,
+    project: ProjectId,
+) -> Result<HashSet<String>, DataSourceError> {
+    Ok(project_sources(datasources, project)
+        .await?
+        .into_iter()
+        .map(|source| namespace_for_source(source.id))
+        .collect())
 }
 
 enum ApiError {
@@ -118,19 +138,21 @@ impl IntoResponse for ApiError {
                 ResponseCode::InternalError,
                 err,
             ),
-            Self::Query(err) => {
-                let (status, code) = match &err {
-                    QueryError::Catalog(_) => {
-                        (StatusCode::BAD_GATEWAY, ResponseCode::UpstreamError)
-                    }
-                    QueryError::Execution(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
-                    QueryError::Encoding(_) => (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        ResponseCode::InternalError,
-                    ),
-                };
-                error_response(status, code, err)
-            }
+            Self::Query(err) => query_error_response(err),
         }
     }
+}
+
+/// How a failed query is reported: an unreachable catalog is the upstream's fault, a rejected
+/// query the caller's, anything else ours.
+pub(super) fn query_error_response(err: QueryError) -> Response {
+    let (status, code) = match &err {
+        QueryError::Catalog(_) => (StatusCode::BAD_GATEWAY, ResponseCode::UpstreamError),
+        QueryError::Execution(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
+        QueryError::Encoding(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ResponseCode::InternalError,
+        ),
+    };
+    error_response(status, code, err)
 }

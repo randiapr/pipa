@@ -67,6 +67,11 @@ impl SourcesViewModel {
     fn load(&self, project_id: Option<String>) {
         let sources = self.sources;
         let status = self.status;
+        // Data sources carry connection details, so the backend refuses them to plain users.
+        if !self.session.can_develop() {
+            sources.set(Vec::new());
+            return;
+        }
         spawn_local(async move {
             match api::list_sources(project_id.as_deref()).await {
                 Ok(list) => sources.set(list),

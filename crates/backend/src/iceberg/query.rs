@@ -10,6 +10,7 @@ use datafusion::arrow::json::writer::ArrayWriter;
 use datafusion::catalog::{CatalogProvider, SchemaProvider};
 use datafusion::execution::context::SQLOptions;
 use datafusion::prelude::SessionContext;
+use datafusion::sql::TableReference;
 use iceberg_datafusion::IcebergCatalogProvider;
 use thiserror::Error;
 
@@ -94,6 +95,48 @@ impl QueryService {
         sql: &str,
         allowed_namespaces: Option<HashSet<String>>,
     ) -> Result<Vec<u8>, QueryError> {
+        let ctx = self.session(allowed_namespaces).await?;
+        run_read_only(&ctx, sql).await
+    }
+
+    /// Lists the tables of `namespaces`, as `(namespace, table)` pairs sorted by name.
+    pub async fn list_tables(
+        &self,
+        namespaces: HashSet<String>,
+    ) -> Result<Vec<(String, String)>, QueryError> {
+        let ctx = self.session(Some(namespaces)).await?;
+        let catalog = ctx
+            .catalog(&self.catalog.name)
+            .expect("session() registers the catalog under this name");
+        Ok(tables_of(catalog.as_ref()))
+    }
+
+    /// Reads rows of `namespace.table`, JSON-encoded like [`query`](Self::query), `offset` rows
+    /// in.
+    ///
+    /// Takes no SQL: the read is assembled with the DataFrame API, and the session only sees
+    /// `namespace`, so it can't reach another data source's tables. `limit` defaults to
+    /// [`DEFAULT_TABLE_ROWS`] and is capped at [`MAX_TABLE_ROWS`].
+    pub async fn read_table(
+        &self,
+        namespace: &str,
+        table: &str,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<Vec<u8>, QueryError> {
+        let ctx = self
+            .session(Some(HashSet::from([namespace.to_string()])))
+            .await?;
+        let table = TableReference::full(self.catalog.name.as_str(), namespace, table);
+        read_rows(&ctx, table, limit, offset).await
+    }
+
+    /// A fresh DataFusion session with the Iceberg catalog registered, optionally narrowed to
+    /// `allowed_namespaces`.
+    async fn session(
+        &self,
+        allowed_namespaces: Option<HashSet<String>>,
+    ) -> Result<SessionContext, QueryError> {
         let catalog = self
             .catalog
             .build_catalog(&self.store)
@@ -113,8 +156,55 @@ impl QueryService {
 
         let ctx = SessionContext::new();
         ctx.register_catalog(self.catalog.name.clone(), provider);
-        run_read_only(&ctx, sql).await
+        Ok(ctx)
     }
+}
+
+/// Rows a table read returns when the caller doesn't say.
+pub const DEFAULT_TABLE_ROWS: usize = 100;
+/// The most rows a single table read may return.
+pub const MAX_TABLE_ROWS: usize = 1000;
+
+/// Every `(schema, table)` of `catalog`, sorted.
+fn tables_of(catalog: &dyn CatalogProvider) -> Vec<(String, String)> {
+    let mut tables: Vec<(String, String)> = catalog
+        .schema_names()
+        .into_iter()
+        .filter_map(|name| catalog.schema(&name).map(|schema| (name, schema)))
+        .flat_map(|(name, schema)| {
+            schema
+                .table_names()
+                .into_iter()
+                .map(move |table| (name.clone(), table))
+        })
+        .collect();
+    tables.sort();
+    tables
+}
+
+/// Reads `offset..offset + limit` rows of `table` on `ctx` and JSON-encodes them.
+async fn read_rows(
+    ctx: &SessionContext,
+    table: TableReference,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<Vec<u8>, QueryError> {
+    let limit = limit.unwrap_or(DEFAULT_TABLE_ROWS).min(MAX_TABLE_ROWS);
+    let batches = ctx
+        .table(table)
+        .await?
+        .limit(offset.unwrap_or(0), Some(limit))?
+        .collect()
+        .await?;
+    encode(&batches)
+}
+
+/// JSON-encodes result batches as an array of objects, one per row.
+fn encode(batches: &[datafusion::arrow::array::RecordBatch]) -> Result<Vec<u8>, QueryError> {
+    let mut writer = ArrayWriter::new(Vec::new());
+    writer.write_batches(&batches.iter().collect::<Vec<_>>())?;
+    writer.finish()?;
+    Ok(writer.into_inner())
 }
 
 /// Executes `sql` on `ctx` and JSON-encodes the rows, rejecting anything but a read-only query.
@@ -124,11 +214,7 @@ async fn run_read_only(ctx: &SessionContext, sql: &str) -> Result<Vec<u8>, Query
         .with_allow_dml(false)
         .with_allow_statements(false);
     let batches = ctx.sql_with_options(sql, options).await?.collect().await?;
-
-    let mut writer = ArrayWriter::new(Vec::new());
-    writer.write_batches(&batches.iter().collect::<Vec<_>>())?;
-    writer.finish()?;
-    Ok(writer.into_inner())
+    encode(&batches)
 }
 
 #[cfg(test)]
@@ -165,6 +251,97 @@ mod tests {
         assert_eq!(
             namespace_for_source(id),
             "cdc_11111111222233334444555555555555"
+        );
+    }
+
+    /// A context with `orders(id, region, amount)` holding five rows in a plain memory table.
+    fn orders_ctx() -> SessionContext {
+        use datafusion::arrow::array::{Int64Array, RecordBatch, StringArray};
+        use datafusion::arrow::datatypes::{DataType, Field, Schema};
+        use datafusion::datasource::MemTable;
+
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("region", DataType::Utf8, false),
+            Field::new("amount", DataType::Int64, false),
+        ]));
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(Int64Array::from(vec![1, 2, 3, 4, 5])),
+                Arc::new(StringArray::from(vec!["EU", "US", "EU", "EU", "US"])),
+                Arc::new(Int64Array::from(vec![10, 20, 30, 40, 50])),
+            ],
+        )
+        .unwrap();
+        let ctx = SessionContext::new();
+        ctx.register_table(
+            "orders",
+            Arc::new(MemTable::try_new(schema, vec![vec![batch]]).unwrap()),
+        )
+        .unwrap();
+        ctx
+    }
+
+    async fn rows(limit: Option<usize>, offset: Option<usize>) -> Result<String, QueryError> {
+        read_rows(&orders_ctx(), TableReference::bare("orders"), limit, offset)
+            .await
+            .map(|body| String::from_utf8(body).unwrap())
+    }
+
+    #[tokio::test]
+    async fn reading_a_table_returns_its_rows_and_columns() {
+        let body = rows(Some(1), None).await.unwrap();
+        assert_eq!(body, r#"[{"id":1,"region":"EU","amount":10}]"#);
+    }
+
+    #[tokio::test]
+    async fn limit_and_offset_page_through_rows_and_limit_is_capped() {
+        let body = rows(Some(2), Some(1)).await.unwrap();
+        assert!(body.starts_with(r#"[{"id":2,"#) && body.contains(r#""id":3"#));
+        assert_eq!(body.matches("\"id\"").count(), 2);
+
+        // An absurd limit is clamped rather than rejected; the table only has five rows anyway.
+        let body = rows(Some(usize::MAX), None).await.unwrap();
+        assert_eq!(body.matches("\"id\"").count(), 5);
+
+        // Past the end there is simply nothing.
+        assert_eq!(rows(None, Some(5)).await.unwrap(), "[]");
+    }
+
+    #[tokio::test]
+    async fn an_unknown_table_is_rejected() {
+        let result = read_rows(&orders_ctx(), TableReference::bare("nope"), None, None).await;
+        assert!(matches!(result, Err(QueryError::Execution(_))));
+    }
+
+    #[test]
+    fn tables_are_listed_per_namespace_and_sorted() {
+        use datafusion::arrow::datatypes::Schema;
+        use datafusion::datasource::MemTable;
+
+        let catalog = MemoryCatalogProvider::new();
+        for (namespace, tables) in [
+            ("cdc_b", vec!["t2", "t1"]),
+            ("cdc_a", vec!["t3"]),
+            ("cdc_c", vec![]),
+        ] {
+            let schema = Arc::new(MemorySchemaProvider::new());
+            for table in tables {
+                let empty = MemTable::try_new(Arc::new(Schema::empty()), vec![vec![]]).unwrap();
+                schema
+                    .register_table(table.to_string(), Arc::new(empty))
+                    .unwrap();
+            }
+            catalog.register_schema(namespace, schema).unwrap();
+        }
+        assert_eq!(
+            tables_of(&catalog),
+            [
+                ("cdc_a".to_string(), "t3".to_string()),
+                ("cdc_b".to_string(), "t1".to_string()),
+                ("cdc_b".to_string(), "t2".to_string()),
+            ]
         );
     }
 

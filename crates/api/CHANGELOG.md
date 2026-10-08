@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.0] - 2026-10-08
+
+### Added
+
+- `Role::Developer` (`"developer"` on the wire), alongside `admin` and `user`.
+- `table` module for read-only table browsing: `TableView`, `Tables`/`TablesResponse` and
+  `ReadTableRequest`, with the `TABLES` (`/tables`) and `TABLE_ROWS` (`/tables/rows`) paths.
+
+### Changed
+
+- **Breaking:** adding a `Role` variant makes existing exhaustive `match`es on it
+  non-exhaustive. `user` now means view-only; the old "everything inside my projects" meaning
+  is `developer`.
+
 ## [0.2.0] - 2026-09-30
 
 ### Added

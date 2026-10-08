@@ -19,7 +19,7 @@ A Cargo workspace of five crates, each versioned independently (see each crate's
   no dependency on any other crate here — it reads registered sources directly from the shared
   object store, and is designed to run distributed (`INGESTION_SHARD_INDEX`/
   `INGESTION_SHARD_COUNT` split sources across instances).
-- **`pipa-backend`** — the HTTP API: accounts and sign-in (admin/user roles), projects, OLTP
+- **`pipa-backend`** — the HTTP API: accounts and sign-in (admin/developer/user roles), projects, read-only table browsing, OLTP
   data source management (registering/testing sources, over the shared RustFS/S3 object
   store), plus Apache Iceberg query access (`POST /query`: REST catalog client, DataFusion SQL,
   scoped to the caller's project). Every external caller (the dashboard, any future client)
@@ -58,8 +58,14 @@ ingestion. The containerized stack below does this for you.
 
 With `just local::up`, sign in as the first admin, `admin` / `admin-password` by default (local-only defaults;
 override with `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD`, and `JWT_SECRET` for the token
-secret). Admins create further accounts on the Users page and assign each `user`-role
-account the projects it may see; a `user` never sees the Users menu.
+secret). Admins create further accounts on the Users page and assign each non-admin account the
+projects it may access. Roles:
+
+- **admin**: everything, including the Users page and creating projects.
+- **developer**: everything inside its assigned projects (sources, free SQL queries) except user
+  and project management; it never sees the Users menu.
+- **user**: view-only. It can browse the Iceberg tables of its projects (paged, no SQL) but cannot run
+  queries or see data sources.
 
 Alternatively, containerized: RustFS, `pipa-catalog-proxy`, `pipa-backend`, two `pipa-ingestion`
 shards, the dashboard, and an example Postgres source (`localhost:5432`, user/password `pipa`,

@@ -10,14 +10,16 @@ mod projects;
 mod query;
 mod session;
 mod sources;
+mod tables;
 mod users;
 
 use leptos::prelude::*;
 
 pub use projects::ProjectsViewModel;
-pub use query::{QueryViewModel, cell_text};
+pub use query::{QueryViewModel, cell_text, columns_of};
 pub use session::SessionViewModel;
 pub use sources::SourcesViewModel;
+pub use tables::{TABLE_PAGE_ROWS, TablesViewModel};
 pub use users::{UsersViewModel, parse_role, role_value};
 
 /// Rows shown per page in a paginated data table.

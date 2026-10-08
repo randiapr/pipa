@@ -171,7 +171,8 @@ pub fn Users() -> impl IntoView {
                             prop:value=move || role_value(vm.role.get())
                             on:change:target=move |ev| vm.role.set(parse_role(&ev.target().value()))
                         >
-                            <option value="user">"User"</option>
+                            <option value="user">"User (view tables only)"</option>
+                            <option value="developer">"Developer"</option>
                             <option value="admin">"Admin"</option>
                         </select>
                     </fieldset>
@@ -232,7 +233,8 @@ pub fn Users() -> impl IntoView {
                                 vm.edit_role.set(parse_role(&ev.target().value()))
                             }
                         >
-                            <option value="user">"User"</option>
+                            <option value="user">"User (view tables only)"</option>
+                            <option value="developer">"Developer"</option>
                             <option value="admin">"Admin"</option>
                         </select>
                     </fieldset>
@@ -375,6 +377,9 @@ fn UserRow(
                     match vm.find(&id_for_role).map(|user| user.role) {
                         Some(Role::Admin) => {
                             view! { <span class="badge badge-primary badge-sm">"admin"</span> }.into_any()
+                        }
+                        Some(Role::Developer) => {
+                            view! { <span class="badge badge-secondary badge-sm">"developer"</span> }.into_any()
                         }
                         Some(Role::User) => {
                             view! { <span class="badge badge-neutral badge-sm">"user"</span> }.into_any()

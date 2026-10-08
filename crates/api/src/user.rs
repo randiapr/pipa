@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::envelope::BaseResponse;
 
-/// What an account is allowed to do. `Admin` manages users and projects and sees every project;
-/// `User` only sees the projects an admin assigned to it.
+/// What an account is allowed to do. `Admin` manages users and projects and sees every project.
+/// `Developer` can do everything inside the projects an admin assigned to it, except manage users
+/// or projects. `User` can only browse the tables of its assigned projects, read-only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Admin,
+    Developer,
     User,
 }
 
@@ -88,6 +90,10 @@ mod tests {
     #[test]
     fn role_serializes_lowercase() {
         assert_eq!(serde_json::to_string(&Role::Admin).unwrap(), "\"admin\"");
+        assert_eq!(
+            serde_json::to_string(&Role::Developer).unwrap(),
+            "\"developer\""
+        );
         assert_eq!(
             serde_json::from_str::<Role>("\"user\"").unwrap(),
             Role::User

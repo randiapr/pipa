@@ -17,8 +17,8 @@ use pipa_api::{
     ConnectionTestOutcome, ConnectionTestResponse, DataSourceResponse, DataSourceView,
     DataSourcesResponse, ErrorResponse, LoginData, LoginRequest, LoginResponse, MeResponse,
     NewDataSource, NewProject, NewUser, ProjectResponse, ProjectUpdate, ProjectView,
-    ProjectsResponse, QueryRequest, RowsResponse, UserResponse, UserUpdate, UserView,
-    UsersResponse, path,
+    ProjectsResponse, QueryRequest, ReadTableRequest, RowsResponse, TableView, TablesResponse,
+    UserResponse, UserUpdate, UserView, UsersResponse, path,
 };
 use serde::de::DeserializeOwned;
 
@@ -175,6 +175,32 @@ pub async fn query(sql: &str, project_id: Option<&str>) -> Result<serde_json::Va
         project_id: project_id.map(str::to_string),
     };
     let request = authed(Request::post(&url(path::QUERY))).json(&body);
+    let response: RowsResponse = send(request).await?;
+    Ok(response.body.rows)
+}
+
+/// Lists the Iceberg tables of `project_id`'s data sources.
+pub async fn list_tables(project_id: &str) -> Result<Vec<TableView>, String> {
+    let target = format!("{}?project_id={project_id}", url(path::TABLES));
+    let response: TablesResponse = send(authed(Request::get(&target)).build()).await?;
+    Ok(response.body.tables)
+}
+
+/// Reads `limit` rows of a table starting at `offset`, as a JSON array of objects.
+pub async fn read_table(
+    project_id: &str,
+    table: &TableView,
+    limit: usize,
+    offset: usize,
+) -> Result<serde_json::Value, String> {
+    let body = ReadTableRequest {
+        project_id: project_id.to_string(),
+        source_id: table.source_id.clone(),
+        table: table.name.clone(),
+        limit: Some(limit),
+        offset: Some(offset),
+    };
+    let request = authed(Request::post(&url(path::TABLE_ROWS))).json(&body);
     let response: RowsResponse = send(request).await?;
     Ok(response.body.rows)
 }
