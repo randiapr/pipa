@@ -111,3 +111,35 @@ Run `just --list` for the full list (`docker-up`/`docker-down`, `outdated`, `upg
 Environment variables: the compose secrets are in the root `.env.example`, and `pipa-backend`,
 `pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. `pipa-catalog-proxy`'s
 are listed at the top of `crates/catalog-proxy/src/main.rs`.
+
+## Contributing
+
+Pull requests target `main`. Branch off it as `<type>/<short-name>` (e.g. `feat/developer-role-table-access`)
+and keep each PR to one concern, with a description of what changed and why.
+
+Run the same checks CI does before opening it:
+
+```sh
+just fmt && just clippy && just test
+cargo clippy -p pipa-ui --target wasm32-unknown-unknown -- -D warnings   # if you touched pipa-ui
+```
+
+CI (`.github/workflows/ci.yaml`) runs `cargo fmt --all -- --check`, clippy with `-D warnings` and the
+tests for `pipa-api`, `pipa-backend`, `pipa-catalog-proxy` and `pipa-ingestion`, and clippy for
+`pipa-ui` on wasm32. All three must pass. Tests marked `#[ignore]` (the live Postgres WAL test) need a
+real database and are skipped. The `Clippy & test (backend, ingestion)` job name is required by a
+branch ruleset on `main`, so don't rename it.
+
+Commit messages and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/)
+(`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `ci:`, ..., optional scope). The type decides the next
+release version: `!` or a `BREAKING CHANGE` footer bumps major, `feat` bumps minor, and
+`fix`/`refactor`/`chore` bump patch. Other types (`docs`, `ci`, `style`, `test`) don't trigger a release.
+
+When a change touches a crate, bump that crate's own version in its `Cargo.toml` and add a
+matching `## [x.y.z]` entry to its `CHANGELOG.md`; crates are versioned independently. The
+`Changelog` workflow (`.github/scripts/check-changelog.sh`) enforces this on every PR: any change
+under `crates/<name>/` other than Markdown files needs a changed changelog, a bumped version and
+a heading for that version. For changes that don't warrant a release, add the `skip-changelog`
+label to the PR to skip the check. Changes to the
+HTTP wire format start in `pipa-api`. `pipa-ingestion` and `pipa-backend` must not depend on each
+other: they only share the data contract in the object store.
