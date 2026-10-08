@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.0] - 2026-10-08
+
+### Added
+
+- **Tables** page (`/tables`): lists the selected project's Iceberg tables and shows one
+  table's rows a page at a time, read-only. The result table is a shared `RowsTable` component,
+  also used by the Query page.
+- **Developer** option in the Users page's role picker, with its own badge.
+
+### Changed
+
+- The `user` role is view-only: its nav bar has no page links (Projects, Sources, Query and
+  Tables are for developers and admins), `/projects`, `/sources` and `/query` are closed to it,
+  and signing in lands on Tables. It still picks its project in the nav-bar switcher.
+- The nav bar shows the signed-in user's real role (`admin`, `developer` or `user`).
+- Data sources are no longer requested for view-only users.
+
 ## [0.4.1] - 2026-10-07
 
 ### Changed

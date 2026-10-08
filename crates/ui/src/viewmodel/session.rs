@@ -109,6 +109,26 @@ impl SessionViewModel {
             .with(|user| user.as_ref().is_some_and(|user| user.role == Role::Admin))
     }
 
+    /// The signed-in user's role as shown in the nav bar (empty when signed out).
+    pub fn role_name(&self) -> &'static str {
+        self.user
+            .with(|user| match user.as_ref().map(|user| user.role) {
+                Some(Role::Admin) => "admin",
+                Some(Role::Developer) => "developer",
+                Some(Role::User) => "user",
+                None => "",
+            })
+    }
+
+    /// Whether the signed-in user may build things (sources, SQL): an admin or a developer.
+    /// A plain `user` can only browse tables.
+    pub fn can_develop(&self) -> bool {
+        self.user.with(|user| {
+            user.as_ref()
+                .is_some_and(|user| matches!(user.role, Role::Admin | Role::Developer))
+        })
+    }
+
     /// The project pages are scoped to, if any and it still exists.
     pub fn current_project(&self) -> Option<ProjectView> {
         let id = self.current_project_id.get()?;

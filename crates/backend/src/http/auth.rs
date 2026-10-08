@@ -1,6 +1,8 @@
 //! Authentication and authorization: the `POST /auth/login` and `GET /auth/me` routes, the
 //! `require_auth` middleware every protected route sits behind, and the `AuthUser`/`AdminOnly`
-//! extractors handlers use to see who is calling.
+//! extractors handlers use to see who is calling. Roles: admins manage everything; developers
+//! build (sources, free SQL) inside their assigned projects; plain users only browse tables
+//! read-only.
 
 use std::sync::Arc;
 
@@ -71,6 +73,20 @@ impl AuthUser {
 
     pub fn require_admin(&self) -> Result<(), AuthError> {
         if self.is_admin() {
+            Ok(())
+        } else {
+            Err(AuthError::Forbidden)
+        }
+    }
+
+    /// Whether the caller may build things (sources, free SQL): admins and developers.
+    /// A plain `user` can only browse tables.
+    pub fn can_develop(&self) -> bool {
+        matches!(self.role, Role::Admin | Role::Developer)
+    }
+
+    pub fn require_developer(&self) -> Result<(), AuthError> {
+        if self.can_develop() {
             Ok(())
         } else {
             Err(AuthError::Forbidden)
@@ -255,14 +271,34 @@ mod tests {
     }
 
     #[test]
-    fn users_only_reach_their_assigned_projects() {
+    fn non_admins_only_reach_their_assigned_projects() {
         let mine = ProjectId::new();
-        let user = user(Role::User, &[mine]);
-        assert!(user.can_access(mine));
-        assert!(!user.can_access(ProjectId::new()));
-        assert!(user.require_project(Some(mine)).is_ok());
-        assert!(user.require_project(Some(ProjectId::new())).is_err());
-        assert!(user.require_project(None).is_err());
-        assert!(user.require_admin().is_err());
+        for role in [Role::Developer, Role::User] {
+            let user = user(role, &[mine]);
+            assert!(user.can_access(mine));
+            assert!(!user.can_access(ProjectId::new()));
+            assert!(user.require_project(Some(mine)).is_ok());
+            assert!(user.require_project(Some(ProjectId::new())).is_err());
+            assert!(user.require_project(None).is_err());
+            assert!(user.require_admin().is_err());
+        }
+    }
+
+    #[test]
+    fn only_admins_and_developers_may_develop() {
+        let mine = ProjectId::new();
+
+        let admin = user(Role::Admin, &[]);
+        assert!(admin.can_develop());
+        assert!(admin.require_developer().is_ok());
+
+        let developer = user(Role::Developer, &[mine]);
+        assert!(developer.can_develop());
+        assert!(developer.require_developer().is_ok());
+
+        let viewer = user(Role::User, &[mine]);
+        assert!(!viewer.can_develop());
+        assert!(viewer.require_developer().is_err());
+        assert!(viewer.require_project(Some(mine)).is_ok());
     }
 }

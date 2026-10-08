@@ -9,12 +9,14 @@ mod login;
 mod pagination;
 mod projects_card;
 mod query;
+mod rows_table;
 mod sources_card;
+mod tables;
 mod users;
 
 use leptos::prelude::*;
 use leptos_router::{
-    components::{Route, Router, Routes},
+    components::{Redirect, Route, Router, Routes},
     hooks::{use_location, use_navigate},
     path,
 };
@@ -24,7 +26,9 @@ use login::Login;
 pub use pagination::Pagination;
 use projects_card::ProjectsCard;
 use query::Query;
+pub use rows_table::RowsTable;
 use sources_card::SourcesCard;
+use tables::Tables;
 use users::Users;
 
 use crate::viewmodel::{AppViewModel, SessionViewModel};
@@ -32,14 +36,18 @@ use crate::viewmodel::{AppViewModel, SessionViewModel};
 /// Nav destinations shared between the desktop navbar menu and the mobile sidebar drawer.
 /// The "Home" entry that used to lead this list has been replaced by [`ThemeToggle`] (the
 /// brand link covers going home).
-/// The Users page is admin-only, so it is left out for everyone else (the route is guarded
-/// too, and the backend is what actually refuses non-admins).
-fn nav_links(is_admin: bool) -> Vec<(&'static str, &'static str)> {
-    let mut links = vec![
-        ("/projects", "Projects"),
-        ("/sources", "Sources"),
-        ("/query", "Query"),
-    ];
+/// Projects, Sources, Query and Tables are for developers and admins, Users for admins only. The
+/// view-only `user` role gets no links at all: Tables is its only page and it lands there after
+/// signing in (it picks its project in the nav bar's switcher). The routes are guarded too, and
+/// the backend is what actually refuses anyone not allowed.
+fn nav_links(can_develop: bool, is_admin: bool) -> Vec<(&'static str, &'static str)> {
+    let mut links = Vec::new();
+    if can_develop {
+        links.push(("/projects", "Projects"));
+        links.push(("/sources", "Sources"));
+        links.push(("/query", "Query"));
+        links.push(("/tables", "Tables"));
+    }
     if is_admin {
         links.push(("/users", "Users"));
     }
@@ -182,7 +190,7 @@ pub fn App() -> impl IntoView {
                             <Show when=move || session.is_authenticated()>
                                 <ul class="menu menu-horizontal">
                                     {move || {
-                                        nav_links(session.is_admin())
+                                        nav_links(session.can_develop(), session.is_admin())
                                             .into_iter()
                                             .map(|(href, label)| view! { <li><a href=href>{label}</a></li> })
                                             .collect_view()
@@ -201,19 +209,41 @@ pub fn App() -> impl IntoView {
                                     <Route path=path!("/login") view=Login />
                                     <Route
                                         path=path!("/")
-                                        view=|| view! { <RequireAuth><Landing /></RequireAuth> }
+                                        view=|| view! { <RequireAuth><Home /></RequireAuth> }
                                     />
                                     <Route
                                         path=path!("/projects")
-                                        view=|| view! { <RequireAuth><ProjectsPage /></RequireAuth> }
+                                        view=|| {
+                                            view! {
+                                                <RequireAuth developer_only=true>
+                                                    <ProjectsPage />
+                                                </RequireAuth>
+                                            }
+                                        }
                                     />
                                     <Route
                                         path=path!("/sources")
-                                        view=|| view! { <RequireAuth><SourcesPage /></RequireAuth> }
+                                        view=|| {
+                                            view! {
+                                                <RequireAuth developer_only=true>
+                                                    <SourcesPage />
+                                                </RequireAuth>
+                                            }
+                                        }
                                     />
                                     <Route
                                         path=path!("/query")
-                                        view=|| view! { <RequireAuth><Query /></RequireAuth> }
+                                        view=|| {
+                                            view! {
+                                                <RequireAuth developer_only=true>
+                                                    <Query />
+                                                </RequireAuth>
+                                            }
+                                        }
+                                    />
+                                    <Route
+                                        path=path!("/tables")
+                                        view=|| view! { <RequireAuth><Tables /></RequireAuth> }
                                     />
                                     <Route
                                         path=path!("/users")
@@ -240,7 +270,7 @@ pub fn App() -> impl IntoView {
                                 <ProjectSwitcher />
                             </li>
                             {move || {
-                                nav_links(session.is_admin())
+                                nav_links(session.can_develop(), session.is_admin())
                                     .into_iter()
                                     .map(|(href, label)| {
                                         view! {
@@ -321,7 +351,7 @@ fn UserMenu() -> impl IntoView {
                 {move || session.user.get().map(|user| user.username).unwrap_or_default()}
             </span>
             <span class="badge badge-sm badge-outline">
-                {move || if session.is_admin() { "admin" } else { "user" }}
+                {move || session.role_name()}
             </span>
             <button
                 class="btn btn-sm btn-ghost"
@@ -337,12 +367,31 @@ fn UserMenu() -> impl IntoView {
     }
 }
 
-/// Route guard: renders `children` only for a signed-in user (an admin, with `admin_only`).
-/// Anyone else is redirected — to the login page when signed out, to the landing page when merely
-/// not an admin. Waits for the stored token to be checked first, so a reload doesn't flash the
-/// login page at someone who is still signed in.
+/// The landing page: the projects overview for developers and admins. A view-only `user` has no
+/// Projects page, so it goes straight to the tables.
 #[component]
-fn RequireAuth(#[prop(optional)] admin_only: bool, children: ChildrenFn) -> impl IntoView {
+fn Home() -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+
+    move || {
+        if session.can_develop() {
+            view! { <Landing /> }.into_any()
+        } else {
+            view! { <Redirect path="/tables" /> }.into_any()
+        }
+    }
+}
+
+/// Route guard: renders `children` only for a signed-in user (an admin, with `admin_only`; an
+/// admin or developer, with `developer_only`). Anyone else is redirected — to the login page when
+/// signed out, to the landing page when merely not allowed. Waits for the stored token to be
+/// checked first, so a reload doesn't flash the login page at someone who is still signed in.
+#[component]
+fn RequireAuth(
+    #[prop(optional)] admin_only: bool,
+    #[prop(optional)] developer_only: bool,
+    children: ChildrenFn,
+) -> impl IntoView {
     let session = expect_context::<SessionViewModel>();
     let navigate = use_navigate();
 
@@ -352,7 +401,8 @@ fn RequireAuth(#[prop(optional)] admin_only: bool, children: ChildrenFn) -> impl
         }
         if !session.is_authenticated() {
             navigate("/login", Default::default());
-        } else if admin_only && !session.is_admin() {
+        } else if (admin_only && !session.is_admin()) || (developer_only && !session.can_develop())
+        {
             navigate("/", Default::default());
         }
     });
@@ -360,7 +410,8 @@ fn RequireAuth(#[prop(optional)] admin_only: bool, children: ChildrenFn) -> impl
     move || {
         let allowed = session.checked.get()
             && session.is_authenticated()
-            && (!admin_only || session.is_admin());
+            && (!admin_only || session.is_admin())
+            && (!developer_only || session.can_develop());
         allowed.then(|| children())
     }
 }

@@ -97,6 +97,24 @@ impl UserService {
         Ok(user)
     }
 
+    /// Moves every account with role `from` to role `to`, returning how many changed. For
+    /// migrations when a role's meaning changes; never touches admins, so it can't strand the
+    /// system without one.
+    pub async fn reassign_role(&self, from: Role, to: Role) -> Result<usize, UserError> {
+        if from == Role::Admin {
+            return Ok(0);
+        }
+        let mut changed = 0;
+        for mut user in self.repository.list().await? {
+            if user.role == from {
+                user.role = to;
+                self.repository.save(&user).await?;
+                changed += 1;
+            }
+        }
+        Ok(changed)
+    }
+
     pub async fn remove(&self, id: UserId) -> Result<(), UserError> {
         let user = self.get(id).await?;
         if user.role == Role::Admin {
@@ -253,6 +271,46 @@ mod tests {
             role,
             project_ids: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn reassign_role_moves_only_the_matching_accounts() {
+        let service = service();
+        service.create(new_user("root", Role::Admin)).await.unwrap();
+        service.create(new_user("a", Role::User)).await.unwrap();
+        service.create(new_user("b", Role::User)).await.unwrap();
+        service
+            .create(new_user("d", Role::Developer))
+            .await
+            .unwrap();
+
+        let changed = service
+            .reassign_role(Role::User, Role::Developer)
+            .await
+            .unwrap();
+        assert_eq!(changed, 2);
+        let users = service.list().await.unwrap();
+        assert_eq!(
+            users.iter().filter(|u| u.role == Role::Developer).count(),
+            3
+        );
+        assert_eq!(users.iter().filter(|u| u.role == Role::Admin).count(), 1);
+
+        // Nothing left to move, and admins are never reassigned.
+        assert_eq!(
+            service
+                .reassign_role(Role::User, Role::Developer)
+                .await
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            service
+                .reassign_role(Role::Admin, Role::User)
+                .await
+                .unwrap(),
+            0
+        );
     }
 
     #[tokio::test]

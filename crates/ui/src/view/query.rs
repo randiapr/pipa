@@ -2,7 +2,8 @@
 
 use leptos::prelude::*;
 
-use crate::viewmodel::{QueryViewModel, SessionViewModel, cell_text};
+use crate::view::RowsTable;
+use crate::viewmodel::{QueryViewModel, SessionViewModel};
 
 #[component]
 pub fn Query() -> impl IntoView {
@@ -60,52 +61,7 @@ pub fn Query() -> impl IntoView {
                     })
             }}
 
-            {move || {
-                vm.rows
-                    .get()
-                    .map(|rows| {
-                        let columns = vm.columns();
-                        if rows.is_empty() {
-                            return view! { <p class="text-base-content/70">"No rows."</p> }.into_any();
-                        }
-                        let count = rows.len();
-                        view! {
-                            <div class="flex flex-col gap-2">
-                                <p class="text-sm text-base-content/70">{format!("{count} row(s)")}</p>
-                                <div class="overflow-x-auto">
-                                    <table class="table table-zebra table-sm">
-                                        <thead>
-                                            <tr>
-                                                {columns
-                                                    .iter()
-                                                    .map(|column| view! { <th>{column.clone()}</th> })
-                                                    .collect_view()}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rows
-                                                .iter()
-                                                .map(|row| {
-                                                    view! {
-                                                        <tr>
-                                                            {columns
-                                                                .iter()
-                                                                .map(|column| {
-                                                                    view! { <td>{cell_text(row.get(column))}</td> }
-                                                                })
-                                                                .collect_view()}
-                                                        </tr>
-                                                    }
-                                                })
-                                                .collect_view()}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        }
-                            .into_any()
-                    })
-            }}
+            {move || vm.rows.get().map(|rows| view! { <RowsTable rows=rows /> })}
         </div>
     }
 }

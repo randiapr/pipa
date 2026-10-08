@@ -29,15 +29,17 @@ pub struct UsersViewModel {
 pub fn role_value(role: Role) -> &'static str {
     match role {
         Role::Admin => "admin",
+        Role::Developer => "developer",
         Role::User => "user",
     }
 }
 
+/// The role a `<select>` value stands for. Anything unrecognized is the least privileged one.
 pub fn parse_role(value: &str) -> Role {
-    if value == "admin" {
-        Role::Admin
-    } else {
-        Role::User
+    match value {
+        "admin" => Role::Admin,
+        "developer" => Role::Developer,
+        _ => Role::User,
     }
 }
 

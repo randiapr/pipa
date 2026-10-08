@@ -46,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
     let project_repository = Arc::new(ObjectStoreProjectRepository::new(store.clone()));
     let project_service = Arc::new(ProjectService::new(project_repository));
 
+    let migration_store = store.clone();
     let jwt_secret = std::env::var("JWT_SECRET")
         .context("JWT_SECRET must be set (at least 32 bytes) to sign login tokens")?;
     let user_service = Arc::new(UserService::new(
@@ -53,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(Argon2PasswordHasher),
         Arc::new(JwtTokenService::new(&jwt_secret).context("invalid JWT_SECRET")?),
     ));
+    migrate_legacy_user_roles(&migration_store, &user_service).await?;
     bootstrap_admin(&user_service).await?;
 
     let query_api = Arc::new(http::QueryApi {
@@ -73,7 +75,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Every route. Everything except `/healthz` and `/auth/login` requires a signed-in user.
+/// Every route. Everything except `/healthz` and `/auth/login` requires a signed-in user; what a
+/// signed-in user may do then depends on their role (see `http::auth`).
 fn router(
     datasources: Arc<DataSourceService>,
     projects: Arc<ProjectService>,
@@ -83,7 +86,8 @@ fn router(
     let protected = Router::new()
         .merge(http::datasource_routes().with_state(datasources))
         .merge(http::project_routes().with_state(projects))
-        .merge(http::query_routes().with_state(query_api))
+        .merge(http::query_routes().with_state(query_api.clone()))
+        .merge(http::table_routes().with_state(query_api))
         .merge(http::user_routes().with_state(users.clone()))
         .merge(http::me_routes().with_state(users.clone()))
         .route_layer(middleware::from_fn_with_state(
@@ -95,6 +99,39 @@ fn router(
         .route("/healthz", get(health))
         .merge(http::login_routes().with_state(users))
         .merge(protected)
+}
+
+/// Object that records the `user` → `developer` migration as done.
+const LEGACY_ROLE_MARKER: &str = "migrations/user-role-to-developer.done";
+
+/// Before the `developer` role existed, `user` meant "everything inside my projects", which is
+/// what `developer` means now (`user` became view-only). Once per store, promotes every stored
+/// `user` account to `developer` so nobody loses access. The marker keeps view-only users
+/// created afterwards from being promoted on the next start.
+async fn migrate_legacy_user_roles(
+    store: &Arc<dyn object_store::ObjectStore>,
+    users: &UserService,
+) -> anyhow::Result<()> {
+    use object_store::{ObjectStoreExt, PutPayload, path::Path};
+
+    let marker = Path::from(LEGACY_ROLE_MARKER);
+    match store.head(&marker).await {
+        Ok(_) => return Ok(()),
+        Err(object_store::Error::NotFound { .. }) => {}
+        Err(err) => return Err(err).context("checking the user role migration marker"),
+    }
+
+    let promoted = users
+        .reassign_role(user::Role::User, user::Role::Developer)
+        .await?;
+    if promoted > 0 {
+        tracing::info!("promoted {promoted} existing \"user\" account(s) to developer");
+    }
+    store
+        .put(&marker, PutPayload::from_static(b"done"))
+        .await
+        .context("recording the user role migration")?;
+    Ok(())
 }
 
 /// Creates the first admin from `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD` when no user exists
@@ -227,9 +264,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_user_accounts_become_developers_exactly_once() {
+        let store: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
+        let users = UserService::new(
+            Arc::new(ObjectStoreUserRepository::new(store.clone())),
+            Arc::new(Argon2PasswordHasher),
+            Arc::new(JwtTokenService::new("0123456789abcdef0123456789abcdef").unwrap()),
+        );
+        let new = |name: &str, role| user::NewUser {
+            username: name.to_string(),
+            password: "long-enough-password".to_string(),
+            role,
+            project_ids: Vec::new(),
+        };
+        users.create(new("root", user::Role::Admin)).await.unwrap();
+        users.create(new("old", user::Role::User)).await.unwrap();
+
+        migrate_legacy_user_roles(&store, &users).await.unwrap();
+        let roles = |users: Vec<user::User>| {
+            let mut roles: Vec<_> = users.into_iter().map(|u| (u.username, u.role)).collect();
+            roles.sort_by(|a, b| a.0.cmp(&b.0));
+            roles
+        };
+        assert_eq!(
+            roles(users.list().await.unwrap()),
+            [
+                ("old".to_string(), user::Role::Developer),
+                ("root".to_string(), user::Role::Admin)
+            ]
+        );
+
+        // A view-only account created afterwards survives the next start.
+        users.create(new("viewer", user::Role::User)).await.unwrap();
+        migrate_legacy_user_roles(&store, &users).await.unwrap();
+        let viewer = users
+            .list()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|u| u.username == "viewer")
+            .unwrap();
+        assert_eq!(viewer.role, user::Role::User);
+    }
+
+    #[tokio::test]
     async fn protected_routes_need_a_valid_token() {
         let app = app().await;
-        for uri in ["/datasources", "/projects", "/users", "/auth/me"] {
+        for uri in [
+            "/datasources",
+            "/projects",
+            "/users",
+            "/auth/me",
+            "/tables?project_id=x",
+        ] {
             let (status, body) = call(&app, "GET", uri, None, None).await;
             assert_eq!(status, StatusCode::UNAUTHORIZED, "{uri}");
             assert_eq!(body["response_code"], 2005);
@@ -256,7 +343,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_user_only_sees_and_touches_their_assigned_project() {
+    async fn a_developer_only_sees_and_touches_their_assigned_project() {
         let app = app().await;
         let admin = login(&app, "root", "root-password").await;
 
@@ -283,7 +370,7 @@ mod tests {
             Some(json!({
                 "username": "alice",
                 "password": "alice-password",
-                "role": "user",
+                "role": "developer",
                 "project_ids": [alpha],
             })),
         )
@@ -389,6 +476,215 @@ mod tests {
             .await;
             assert_eq!(status, StatusCode::FORBIDDEN, "{project_id:?}");
         }
+    }
+
+    /// Registers a source in `project` as `admin`, returning its id.
+    async fn register_source(app: &Router, admin: &str, project: &str) -> String {
+        let (status, body) = call(
+            app,
+            "POST",
+            "/datasources",
+            Some(admin),
+            Some(json!({
+                "name": "orders",
+                "engine": "postgres",
+                "connection": {
+                    "host": "db", "port": 5432, "username": "u", "password": "p", "database": "d"
+                },
+                "project_id": project,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        body["datasource"]["id"].as_str().unwrap().to_string()
+    }
+
+    async fn create_account(app: &Router, admin: &str, name: &str, role: &str, project: &str) {
+        let (status, body) = call(
+            app,
+            "POST",
+            "/users",
+            Some(admin),
+            Some(json!({
+                "username": name,
+                "password": format!("{name}-password"),
+                "role": role,
+                "project_ids": [project],
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+    }
+
+    async fn create_project(app: &Router, admin: &str, name: &str) -> String {
+        let (_, body) = call(
+            app,
+            "POST",
+            "/projects",
+            Some(admin),
+            Some(json!({ "name": name })),
+        )
+        .await;
+        body["project"]["id"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn a_plain_user_can_only_browse_tables_of_their_project() {
+        let app = app().await;
+        let admin = login(&app, "root", "root-password").await;
+        let alpha = create_project(&app, &admin, "alpha").await;
+        let beta = create_project(&app, &admin, "beta").await;
+        let alpha_source = register_source(&app, &admin, &alpha).await;
+        let beta_source = register_source(&app, &admin, &beta).await;
+        create_account(&app, &admin, "viewer", "user", &alpha).await;
+        let viewer = login(&app, "viewer", "viewer-password").await;
+
+        // Everything that builds, or reveals connection details, is closed to a viewer.
+        let forbidden: [(&str, String, Option<Value>); 7] = [
+            ("GET", "/datasources".into(), None),
+            ("GET", format!("/datasources?project_id={alpha}"), None),
+            ("GET", format!("/datasources/{alpha_source}"), None),
+            ("POST", format!("/datasources/{alpha_source}/test"), None),
+            ("DELETE", format!("/datasources/{alpha_source}"), None),
+            (
+                "POST",
+                "/query".into(),
+                Some(json!({ "sql": "SELECT 1", "project_id": alpha })),
+            ),
+            ("GET", "/users".into(), None),
+        ];
+        for (method, uri, body) in forbidden {
+            let (status, _) = call(&app, method, &uri, Some(&viewer), body).await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{method} {uri}");
+        }
+
+        // Tables of another project are off limits, in the list and by name.
+        let (status, _) = call(
+            &app,
+            "GET",
+            &format!("/tables?project_id={beta}"),
+            Some(&viewer),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        let read = |project: &str, source: &str| json!({ "project_id": project, "source_id": source, "table": "public__orders" });
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/tables/rows",
+            Some(&viewer),
+            Some(read(&beta, &beta_source)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+
+        // In their own project a source of another project is refused before the catalog is
+        // touched, and malformed ids are a bad request.
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/tables/rows",
+            Some(&viewer),
+            Some(read(&alpha, &beta_source)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/tables/rows",
+            Some(&viewer),
+            Some(read(&alpha, "nope")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        // Their own project's tables get as far as the (unreachable) catalog.
+        let (status, body) = call(
+            &app,
+            "GET",
+            &format!("/tables?project_id={alpha}"),
+            Some(&viewer),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_GATEWAY, "{body}");
+        let (status, body) = call(
+            &app,
+            "POST",
+            "/tables/rows",
+            Some(&viewer),
+            Some(read(&alpha, &alpha_source)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_GATEWAY, "{body}");
+    }
+
+    #[tokio::test]
+    async fn a_developer_builds_inside_their_project_but_manages_nothing_else() {
+        let app = app().await;
+        let admin = login(&app, "root", "root-password").await;
+        let alpha = create_project(&app, &admin, "alpha").await;
+        let beta = create_project(&app, &admin, "beta").await;
+        create_account(&app, &admin, "dev", "developer", &alpha).await;
+        let dev = login(&app, "dev", "dev-password").await;
+
+        // Developers have no part in user management or project administration.
+        let (status, _) = call(&app, "GET", "/users", Some(&dev), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/projects",
+            Some(&dev),
+            Some(json!({ "name": "gamma" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+
+        // But they build in their own project: sources and free SQL are open to them there.
+        let (status, _) = call(&app, "GET", "/datasources", Some(&dev), None).await;
+        assert_eq!(status, StatusCode::OK);
+        let source = register_source(&app, &dev, &alpha).await;
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/query",
+            Some(&dev),
+            Some(json!({ "sql": "SELECT 1", "project_id": alpha })),
+        )
+        .await;
+        assert_ne!(status, StatusCode::FORBIDDEN);
+        let (status, _) = call(
+            &app,
+            "DELETE",
+            &format!("/datasources/{source}"),
+            Some(&dev),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        // ...and not in anyone else's.
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/query",
+            Some(&dev),
+            Some(json!({ "sql": "SELECT 1", "project_id": beta })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        let (status, _) = call(
+            &app,
+            "GET",
+            &format!("/tables?project_id={beta}"),
+            Some(&dev),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

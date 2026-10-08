@@ -8,8 +8,8 @@ use crate::envelope::BaseResponse;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryRequest {
     pub sql: String,
-    /// Project whose data the query may read. Required for `user` accounts; an `admin` may omit
-    /// it to query every table.
+    /// Project whose data the query may read. Required for `developer` accounts; an `admin` may
+    /// omit it to query every table. `user` accounts cannot run free SQL at all.
     #[serde(default)]
     pub project_id: Option<String>,
 }

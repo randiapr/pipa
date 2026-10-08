@@ -130,6 +130,7 @@ impl From<pipa_api::Role> for Role {
     fn from(role: pipa_api::Role) -> Self {
         match role {
             pipa_api::Role::Admin => Self::Admin,
+            pipa_api::Role::Developer => Self::Developer,
             pipa_api::Role::User => Self::User,
         }
     }
@@ -139,6 +140,7 @@ impl From<Role> for pipa_api::Role {
     fn from(role: Role) -> Self {
         match role {
             Role::Admin => Self::Admin,
+            Role::Developer => Self::Developer,
             Role::User => Self::User,
         }
     }
@@ -195,6 +197,15 @@ impl TryFrom<pipa_api::UserUpdate> for UserAccountUpdate {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn developer_role_round_trips() {
+        assert_eq!(Role::from(pipa_api::Role::Developer), Role::Developer);
+        assert_eq!(
+            pipa_api::Role::from(Role::Developer),
+            pipa_api::Role::Developer
+        );
+    }
 
     #[test]
     fn new_user_parses_project_ids_and_role() {

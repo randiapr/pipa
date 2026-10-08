@@ -9,21 +9,29 @@ planned but not implemented yet.
 
 ## Workspace
 
-A Cargo workspace of three crates, each versioned independently (see each crate's own
+A Cargo workspace of five crates, each versioned independently (see each crate's own
 `CHANGELOG.md`):
 
 - **`pipa-ingestion`** — the CDC engine. Streams row-level changes out of a registered
-  Postgres source via logical replication and, eventually, into Iceberg tables. A
-  standalone service with no dependency on any other crate here — it reads registered
-  sources directly from the shared object store, and is designed to run distributed
-  (`INGESTION_SHARD_INDEX`/`INGESTION_SHARD_COUNT` split sources across instances).
-- **`pipa-backend`** — the HTTP API: OLTP data source/project management (registering/
-  testing sources, over the shared RustFS/S3 object store), plus its own Apache Iceberg
-  catalog and query integration (REST catalog client, DataFusion SQL execution). Every
-  external caller (the dashboard, any future client) talks to this, never to
-  `pipa-ingestion` directly.
-- **`pipa-ui`** — a Leptos dashboard (Tailwind CSS v4 + daisyUI) for registering and
-  managing OLTP data sources.
+  Postgres source via logical replication and appends them to Iceberg tables as changelog
+  rows (`_op`, `_position`, ... plus the source columns), with effectively-once delivery: the
+  checkpoint is committed in the same Iceberg snapshot as the data. A standalone service with
+  no dependency on any other crate here — it reads registered sources directly from the shared
+  object store, and is designed to run distributed (`INGESTION_SHARD_INDEX`/
+  `INGESTION_SHARD_COUNT` split sources across instances).
+- **`pipa-backend`** — the HTTP API: accounts and sign-in (admin/developer/user roles), projects, read-only table browsing, OLTP
+  data source management (registering/testing sources, over the shared RustFS/S3 object
+  store), plus Apache Iceberg query access (`POST /query`: REST catalog client, DataFusion SQL,
+  scoped to the caller's project). Every external caller (the dashboard, any future client)
+  talks to this, never to `pipa-ingestion` directly.
+- **`pipa-catalog-proxy`** — a small internal reverse proxy that SigV4-signs requests to
+  RustFS's embedded Iceberg REST catalog, which rejects unsigned ones (`iceberg-catalog-rest`
+  can't sign). The signing is implemented in-house on `hmac`/`sha2`; there is no AWS
+  dependency. Not an external-facing service.
+- **`pipa-api`** — the HTTP contract (request/response types, routes) shared by `pipa-backend`
+  and `pipa-ui`; builds for both native and wasm32.
+- **`pipa-ui`** — a Leptos dashboard (Tailwind CSS v4 + daisyUI) for signing in and managing
+  projects, OLTP data sources, users and queries.
 
 ## Prerequisites
 
@@ -42,20 +50,38 @@ just local::up      # rustfs + pipa-backend + pipa-ingestion + dashboard, all in
 Open `http://localhost:3000` for the dashboard and `http://localhost:8080/healthz` for the
 API. `just local::log` tails every service's output; `just local::down` stops everything.
 
+`just local::up` does not start `pipa-catalog-proxy`, so locally the Iceberg side (ingestion
+writes and `POST /query`) won't work against RustFS's signed-only catalog until it is running
+and `ICEBERG_CATALOG_URI` points at it, e.g. `CATALOG_PROXY_LISTEN=127.0.0.1:8181 cargo run -p
+pipa-catalog-proxy` plus `ICEBERG_CATALOG_URI=http://localhost:8181/iceberg` for the backend and
+ingestion. The containerized stack below does this for you.
+
 With `just local::up`, sign in as the first admin, `admin` / `admin-password` by default (local-only defaults;
 override with `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD`, and `JWT_SECRET` for the token
-secret). Admins create further accounts on the Users page and assign each `user`-role
-account the projects it may see; a `user` never sees the Users menu.
+secret). Admins create further accounts on the Users page and assign each non-admin account the
+projects it may access. Roles:
 
-Alternatively, containerized (`pipa-ingestion` + `pipa-backend` + RustFS, no local Rust
-toolchain needed — `pipa-ui` isn't included, it's a static SPA, not a Rust service):
+- **admin**: everything, including the Users page and creating projects.
+- **developer**: everything inside its assigned projects (sources, free SQL queries) except user
+  and project management; it never sees the Users menu.
+- **user**: view-only. It can browse the Iceberg tables of its projects (paged, no SQL) but cannot run
+  queries or see data sources.
+
+Alternatively, containerized: RustFS, `pipa-catalog-proxy`, `pipa-backend`, two `pipa-ingestion`
+shards, the dashboard, and an example Postgres source (`localhost:5432`, user/password `pipa`,
+database `testdb`, `wal_level=logical`) to register as a data source:
 
 ```sh
 just docker-up   # first run creates .env with a random JWT secret and admin password
+just docker-down # stop it, keeping the data volumes (docker-down-clean also deletes them)
 ```
 
-`just docker-up` does not use those defaults: it prints the generated admin login once (it stays in the gitignored `.env`, which
-you can edit). Without `just`, `cp .env.example .env`, set `PIPA_JWT_SECRET` and
+The dashboard is a static SPA built on the host with Trunk, which `just docker-up` does for you
+(plain `docker compose up --build` needs `just build-ui-release` run first). It is served at
+`http://localhost:3000` and the API at `http://localhost:8080`.
+
+`just docker-up` does not use the local defaults above: it prints the generated admin login once (it stays in the gitignored `.env`, which
+you can edit; the password needs at least 8 characters). Without `just`, `cp .env.example .env`, set `PIPA_JWT_SECRET` and
 `PIPA_ADMIN_PASSWORD`, then `docker compose up --build`.
 
 `POST /query` and `pipa-ingestion` talk to RustFS's own embedded Iceberg REST Catalog ("S3 Tables"
@@ -80,6 +106,8 @@ just ui           # run the dashboard dev server (trunk serve, :3000)
 just build-ui     # production build of the dashboard
 ```
 
-Run `just --list` for the full list, including per-crate variants under `-p`.
+Run `just --list` for the full list (`docker-up`/`docker-down`, `outdated`, `upgrade`, ...).
 
-Environment variables are documented per crate in `crates/*/.env.example`.
+Environment variables: the compose secrets are in the root `.env.example`, and `pipa-backend`,
+`pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. `pipa-catalog-proxy`'s
+are listed at the top of `crates/catalog-proxy/src/main.rs`.

@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.8.0] - 2026-10-08
+
+### Added
+
+- `developer` role: everything inside its assigned projects (data sources, `POST /query`, tables)
+  except user and project management.
+- Read-only table browsing for every role with access to the project, including `user`:
+  `GET /tables?project_id=` lists the Iceberg tables of the project's data sources and
+  `POST /tables/rows` reads a page of one (100 rows by default, at most 1000). Neither accepts
+  SQL; a read names a data source of the project and a table, and runs in a session that only
+  sees that source's namespace.
+
+### Changed
+
+- **Breaking:** the `user` role is now view-only. It gets `403` on `/datasources` (whose views
+  carry connection passwords) and `POST /query`; it can only use `/tables`. Anything that needs
+  the old `user` permissions requires `developer`.
+- Stored accounts with role `user` are promoted to `developer` once at startup, so nobody loses
+  access. A marker object, `migrations/user-role-to-developer.done`, keeps view-only users
+  created afterwards from being promoted on later starts.
+
 ## [0.7.0] - 2026-10-07
 
 ### Fixed

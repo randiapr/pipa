@@ -28,23 +28,6 @@ impl QueryViewModel {
         }
     }
 
-    /// Column names of the last result, in order of first appearance across its rows.
-    pub fn columns(&self) -> Vec<String> {
-        let mut columns: Vec<String> = Vec::new();
-        self.rows.with(|rows| {
-            for row in rows.iter().flatten() {
-                if let Some(object) = row.as_object() {
-                    for key in object.keys() {
-                        if !columns.contains(key) {
-                            columns.push(key.clone());
-                        }
-                    }
-                }
-            }
-        });
-        columns
-    }
-
     pub fn run(&self, ev: SubmitEvent) {
         ev.prevent_default();
 
@@ -72,6 +55,21 @@ impl QueryViewModel {
             this.running.set(false);
         });
     }
+}
+
+/// Column names of a result, in order of first appearance across its rows.
+pub fn columns_of(rows: &[serde_json::Value]) -> Vec<String> {
+    let mut columns: Vec<String> = Vec::new();
+    for row in rows {
+        if let Some(object) = row.as_object() {
+            for key in object.keys() {
+                if !columns.contains(key) {
+                    columns.push(key.clone());
+                }
+            }
+        }
+    }
+    columns
 }
 
 /// A result cell as plain text: strings unquoted, `null` empty, anything else as JSON.
