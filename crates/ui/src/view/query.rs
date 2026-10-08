@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 
-use crate::view::RowsTable;
+use crate::view::{Pagination, RowsView};
 use crate::viewmodel::{QueryViewModel, SessionViewModel};
 
 #[component]
@@ -61,7 +61,17 @@ pub fn Query() -> impl IntoView {
                     })
             }}
 
-            {move || vm.rows.get().map(|rows| view! { <RowsTable rows=rows /> })}
+            <Show when=move || vm.ran.get()>
+                <div class="flex flex-col gap-2">
+                    <p class="text-sm text-base-content/70">
+                        {move || format!("{} row(s)", vm.results.len())}
+                    </p>
+                    {move || view! { <RowsView rows=vm.results.paged() /> }}
+                    <Show when=move || !vm.results.is_empty()>
+                        <Pagination list=vm.results />
+                    </Show>
+                </div>
+            </Show>
         </div>
     }
 }

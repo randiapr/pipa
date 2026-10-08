@@ -4,12 +4,14 @@
 //! methods from event handlers. They hold no business logic of their own and never call
 //! `crate::api` directly — that boundary belongs to the ViewModel.
 
+mod icons;
 mod landing;
 mod login;
 mod pagination;
 mod projects_card;
 mod query;
-mod rows_table;
+mod responsive_list;
+mod rows_view;
 mod sources_card;
 mod tables;
 mod users;
@@ -21,17 +23,19 @@ use leptos_router::{
     path,
 };
 
+pub use icons::{EditIcon, TrashIcon};
 use landing::Landing;
 use login::Login;
-pub use pagination::Pagination;
+pub use pagination::{PageSizePicker, Pagination};
 use projects_card::ProjectsCard;
 use query::Query;
-pub use rows_table::RowsTable;
+pub use responsive_list::ResponsiveList;
+pub use rows_view::RowsView;
 use sources_card::SourcesCard;
 use tables::Tables;
 use users::Users;
 
-use crate::viewmodel::{AppViewModel, SessionViewModel};
+use crate::viewmodel::{AppViewModel, LayoutViewModel, SessionViewModel};
 
 /// Nav destinations shared between the desktop navbar menu and the mobile sidebar drawer.
 /// The "Home" entry that used to lead this list has been replaced by [`ThemeToggle`] (the
@@ -135,6 +139,7 @@ pub fn App() -> impl IntoView {
     let session = SessionViewModel::new();
     provide_context(session);
     session.init();
+    provide_context(LayoutViewModel::new());
 
     // daisyUI's drawer only closes when the checkbox is unchecked — clicking the hamburger
     // or the overlay does that natively via their `<label for="app-drawer">`, but tapping a

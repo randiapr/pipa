@@ -6,15 +6,14 @@ use leptos::task::spawn_local;
 use pipa_api::{NewProject, ProjectUpdate, ProjectView};
 
 use crate::api;
-use crate::viewmodel::{PAGE_SIZE, StatusMessage};
+use crate::viewmodel::{PagedList, StatusMessage};
 
 /// Reactive state for the Projects feature, plus the commands that mutate it via
 /// [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is cheap to
 /// `Copy` — views hold it by value and read/call straight through it.
 #[derive(Copy, Clone)]
 pub struct ProjectsViewModel {
-    pub projects: RwSignal<Vec<ProjectView>>,
-    pub page: RwSignal<usize>,
+    pub list: PagedList<ProjectView>,
     pub name: RwSignal<String>,
     pub description: RwSignal<String>,
     pub editing_id: RwSignal<Option<String>>,
@@ -32,8 +31,7 @@ impl ProjectsViewModel {
         status: RwSignal<Option<StatusMessage>>,
     ) -> Self {
         Self {
-            projects,
-            page: RwSignal::new(0),
+            list: PagedList::over(projects),
             name: RwSignal::new(String::new()),
             description: RwSignal::new(String::new()),
             editing_id: RwSignal::new(None),
@@ -44,7 +42,7 @@ impl ProjectsViewModel {
     }
 
     pub fn refresh(&self) {
-        let projects = self.projects;
+        let projects = self.list.items;
         let status = self.status;
         spawn_local(async move {
             match api::list_projects().await {
@@ -56,31 +54,25 @@ impl ProjectsViewModel {
         });
     }
 
-    /// The current page's slice, clamped to the last valid page (e.g. after a delete shrinks
-    /// the list past the page the user was on).
-    pub fn paged(&self) -> Vec<ProjectView> {
-        let all = self.projects.get();
-        let total_pages = all.len().div_ceil(PAGE_SIZE).max(1);
-        let page = self.page.get().min(total_pages - 1);
-        all.into_iter()
-            .skip(page * PAGE_SIZE)
-            .take(PAGE_SIZE)
-            .collect()
-    }
-
-    pub fn total(&self) -> Signal<usize> {
-        let projects = self.projects;
-        Signal::derive(move || projects.get().len())
-    }
-
     /// Looks up a project's current display name by id — used by the Sources view to label
     /// rows without holding a stale copy of the name.
     pub fn name_of(&self, id: &str) -> Option<String> {
-        self.projects
+        self.list
+            .items
             .get()
             .into_iter()
             .find(|p| p.id == id)
             .map(|p| p.name)
+    }
+
+    /// A project's current description by id, `None` when it has none.
+    pub fn description_of(&self, id: &str) -> Option<String> {
+        self.list
+            .items
+            .get()
+            .into_iter()
+            .find(|p| p.id == id)
+            .and_then(|p| p.description)
     }
 
     pub fn submit_new(&self, ev: SubmitEvent) {
@@ -109,7 +101,7 @@ impl ProjectsViewModel {
     }
 
     pub fn start_edit(&self, id: String) {
-        if let Some(current) = self.projects.get().into_iter().find(|p| p.id == id) {
+        if let Some(current) = self.list.items.get().into_iter().find(|p| p.id == id) {
             self.edit_name.set(current.name);
             self.edit_description
                 .set(current.description.unwrap_or_default());

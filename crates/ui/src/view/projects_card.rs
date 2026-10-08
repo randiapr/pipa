@@ -1,11 +1,12 @@
-//! View: the Projects card — a paginated table of existing projects, with create and edit
-//! each presented as a native `<dialog>` modal (`showModal()`/`close()`), not inline forms.
+//! View: the Projects card — a paginated list of existing projects (a table on desktop, cards
+//! on mobile), with create and edit each presented as a native `<dialog>` modal
+//! (`showModal()`/`close()`), not inline forms. Both layouts share the same dialogs.
 
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 
-use crate::view::Pagination;
+use crate::view::{EditIcon, Pagination, ResponsiveList, TrashIcon};
 use crate::viewmodel::{ProjectsViewModel, SessionViewModel};
 
 #[component]
@@ -73,27 +74,52 @@ pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
                 </div>
 
                 <Show
-                    when=move || !vm.projects.get().is_empty()
+                    when=move || !vm.list.is_empty()
                     fallback=|| view! { <p class="text-base-content/70">"No projects yet."</p> }
                 >
-                    <div class="overflow-x-auto">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>"Name"</th>
-                                    <th>"Description"</th>
-                                    <Show when=move || session.is_admin()>
-                                        <th class="text-right">"Actions"</th>
-                                    </Show>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <ResponsiveList
+                        table=move || {
+                            view! {
+                                <div class="overflow-x-auto">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>"Name"</th>
+                                                <th>"Description"</th>
+                                                <Show when=move || session.is_admin()>
+                                                    <th class="text-right">"Actions"</th>
+                                                </Show>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <For
+                                                each=move || vm.list.paged()
+                                                key=|project| project.id.clone()
+                                                children=move |project| {
+                                                    view! {
+                                                        <ProjectRow
+                                                            vm=vm
+                                                            edit_dialog=edit_dialog
+                                                            delete_dialog=delete_dialog
+                                                            pending_delete=pending_delete
+                                                            id=project.id
+                                                        />
+                                                    }
+                                                }
+                                            />
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        }
+                        cards=move || {
+                            view! {
                                 <For
-                                    each=move || vm.paged()
+                                    each=move || vm.list.paged()
                                     key=|project| project.id.clone()
                                     children=move |project| {
                                         view! {
-                                            <ProjectRow
+                                            <ProjectItemCard
                                                 vm=vm
                                                 edit_dialog=edit_dialog
                                                 delete_dialog=delete_dialog
@@ -103,11 +129,11 @@ pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
                                         }
                                     }
                                 />
-                            </tbody>
-                        </table>
-                    </div>
+                            }
+                        }
+                    />
                     <div class="card-actions justify-end">
-                        <Pagination page=vm.page total=vm.total() />
+                        <Pagination list=vm.list />
                     </div>
                 </Show>
             </div>
@@ -267,7 +293,7 @@ pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
     }
 }
 
-/// A single project row. Fields are looked up from `vm.projects` by `id` on every render
+/// A single project row. Fields are looked up from `vm.list` by `id` on every render
 /// (rather than captured once from the row's initial data) so an edit elsewhere is reflected
 /// immediately — `<For>` keys rows by id and reuses the DOM node across an edit, so it never
 /// recreates this component just because the underlying project changed.
@@ -280,84 +306,109 @@ fn ProjectRow(
     id: String,
 ) -> impl IntoView {
     let session = expect_context::<SessionViewModel>();
-    let id_for_edit = id.clone();
-    let id_for_delete = id.clone();
     let id_for_name = id.clone();
-    let id_for_description = id;
+    let id_for_description = id.clone();
 
     view! {
         <tr>
             <td>{move || vm.name_of(&id_for_name).unwrap_or_default()}</td>
-            <td>{move || {
-                vm.projects
-                    .get()
-                    .into_iter()
-                    .find(|p| p.id == id_for_description)
-                    .and_then(|p| p.description)
-                    .unwrap_or_default()
-            }}</td>
-            {move || {
-                // Cloned per render: the click handlers below take ownership of the ids.
-                let id_for_edit = id_for_edit.clone();
-                let id_for_delete = id_for_delete.clone();
-                session.is_admin().then(|| view! {
+            <td>{move || vm.description_of(&id_for_description).unwrap_or_default()}</td>
+            <Show when=move || session.is_admin()>
                 <td class="text-right">
-                <div class="join">
-                    <button
-                        class="join-item btn btn-sm btn-square"
-                        type="button"
-                        title="Edit"
-                        aria-label="Edit"
-                        on:click=move |_| {
-                            vm.start_edit(id_for_edit.clone());
-                            if let Some(dialog) = edit_dialog.get() {
-                                let _ = dialog.show_modal();
-                            }
-                        }
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            class="h-4 w-4 stroke-current"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"
-                            ></path>
-                        </svg>
-                    </button>
-                    <button
-                        class="join-item btn btn-sm btn-square btn-error btn-soft"
-                        type="button"
-                        title="Delete"
-                        aria-label="Delete"
-                        on:click=move |_| {
-                            pending_delete.set(Some(id_for_delete.clone()));
-                            if let Some(dialog) = delete_dialog.get() {
-                                let _ = dialog.show_modal();
-                            }
-                        }
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            class="h-4 w-4 stroke-current"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                            ></path>
-                        </svg>
-                    </button>
-                </div>
-            </td>
-            }) }}
+                    <ProjectActions
+                        vm=vm
+                        edit_dialog=edit_dialog
+                        delete_dialog=delete_dialog
+                        pending_delete=pending_delete
+                        id=id.clone()
+                    />
+                </td>
+            </Show>
         </tr>
+    }
+}
+
+/// The mobile counterpart of [`ProjectRow`], looked up by `id` the same way.
+#[component]
+fn ProjectItemCard(
+    vm: ProjectsViewModel,
+    edit_dialog: NodeRef<html::Dialog>,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    id: String,
+) -> impl IntoView {
+    let session = expect_context::<SessionViewModel>();
+    let id_for_name = id.clone();
+    let id_for_description = id.clone();
+
+    view! {
+        <div class="card card-border card-sm bg-base-100">
+            <div class="card-body">
+                <h3 class="card-title">{move || vm.name_of(&id_for_name).unwrap_or_default()}</h3>
+                <p class="text-base-content/70">
+                    {move || {
+                        vm.description_of(&id_for_description)
+                            .unwrap_or_else(|| "No description".to_string())
+                    }}
+                </p>
+                <Show when=move || session.is_admin()>
+                    <div class="card-actions justify-end">
+                        <ProjectActions
+                            vm=vm
+                            edit_dialog=edit_dialog
+                            delete_dialog=delete_dialog
+                            pending_delete=pending_delete
+                            id=id.clone()
+                        />
+                    </div>
+                </Show>
+            </div>
+        </div>
+    }
+}
+
+/// Edit/delete buttons for one project (admin only — callers decide whether to show them).
+#[component]
+fn ProjectActions(
+    vm: ProjectsViewModel,
+    edit_dialog: NodeRef<html::Dialog>,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    id: String,
+) -> impl IntoView {
+    let id_for_edit = id.clone();
+    let id_for_delete = id;
+
+    view! {
+        <div class="join">
+            <button
+                class="join-item btn btn-sm btn-square"
+                type="button"
+                title="Edit"
+                aria-label="Edit"
+                on:click=move |_| {
+                    vm.start_edit(id_for_edit.clone());
+                    if let Some(dialog) = edit_dialog.get() {
+                        let _ = dialog.show_modal();
+                    }
+                }
+            >
+                <EditIcon />
+            </button>
+            <button
+                class="join-item btn btn-sm btn-square btn-error btn-soft"
+                type="button"
+                title="Delete"
+                aria-label="Delete"
+                on:click=move |_| {
+                    pending_delete.set(Some(id_for_delete.clone()));
+                    if let Some(dialog) = delete_dialog.get() {
+                        let _ = dialog.show_modal();
+                    }
+                }
+            >
+                <TrashIcon />
+            </button>
+        </div>
     }
 }

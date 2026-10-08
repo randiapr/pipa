@@ -47,7 +47,7 @@ pub fn Landing() -> impl IntoView {
             }}
 
             <Show
-                when=move || !vm.projects.projects.get().is_empty()
+                when=move || !vm.projects.list.items.get().is_empty()
                 fallback=|| {
                     view! {
                         <div class="card card-border bg-base-100 shadow-xl">
@@ -68,7 +68,7 @@ pub fn Landing() -> impl IntoView {
             >
                 <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                     <For
-                        each=move || vm.projects.projects.get()
+                        each=move || vm.projects.list.items.get()
                         key=|project| project.id.clone()
                         children=move |project| view! { <ProjectCard vm=vm id=project.id name=project.name description=project.description /> }
                     />
@@ -92,7 +92,8 @@ fn ProjectCard(
         move || session.current_project_id.get().as_deref() == Some(id_for_selected.as_str());
     let source_count = move || {
         vm.sources
-            .sources
+            .list
+            .items
             .get()
             .iter()
             .filter(|source| source.project_id.as_deref() == Some(id.as_str()))

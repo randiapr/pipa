@@ -1,13 +1,16 @@
-//! View: the Users page (admin only) — a paginated table of accounts, with create and edit each
-//! presented as a native `<dialog>` modal, like the Projects card.
+//! View: the Users page (admin only) — a paginated list of accounts (a table on desktop, cards
+//! on mobile), with create and edit each presented as a native `<dialog>` modal, like the
+//! Projects card.
 
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 use pipa_api::Role;
 
-use crate::view::{Pagination, STATUS_TOAST_DURATION};
-use crate::viewmodel::{SessionViewModel, StatusMessage, UsersViewModel, parse_role, role_value};
+use crate::view::{EditIcon, Pagination, ResponsiveList, STATUS_TOAST_DURATION, TrashIcon};
+use crate::viewmodel::{
+    SessionViewModel, StatusMessage, UsersViewModel, parse_role, role_badge_class, role_value,
+};
 
 #[component]
 pub fn Users() -> impl IntoView {
@@ -91,26 +94,51 @@ pub fn Users() -> impl IntoView {
             }}
 
             <Show
-                when=move || !vm.users.get().is_empty()
+                when=move || !vm.list.is_empty()
                 fallback=|| view! { <p class="text-base-content/70">"No users yet."</p> }
             >
-                <div class="overflow-x-auto">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>"Username"</th>
-                                <th>"Role"</th>
-                                <th>"Projects"</th>
-                                <th class="text-right">"Actions"</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <ResponsiveList
+                    table=move || {
+                        view! {
+                            <div class="overflow-x-auto">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>"Username"</th>
+                                            <th>"Role"</th>
+                                            <th>"Projects"</th>
+                                            <th class="text-right">"Actions"</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <For
+                                            each=move || vm.list.paged()
+                                            key=|user| user.id.clone()
+                                            children=move |user| {
+                                                view! {
+                                                    <UserRow
+                                                        vm=vm
+                                                        edit_dialog=edit_dialog
+                                                        delete_dialog=delete_dialog
+                                                        pending_delete=pending_delete
+                                                        id=user.id
+                                                    />
+                                                }
+                                            }
+                                        />
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                    cards=move || {
+                        view! {
                             <For
-                                each=move || vm.paged()
+                                each=move || vm.list.paged()
                                 key=|user| user.id.clone()
                                 children=move |user| {
                                     view! {
-                                        <UserRow
+                                        <UserItemCard
                                             vm=vm
                                             edit_dialog=edit_dialog
                                             delete_dialog=delete_dialog
@@ -120,11 +148,11 @@ pub fn Users() -> impl IntoView {
                                     }
                                 }
                             />
-                        </tbody>
-                    </table>
-                </div>
+                        }
+                    }
+                />
                 <div class="flex justify-end">
-                    <Pagination page=vm.page total=vm.total() />
+                    <Pagination list=vm.list />
                 </div>
             </Show>
         </div>
@@ -346,7 +374,7 @@ fn ProjectChecklist(
     }
 }
 
-/// A single user row. Fields are looked up from `vm.users` by `id` on every render, so an edit
+/// A single user row. Fields are looked up from `vm.list` by `id` on every render, so an edit
 /// is reflected in place (see `ProjectRow` for why).
 #[component]
 fn UserRow(
@@ -356,110 +384,141 @@ fn UserRow(
     pending_delete: RwSignal<Option<String>>,
     id: String,
 ) -> impl IntoView {
-    let id_for_edit = id.clone();
-    let id_for_delete = id.clone();
-    let id_for_delete_disabled = id.clone();
-    let id_for_self = id.clone();
     let id_for_name = id.clone();
     let id_for_role = id.clone();
-    let id_for_projects = id;
+    let id_for_projects = id.clone();
 
     view! {
         <tr>
             <td>
-                {move || vm.find(&id_for_name).map(|user| user.username).unwrap_or_default()}
-                <Show when=move || vm.is_self(&id_for_self)>
-                    <span class="badge badge-ghost badge-sm ml-2">"you"</span>
-                </Show>
+                <UserName vm=vm id=id_for_name />
             </td>
             <td>
-                {move || {
-                    match vm.find(&id_for_role).map(|user| user.role) {
-                        Some(Role::Admin) => {
-                            view! { <span class="badge badge-primary badge-sm">"admin"</span> }.into_any()
-                        }
-                        Some(Role::Developer) => {
-                            view! { <span class="badge badge-secondary badge-sm">"developer"</span> }.into_any()
-                        }
-                        Some(Role::User) => {
-                            view! { <span class="badge badge-neutral badge-sm">"user"</span> }.into_any()
-                        }
-                        None => ().into_any(),
-                    }
-                }}
+                <RoleBadge vm=vm id=id_for_role />
             </td>
-            <td>
-                {move || {
-                    let Some(user) = vm.find(&id_for_projects) else {
-                        return String::new();
-                    };
-                    if user.role == Role::Admin {
-                        return "All projects".to_string();
-                    }
-                    let names = vm.project_names(&user);
-                    if names.is_empty() { "\u{2014}".to_string() } else { names.join(", ") }
-                }}
-            </td>
+            <td>{move || vm.find(&id_for_projects).map(|user| vm.projects_label(&user)).unwrap_or_default()}</td>
             <td class="text-right">
-                <div class="join">
-                    <button
-                        class="join-item btn btn-sm btn-square"
-                        type="button"
-                        title="Edit"
-                        aria-label="Edit"
-                        on:click=move |_| {
-                            vm.start_edit(id_for_edit.clone());
-                            if let Some(dialog) = edit_dialog.get() {
-                                let _ = dialog.show_modal();
-                            }
-                        }
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            class="h-4 w-4 stroke-current"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"
-                            ></path>
-                        </svg>
-                    </button>
-                    <button
-                        class="join-item btn btn-sm btn-square btn-error btn-soft"
-                        type="button"
-                        title="Delete"
-                        aria-label="Delete"
-                        disabled=move || vm.is_self(&id_for_delete_disabled)
-                        on:click={
-                            let id = id_for_delete.clone();
-                            move |_| {
-                                pending_delete.set(Some(id.clone()));
-                                if let Some(dialog) = delete_dialog.get() {
-                                    let _ = dialog.show_modal();
-                                }
-                            }
-                        }
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            class="h-4 w-4 stroke-current"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                            ></path>
-                        </svg>
-                    </button>
-                </div>
+                <UserActions
+                    vm=vm
+                    edit_dialog=edit_dialog
+                    delete_dialog=delete_dialog
+                    pending_delete=pending_delete
+                    id=id
+                />
             </td>
         </tr>
+    }
+}
+
+/// The mobile counterpart of [`UserRow`], looked up by `id` the same way.
+#[component]
+fn UserItemCard(
+    vm: UsersViewModel,
+    edit_dialog: NodeRef<html::Dialog>,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    id: String,
+) -> impl IntoView {
+    let id_for_name = id.clone();
+    let id_for_role = id.clone();
+    let id_for_projects = id.clone();
+
+    view! {
+        <div class="card card-border card-sm bg-base-100">
+            <div class="card-body">
+                <div class="flex items-start justify-between gap-2">
+                    <h3 class="card-title break-all">
+                        <UserName vm=vm id=id_for_name />
+                    </h3>
+                    <RoleBadge vm=vm id=id_for_role />
+                </div>
+                <p class="text-sm text-base-content/70">
+                    {move || {
+                        vm.find(&id_for_projects)
+                            .map(|user| format!("Projects: {}", vm.projects_label(&user)))
+                            .unwrap_or_default()
+                    }}
+                </p>
+                <div class="card-actions justify-end">
+                    <UserActions
+                        vm=vm
+                        edit_dialog=edit_dialog
+                        delete_dialog=delete_dialog
+                        pending_delete=pending_delete
+                        id=id
+                    />
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// A user's name, marked "you" for the signed-in account.
+#[component]
+fn UserName(vm: UsersViewModel, id: String) -> impl IntoView {
+    let id_for_self = id.clone();
+
+    view! {
+        {move || vm.find(&id).map(|user| user.username).unwrap_or_default()}
+        <Show when=move || vm.is_self(&id_for_self)>
+            <span class="badge badge-ghost badge-sm ml-2">"you"</span>
+        </Show>
+    }
+}
+
+#[component]
+fn RoleBadge(vm: UsersViewModel, id: String) -> impl IntoView {
+    move || {
+        vm.find(&id).map(|user| {
+            view! { <span class=role_badge_class(user.role)>{role_value(user.role)}</span> }
+        })
+    }
+}
+
+/// Edit/delete buttons for one user. Deleting yourself is disabled.
+#[component]
+fn UserActions(
+    vm: UsersViewModel,
+    edit_dialog: NodeRef<html::Dialog>,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    id: String,
+) -> impl IntoView {
+    let id_for_edit = id.clone();
+    let id_for_delete = id.clone();
+    let id_for_delete_disabled = id;
+
+    view! {
+        <div class="join">
+            <button
+                class="join-item btn btn-sm btn-square"
+                type="button"
+                title="Edit"
+                aria-label="Edit"
+                on:click=move |_| {
+                    vm.start_edit(id_for_edit.clone());
+                    if let Some(dialog) = edit_dialog.get() {
+                        let _ = dialog.show_modal();
+                    }
+                }
+            >
+                <EditIcon />
+            </button>
+            <button
+                class="join-item btn btn-sm btn-square btn-error btn-soft"
+                type="button"
+                title="Delete"
+                aria-label="Delete"
+                disabled=move || vm.is_self(&id_for_delete_disabled)
+                on:click=move |_| {
+                    pending_delete.set(Some(id_for_delete.clone()));
+                    if let Some(dialog) = delete_dialog.get() {
+                        let _ = dialog.show_modal();
+                    }
+                }
+            >
+                <TrashIcon />
+            </button>
+        </div>
     }
 }

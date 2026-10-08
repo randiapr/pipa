@@ -1,5 +1,7 @@
 //! ViewModel: reactive state and commands for the data source registration form and list.
 
+use std::collections::HashMap;
+
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -8,15 +10,17 @@ use pipa_api::{
 };
 
 use crate::api;
-use crate::viewmodel::{PAGE_SIZE, SessionViewModel, StatusMessage};
+use crate::viewmodel::{PagedList, SessionViewModel, StatusMessage};
 
 /// Reactive state for the data source registration form and table, plus the commands that
 /// mutate it via [`crate::api`]. Every field is an `RwSignal` handle, so the whole struct is
 /// cheap to `Copy` — views hold it by value and read/call straight through it.
 #[derive(Copy, Clone)]
 pub struct SourcesViewModel {
-    pub sources: RwSignal<Vec<DataSourceView>>,
-    pub page: RwSignal<usize>,
+    pub list: PagedList<DataSourceView>,
+    /// The latest connection-test outcome per source id. Kept here rather than in a row so it
+    /// shows in both the table and the card layout, and survives a resize that swaps them.
+    pub test_results: RwSignal<HashMap<String, ConnectionTestOutcome>>,
     pub name: RwSignal<String>,
     pub engine: RwSignal<DbEngine>,
     pub host: RwSignal<String>,
@@ -36,8 +40,8 @@ pub struct SourcesViewModel {
 impl SourcesViewModel {
     pub fn new(session: SessionViewModel, status: RwSignal<Option<StatusMessage>>) -> Self {
         Self {
-            sources: RwSignal::new(Vec::new()),
-            page: RwSignal::new(0),
+            list: PagedList::new(),
+            test_results: RwSignal::new(HashMap::new()),
             name: RwSignal::new(String::new()),
             engine: RwSignal::new(DbEngine::Postgres),
             host: RwSignal::new(String::new()),
@@ -65,7 +69,7 @@ impl SourcesViewModel {
     }
 
     fn load(&self, project_id: Option<String>) {
-        let sources = self.sources;
+        let sources = self.list.items;
         let status = self.status;
         // Data sources carry connection details, so the backend refuses them to plain users.
         if !self.session.can_develop() {
@@ -82,27 +86,11 @@ impl SourcesViewModel {
         });
     }
 
-    /// The current page's slice, clamped to the last valid page (e.g. after a delete shrinks
-    /// the list past the page the user was on).
-    pub fn paged(&self) -> Vec<DataSourceView> {
-        let all = self.sources.get();
-        let total_pages = all.len().div_ceil(PAGE_SIZE).max(1);
-        let page = self.page.get().min(total_pages - 1);
-        all.into_iter()
-            .skip(page * PAGE_SIZE)
-            .take(PAGE_SIZE)
-            .collect()
-    }
-
-    pub fn total(&self) -> Signal<usize> {
-        let sources = self.sources;
-        Signal::derive(move || sources.get().len())
-    }
-
     /// Looks up a data source's current display name by id — used by the delete confirmation
     /// dialog, which only holds an id.
     pub fn name_of(&self, id: &str) -> Option<String> {
-        self.sources
+        self.list
+            .items
             .get()
             .into_iter()
             .find(|s| s.id == id)
@@ -117,6 +105,22 @@ impl SourcesViewModel {
             .into_iter()
             .find(|p| &p.id == id)
             .map(|p| p.name)
+    }
+
+    /// Where a source connects to, as `host:port/database`.
+    pub fn connection_label(source: &DataSourceView) -> String {
+        let connection = &source.connection;
+        format!(
+            "{}:{}/{}",
+            connection.host, connection.port, connection.database
+        )
+    }
+
+    pub fn engine_label(engine: DbEngine) -> &'static str {
+        match engine {
+            DbEngine::Postgres => "PostgreSQL",
+            DbEngine::MySql => "MySQL",
+        }
     }
 
     pub fn submit_new(&self, ev: SubmitEvent) {
@@ -168,11 +172,19 @@ impl SourcesViewModel {
         });
     }
 
-    pub fn test(&self, id: String, result: RwSignal<Option<ConnectionTestOutcome>>) {
+    /// The outcome of the last connection test of `id`, if it has been tested.
+    pub fn test_result(&self, id: &str) -> Option<ConnectionTestOutcome> {
+        self.test_results.with(|results| results.get(id).cloned())
+    }
+
+    pub fn test(&self, id: String) {
+        let results = self.test_results;
         let status = self.status;
         spawn_local(async move {
             match api::test_source(&id).await {
-                Ok(outcome) => result.set(Some(outcome)),
+                Ok(outcome) => results.update(|results| {
+                    results.insert(id, outcome);
+                }),
                 Err(err) => status.set(Some(StatusMessage::Error(format!(
                     "Connection test failed: {err}"
                 )))),
