@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.6.0] - 2026-10-08
+
+### Added
+
+- Lists switch layout with the screen width: a paginated `table` on desktop, a stack of
+  `card`s on mobile (below Tailwind's `lg` breakpoint, the same width the navbar collapses
+  into its drawer). Applies to Projects, Sources, Users, the Tables list and query/table results.
+  The layout follows `matchMedia` live, so only one is in the DOM; if `matchMedia` is
+  unavailable, both are rendered and CSS picks one.
+- A **rows-per-page** picker on desktop tables (10 / 25 / 50 / 100, default 10, never more than
+  100). Mobile cards show 5 per page. Changing the page size, or a resize that swaps layouts,
+  keeps the first row shown in view rather than jumping back to page 1.
+- Query results are paginated the same way (they used to render every row at once).
+
+### Changed
+
+- The Tables page reads a table a page at a time using the picker's size (it used to always
+  fetch 100 rows), and the pager shows which rows are on screen (e.g. "Rows 1–25").
+- A data source's connection-test result now stays visible when the layout switches.
+- Pagination logic is shared by every paginated list (`PagedList`, with its layout-aware
+  `PageSize`) instead of repeated in each ViewModel.
+
 ## [0.5.0] - 2026-10-08
 
 ### Added

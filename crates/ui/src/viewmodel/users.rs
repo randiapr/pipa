@@ -7,12 +7,11 @@ use leptos::task::spawn_local;
 use pipa_api::{NewUser, Role, UserUpdate, UserView};
 
 use crate::api;
-use crate::viewmodel::{PAGE_SIZE, SessionViewModel, StatusMessage};
+use crate::viewmodel::{PagedList, SessionViewModel, StatusMessage};
 
 #[derive(Copy, Clone)]
 pub struct UsersViewModel {
-    pub users: RwSignal<Vec<UserView>>,
-    pub page: RwSignal<usize>,
+    pub list: PagedList<UserView>,
     pub username: RwSignal<String>,
     pub password: RwSignal<String>,
     pub role: RwSignal<Role>,
@@ -31,6 +30,15 @@ pub fn role_value(role: Role) -> &'static str {
         Role::Admin => "admin",
         Role::Developer => "developer",
         Role::User => "user",
+    }
+}
+
+/// The daisyUI badge a role is shown with, in both the table and the card layout.
+pub fn role_badge_class(role: Role) -> &'static str {
+    match role {
+        Role::Admin => "badge badge-primary badge-sm",
+        Role::Developer => "badge badge-secondary badge-sm",
+        Role::User => "badge badge-neutral badge-sm",
     }
 }
 
@@ -55,8 +63,7 @@ fn toggle(ids: RwSignal<Vec<String>>, id: String, selected: bool) {
 impl UsersViewModel {
     pub fn new(session: SessionViewModel, status: RwSignal<Option<StatusMessage>>) -> Self {
         Self {
-            users: RwSignal::new(Vec::new()),
-            page: RwSignal::new(0),
+            list: PagedList::new(),
             username: RwSignal::new(String::new()),
             password: RwSignal::new(String::new()),
             role: RwSignal::new(Role::User),
@@ -71,7 +78,7 @@ impl UsersViewModel {
     }
 
     pub fn refresh(&self) {
-        let users = self.users;
+        let users = self.list.items;
         let status = self.status;
         spawn_local(async move {
             match api::list_users().await {
@@ -83,24 +90,8 @@ impl UsersViewModel {
         });
     }
 
-    /// The current page's slice, clamped to the last valid page.
-    pub fn paged(&self) -> Vec<UserView> {
-        let all = self.users.get();
-        let total_pages = all.len().div_ceil(PAGE_SIZE).max(1);
-        let page = self.page.get().min(total_pages - 1);
-        all.into_iter()
-            .skip(page * PAGE_SIZE)
-            .take(PAGE_SIZE)
-            .collect()
-    }
-
-    pub fn total(&self) -> Signal<usize> {
-        let users = self.users;
-        Signal::derive(move || users.get().len())
-    }
-
     pub fn find(&self, id: &str) -> Option<UserView> {
-        self.users.get().into_iter().find(|user| user.id == id)
+        self.list.items.get().into_iter().find(|user| user.id == id)
     }
 
     /// Whether `id` is the account currently signed in.
@@ -118,6 +109,20 @@ impl UsersViewModel {
             .filter_map(|id| projects.iter().find(|project| &project.id == id))
             .map(|project| project.name.clone())
             .collect()
+    }
+
+    /// What `user` has access to, for display: every project for an admin, otherwise the names
+    /// of its projects (a dash when it has none).
+    pub fn projects_label(&self, user: &UserView) -> String {
+        if user.role == Role::Admin {
+            return "All projects".to_string();
+        }
+        let names = self.project_names(user);
+        if names.is_empty() {
+            "\u{2014}".to_string()
+        } else {
+            names.join(", ")
+        }
     }
 
     pub fn toggle_new_project(&self, id: String, selected: bool) {

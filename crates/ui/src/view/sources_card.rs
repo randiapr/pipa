@@ -1,13 +1,14 @@
-//! View: the Sources card — a paginated table of registered data sources with per-row
-//! connection-test and remove actions, plus a "register a data source" form presented as a
-//! native `<dialog>` modal (`showModal()`/`close()`) rather than an inline form.
+//! View: the Sources card — a paginated list of registered data sources (a table on desktop,
+//! cards on mobile) with per-source connection-test and remove actions, plus a "register a
+//! data source" form presented as a native `<dialog>` modal (`showModal()`/`close()`) rather
+//! than an inline form. Both layouts share the same dialogs.
 
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 use pipa_api::{ConnectionTestOutcome, DataSourceView, DbEngine};
 
-use crate::view::Pagination;
+use crate::view::{Pagination, ResponsiveList, TrashIcon};
 use crate::viewmodel::SourcesViewModel;
 
 #[component]
@@ -61,30 +62,54 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                     </button>
                 </div>
                 <Show
-                    when=move || !vm.sources.get().is_empty()
+                    when=move || !vm.list.is_empty()
                     fallback=|| {
                         view! { <p class="text-base-content/70">"No data sources registered yet."</p> }
                     }
                 >
-                    <div class="overflow-x-auto">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>"Name"</th>
-                                    <th>"Engine"</th>
-                                    <th>"Connection"</th>
-                                    <th>"Project"</th>
-                                    <th>"Status"</th>
-                                    <th class="text-right">"Actions"</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <ResponsiveList
+                        table=move || {
+                            view! {
+                                <div class="overflow-x-auto">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>"Name"</th>
+                                                <th>"Engine"</th>
+                                                <th>"Connection"</th>
+                                                <th>"Project"</th>
+                                                <th>"Status"</th>
+                                                <th class="text-right">"Actions"</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <For
+                                                each=move || vm.list.paged()
+                                                key=|source| source.id.clone()
+                                                children=move |source| {
+                                                    view! {
+                                                        <SourceRow
+                                                            vm=vm
+                                                            delete_dialog=delete_dialog
+                                                            pending_delete=pending_delete
+                                                            source=source
+                                                        />
+                                                    }
+                                                }
+                                            />
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        }
+                        cards=move || {
+                            view! {
                                 <For
-                                    each=move || vm.paged()
+                                    each=move || vm.list.paged()
                                     key=|source| source.id.clone()
                                     children=move |source| {
                                         view! {
-                                            <SourceRow
+                                            <SourceItemCard
                                                 vm=vm
                                                 delete_dialog=delete_dialog
                                                 pending_delete=pending_delete
@@ -93,11 +118,11 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                                         }
                                     }
                                 />
-                            </tbody>
-                        </table>
-                    </div>
+                            }
+                        }
+                    />
                     <div class="card-actions justify-end">
-                        <Pagination page=vm.page total=vm.total() />
+                        <Pagination list=vm.list />
                     </div>
                 </Show>
             </div>
@@ -269,12 +294,102 @@ fn SourceRow(
     pending_delete: RwSignal<Option<String>>,
     source: DataSourceView,
 ) -> impl IntoView {
-    let id_for_test = source.id.clone();
-    let id_for_delete = source.id.clone();
     let project_id = source.project_id.clone();
-    let test_result = RwSignal::new(Option::<ConnectionTestOutcome>::None);
 
-    let on_test = move |_| vm.test(id_for_test.clone(), test_result);
+    view! {
+        <tr>
+            <td>
+                <strong>{source.name.clone()}</strong>
+            </td>
+            <td>{SourcesViewModel::engine_label(source.engine)}</td>
+            <td>{SourcesViewModel::connection_label(&source)}</td>
+            <td>{move || vm.project_label(&project_id).unwrap_or_else(|| "\u{2014}".to_string())}</td>
+            <td>
+                <TestStatus vm=vm id=source.id.clone() />
+            </td>
+            <td class="text-right">
+                <SourceActions
+                    vm=vm
+                    delete_dialog=delete_dialog
+                    pending_delete=pending_delete
+                    id=source.id
+                />
+            </td>
+        </tr>
+    }
+}
+
+/// The mobile counterpart of [`SourceRow`], reading `source` the same way.
+#[component]
+fn SourceItemCard(
+    vm: SourcesViewModel,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    source: DataSourceView,
+) -> impl IntoView {
+    let project_id = source.project_id.clone();
+
+    view! {
+        <div class="card card-border card-sm bg-base-100">
+            <div class="card-body">
+                <div class="flex items-start justify-between gap-2">
+                    <h3 class="card-title break-all">{source.name.clone()}</h3>
+                    <span class="badge badge-ghost badge-sm shrink-0">
+                        {SourcesViewModel::engine_label(source.engine)}
+                    </span>
+                </div>
+                <p class="font-mono text-sm break-all">{SourcesViewModel::connection_label(&source)}</p>
+                <p class="text-sm text-base-content/70">
+                    {move || {
+                        vm.project_label(&project_id)
+                            .map(|name| format!("Project: {name}"))
+                            .unwrap_or_else(|| "No project".to_string())
+                    }}
+                </p>
+                <div class="card-actions items-center justify-between">
+                    <TestStatus vm=vm id=source.id.clone() />
+                    <SourceActions
+                        vm=vm
+                        delete_dialog=delete_dialog
+                        pending_delete=pending_delete
+                        id=source.id
+                    />
+                </div>
+            </div>
+        </div>
+    }
+}
+
+/// The badge for a source's last connection test; nothing until it has been tested.
+#[component]
+fn TestStatus(vm: SourcesViewModel, id: String) -> impl IntoView {
+    move || {
+        vm.test_result(&id).map(|outcome| match outcome {
+            ConnectionTestOutcome::Reachable => {
+                view! { <span class="badge badge-success badge-sm">"reachable"</span> }.into_any()
+            }
+            ConnectionTestOutcome::Unreachable { reason } => view! {
+                <span class="badge badge-error badge-sm" title=reason>
+                    "unreachable"
+                </span>
+            }
+            .into_any(),
+        })
+    }
+}
+
+/// "Test connection" and remove buttons for one source.
+#[component]
+fn SourceActions(
+    vm: SourcesViewModel,
+    delete_dialog: NodeRef<html::Dialog>,
+    pending_delete: RwSignal<Option<String>>,
+    id: String,
+) -> impl IntoView {
+    let id_for_test = id.clone();
+    let id_for_delete = id;
+
+    let on_test = move |_| vm.test(id_for_test.clone());
     let on_delete = move |_| {
         pending_delete.set(Some(id_for_delete.clone()));
         if let Some(dialog) = delete_dialog.get() {
@@ -283,75 +398,19 @@ fn SourceRow(
     };
 
     view! {
-        <tr>
-            <td>
-                <strong>{source.name.clone()}</strong>
-            </td>
-            <td>{engine_label(source.engine)}</td>
-            <td>
-                {format!(
-                    "{}:{}/{}",
-                    source.connection.host,
-                    source.connection.port,
-                    source.connection.database,
-                )}
-            </td>
-            <td>{move || vm.project_label(&project_id).unwrap_or_else(|| "\u{2014}".to_string())}</td>
-            <td>
-                {move || {
-                    test_result
-                        .get()
-                        .map(|outcome| match outcome {
-                            ConnectionTestOutcome::Reachable => {
-                                view! { <span class="badge badge-success badge-sm">"reachable"</span> }
-                                    .into_any()
-                            }
-                            ConnectionTestOutcome::Unreachable { reason } => {
-                                view! {
-                                    <span class="badge badge-error badge-sm" title=reason>
-                                        "unreachable"
-                                    </span>
-                                }
-                                    .into_any()
-                            }
-                        })
-                }}
-            </td>
-            <td class="text-right">
-                <div class="join">
-                    <button class="join-item btn btn-sm" on:click=on_test type="button">
-                        "Test connection"
-                    </button>
-                    <button
-                        class="join-item btn btn-sm btn-square btn-error btn-soft"
-                        type="button"
-                        title="Remove"
-                        aria-label="Remove"
-                        on:click=on_delete
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            class="h-4 w-4 stroke-current"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
-                            ></path>
-                        </svg>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    }
-}
-
-fn engine_label(engine: DbEngine) -> &'static str {
-    match engine {
-        DbEngine::Postgres => "PostgreSQL",
-        DbEngine::MySql => "MySQL",
+        <div class="join">
+            <button class="join-item btn btn-sm" on:click=on_test type="button">
+                "Test connection"
+            </button>
+            <button
+                class="join-item btn btn-sm btn-square btn-error btn-soft"
+                type="button"
+                title="Remove"
+                aria-label="Remove"
+                on:click=on_delete
+            >
+                <TrashIcon />
+            </button>
+        </div>
     }
 }

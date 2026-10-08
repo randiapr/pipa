@@ -7,10 +7,7 @@ use leptos::task::spawn_local;
 use pipa_api::TableView;
 
 use crate::api;
-use crate::viewmodel::{SessionViewModel, StatusMessage};
-
-/// Rows fetched per page of a table.
-pub const TABLE_PAGE_ROWS: usize = 100;
+use crate::viewmodel::{PageSize, SessionViewModel, StatusMessage};
 
 #[derive(Copy, Clone)]
 pub struct TablesViewModel {
@@ -22,6 +19,8 @@ pub struct TablesViewModel {
     /// Rows skipped before the current page.
     pub offset: RwSignal<usize>,
     pub loading: RwSignal<bool>,
+    /// Rows fetched per page: the picker's choice on desktop (at most 100), fewer on mobile.
+    pub page_size: PageSize,
     pub error: RwSignal<Option<String>>,
     session: SessionViewModel,
     status: RwSignal<Option<StatusMessage>>,
@@ -35,6 +34,7 @@ impl TablesViewModel {
             rows: RwSignal::new(None),
             offset: RwSignal::new(0),
             loading: RwSignal::new(false),
+            page_size: PageSize::new(),
             error: RwSignal::new(None),
             session,
             status,
@@ -77,11 +77,20 @@ impl TablesViewModel {
     }
 
     pub fn next(&self) {
-        self.load(self.offset.get_untracked() + TABLE_PAGE_ROWS);
+        self.load(self.offset.get_untracked() + self.page_size.get_untracked());
     }
 
     pub fn prev(&self) {
-        self.load(self.offset.get_untracked().saturating_sub(TABLE_PAGE_ROWS));
+        self.load(
+            self.offset
+                .get_untracked()
+                .saturating_sub(self.page_size.get_untracked()),
+        );
+    }
+
+    /// Fetches the open table's page again from the same row, e.g. after the page size changed.
+    pub fn reload(&self) {
+        self.load(self.offset.get_untracked());
     }
 
     pub fn has_prev(&self) -> bool {
@@ -90,10 +99,9 @@ impl TablesViewModel {
 
     /// A full page suggests there may be more rows after it.
     pub fn has_next(&self) -> bool {
-        self.rows.with(|rows| {
-            rows.as_ref()
-                .is_some_and(|rows| rows.len() >= TABLE_PAGE_ROWS)
-        })
+        let size = self.page_size.get();
+        self.rows
+            .with(|rows| rows.as_ref().is_some_and(|rows| rows.len() >= size))
     }
 
     fn load(&self, offset: usize) {
@@ -104,12 +112,13 @@ impl TablesViewModel {
             return;
         };
         let this = *self;
+        let limit = this.page_size.get_untracked();
         this.offset.set(offset);
         this.rows.set(None);
         this.error.set(None);
         this.loading.set(true);
         spawn_local(async move {
-            match api::read_table(&project_id, &table, TABLE_PAGE_ROWS, offset).await {
+            match api::read_table(&project_id, &table, limit, offset).await {
                 Ok(serde_json::Value::Array(rows)) => this.rows.set(Some(rows)),
                 Ok(other) => this.rows.set(Some(vec![other])),
                 Err(err) => this.error.set(Some(err)),
