@@ -9,6 +9,7 @@
 //! table row on desktop and a card on mobile (see [`LayoutViewModel`]) — and must look the same
 //! in both, including across a resize that swaps one for the other.
 
+mod explorer;
 mod layout;
 mod paging;
 mod projects;
@@ -20,6 +21,7 @@ mod users;
 
 use leptos::prelude::*;
 
+pub use explorer::{ExplorerViewModel, table_ref};
 pub use layout::LayoutViewModel;
 pub use paging::{PAGE_SIZE_OPTIONS, PageSize, PagedList};
 pub use projects::ProjectsViewModel;
@@ -27,10 +29,10 @@ pub use query::{QueryViewModel, cell_text, columns_of};
 pub use session::SessionViewModel;
 pub use sources::SourcesViewModel;
 pub use tables::TablesViewModel;
-pub use users::{UsersViewModel, parse_role, role_badge_class, role_value};
+pub use users::{UsersViewModel, parse_role, role_value};
 
-/// A dashboard-wide status message, carrying enough to pick the right daisyUI `alert` variant
-/// (`alert-success`/`alert-error`) rather than always rendering the same neutral alert.
+/// A dashboard-wide status message: whether it reports a success or an error (the view picks
+/// the alert's color from that), and its text.
 #[derive(Clone, PartialEq, Eq)]
 pub enum StatusMessage {
     Success(String),
@@ -41,14 +43,6 @@ impl StatusMessage {
     pub fn text(&self) -> &str {
         match self {
             Self::Success(text) | Self::Error(text) => text,
-        }
-    }
-
-    /// The daisyUI `alert` variant class for this message's kind.
-    pub fn alert_class(&self) -> &'static str {
-        match self {
-            Self::Success(_) => "alert alert-success",
-            Self::Error(_) => "alert alert-error",
         }
     }
 }

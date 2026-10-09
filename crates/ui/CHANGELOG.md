@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.8.0] - 2026-10-09
+
+### Added
+
+- Data source explorer (`/sources/:id`, the "Explore" button of a source): lists the tables of
+  the source's database, with a filter, each table's columns (type, nullability, primary key, referenced column)
+  in a collapse, and a checkbox per table choosing whether it is ingested; the choice is saved
+  as a whole (Save/Discard, plus "Select shown"/"Clear shown" for the filtered tables). Any
+  number of tables can be expanded at once; one icon button expands or collapses all the
+  filtered tables. A Postgres source's tables are grouped by schema: each schema is a
+  collapse holding its tables' collapses, with a checkbox choosing all of its filtered tables;
+  the toolbar's expand/collapse-all button opens or closes the schemas too.
+- The sources list shows how many tables each source ingests.
+- Every update and delete asks for confirmation first: saving a project or user edit (the
+  edit form stays open behind the question), saving or discarding the explorer's table choice
+  (saying how many tables are added and removed, and what that means for capture), and
+  deleting a project, data source or user.
+
+### Changed
+
+- Rebranding: the dashboard's text calls the captured tables pipa's own rather than Iceberg's
+  ("capture into pipa").
+- The daisyUI markup the pages repeated now lives in one module of generic components,
+  `src/components/` (`Modal`/`ModalActions`/`ConfirmDialog`, `Collapse`/`ExpandToggle`,
+  `Card`, `Alert`/`Toast`/`Badge`/`Loading`, `Field`/`TextInput`/`TextArea`/`Select`/
+  `Checkbox`, and the icons), with no ViewModel or API imports; the pages in `src/view/` are
+  built from them. The status toast is one shared `StatusToast`. The ViewModels no longer
+  return CSS classes (`StatusMessage::alert_class` and `role_badge_class` are gone): colors
+  are picked in the view.
+
 ## [0.7.0] - 2026-10-09
 
 ### Changed

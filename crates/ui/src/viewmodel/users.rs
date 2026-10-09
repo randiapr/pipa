@@ -33,15 +33,6 @@ pub fn role_value(role: Role) -> &'static str {
     }
 }
 
-/// The daisyUI badge a role is shown with, in both the table and the card layout.
-pub fn role_badge_class(role: Role) -> &'static str {
-    match role {
-        Role::Admin => "badge badge-primary badge-sm",
-        Role::Developer => "badge badge-secondary badge-sm",
-        Role::User => "badge badge-neutral badge-sm",
-    }
-}
-
 /// The role a `<select>` value stands for. Anything unrecognized is the least privileged one.
 pub fn parse_role(value: &str) -> Role {
     match value {

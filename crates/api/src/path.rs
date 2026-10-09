@@ -4,6 +4,7 @@
 pub const DATASOURCES: &str = "/datasources";
 pub const DATASOURCE: &str = "/datasources/{id}";
 pub const DATASOURCE_TEST: &str = "/datasources/{id}/test";
+pub const DATASOURCE_TABLES: &str = "/datasources/{id}/tables";
 pub const PROJECTS: &str = "/projects";
 pub const PROJECT: &str = "/projects/{id}";
 pub const TABLES: &str = "/tables";
@@ -26,6 +27,10 @@ pub fn datasource_test(id: &str) -> String {
     with_id(DATASOURCE_TEST, id)
 }
 
+pub fn datasource_tables(id: &str) -> String {
+    with_id(DATASOURCE_TABLES, id)
+}
+
 pub fn project(id: &str) -> String {
     with_id(PROJECT, id)
 }
@@ -43,6 +48,7 @@ mod tests {
         assert_eq!(user("abc"), "/users/abc");
         assert_eq!(datasource("abc"), "/datasources/abc");
         assert_eq!(datasource_test("abc"), "/datasources/abc/test");
+        assert_eq!(datasource_tables("abc"), "/datasources/abc/tables");
         assert_eq!(project("abc"), "/projects/abc");
     }
 }

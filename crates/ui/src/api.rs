@@ -15,10 +15,11 @@ use gloo_net::Error as NetError;
 use gloo_net::http::{Request, RequestBuilder, Response};
 use pipa_api::{
     ConnectionTestOutcome, ConnectionTestResponse, DataSourceResponse, DataSourceView,
-    DataSourcesResponse, ErrorResponse, LoginData, LoginRequest, LoginResponse, MeResponse,
-    NewDataSource, NewProject, NewUser, ProjectResponse, ProjectUpdate, ProjectView,
-    ProjectsResponse, QueryRequest, ReadTableRequest, RowsResponse, TableView, TablesResponse,
-    UserResponse, UserUpdate, UserView, UsersResponse, path,
+    DataSourcesResponse, ErrorResponse, IngestedTablesUpdate, LoginData, LoginRequest,
+    LoginResponse, MeResponse, NewDataSource, NewProject, NewUser, ProjectResponse, ProjectUpdate,
+    ProjectView, ProjectsResponse, QueryRequest, ReadTableRequest, RowsResponse, SourceTableRef,
+    SourceTableView, SourceTablesResponse, TableView, TablesResponse, UserResponse, UserUpdate,
+    UserView, UsersResponse, path,
 };
 use serde::de::DeserializeOwned;
 
@@ -135,6 +136,30 @@ pub async fn register_source(new_source: &NewDataSource) -> Result<DataSourceVie
     Ok(response.body.datasource)
 }
 
+pub async fn get_source(id: &str) -> Result<DataSourceView, String> {
+    let response: DataSourceResponse =
+        send(authed(Request::get(&url(&path::datasource(id)))).build()).await?;
+    Ok(response.body.datasource)
+}
+
+/// Lists the tables of a source's database, read live from it.
+pub async fn list_source_tables(id: &str) -> Result<Vec<SourceTableView>, String> {
+    let response: SourceTablesResponse =
+        send(authed(Request::get(&url(&path::datasource_tables(id)))).build()).await?;
+    Ok(response.body.tables)
+}
+
+/// Replaces the tables a source ingests.
+pub async fn set_ingested_tables(
+    id: &str,
+    tables: Vec<SourceTableRef>,
+) -> Result<DataSourceView, String> {
+    let body = IngestedTablesUpdate { tables };
+    let request = authed(Request::put(&url(&path::datasource_tables(id)))).json(&body);
+    let response: DataSourceResponse = send(request).await?;
+    Ok(response.body.datasource)
+}
+
 pub async fn delete_source(id: &str) -> Result<(), String> {
     send_discard(authed(Request::delete(&url(&path::datasource(id)))).build()).await
 }
@@ -167,7 +192,7 @@ pub async fn delete_project(id: &str) -> Result<(), String> {
     send_discard(authed(Request::delete(&url(&path::project(id)))).build()).await
 }
 
-/// Runs read-only SQL over the Iceberg tables of `project_id` (every table, for an admin who
+/// Runs read-only SQL over the pipa tables of `project_id` (every table, for an admin who
 /// passes `None`), returning the rows as a JSON array of objects.
 pub async fn query(sql: &str, project_id: Option<&str>) -> Result<serde_json::Value, String> {
     let body = QueryRequest {
@@ -179,7 +204,7 @@ pub async fn query(sql: &str, project_id: Option<&str>) -> Result<serde_json::Va
     Ok(response.body.rows)
 }
 
-/// Lists the Iceberg tables of `project_id`'s data sources.
+/// Lists the pipa tables of `project_id`'s data sources.
 pub async fn list_tables(project_id: &str) -> Result<Vec<TableView>, String> {
     let target = format!("{}?project_id={project_id}", url(path::TABLES));
     let response: TablesResponse = send(authed(Request::get(&target)).build()).await?;

@@ -7,6 +7,7 @@
 //! is the row shape every Iceberg writer needs; it does not otherwise know anything about
 //! catalogs, Postgres, or object storage — those are [`crate::write::infrastructure`]'s job.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use arrow_array::{
@@ -44,9 +45,18 @@ impl TargetTable {
     pub fn for_event(source: &DataSource, event: &ChangeEvent) -> Self {
         Self {
             namespace: namespace_for_source(source),
-            table: sanitize_ident(&format!("{}__{}", event.schema, event.table)),
+            table: target_table_name(&event.schema, &event.table),
         }
     }
+}
+
+/// The target table name source table `schema.table` maps to: `{schema}__{table}`, sanitized.
+/// The only spelling of that convention: anything matching source tables against target
+/// tables maps forward through this rather than splitting a target name back apart, which
+/// the sanitizing (and a `__` inside a name) makes ambiguous. `pipa-backend` keeps an
+/// identical copy (`iceberg::table_for_source_table`); keep the two in step.
+pub fn target_table_name(schema: &str, table: &str) -> String {
+    sanitize_ident(&format!("{schema}__{table}"))
 }
 
 /// The Iceberg namespace every target table for `source` lives under — shared by
@@ -116,6 +126,9 @@ pub trait IcebergWriter: Send + Sync {
     /// created; this backfills tables created before keys were recorded, so readers can
     /// collapse their changelog to current rows from Iceberg alone.
     async fn record_key_columns(&self, source: &DataSource) -> Result<(), WriteError>;
+
+    /// The names of `source`'s existing target tables; empty if it has none yet.
+    async fn existing_tables(&self, source: &DataSource) -> Result<HashSet<String>, WriteError>;
 }
 
 /// The checkpoint a target table's latest snapshot carries.

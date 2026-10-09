@@ -1,4 +1,5 @@
-//! `/datasources` routes: register/list/get/delete OLTP data sources, test connectivity. Every
+//! `/datasources` routes: register/list/get/delete OLTP data sources, test connectivity, explore
+//! a source's tables and choose the ones to ingest (`/datasources/{id}/tables`). Every
 //! route needs a developer or admin (a data source carries its connection password, so view-only
 //! users never see one) and is limited to data sources in projects the caller may access;
 //! project-less data sources are admin-only.
@@ -16,12 +17,14 @@ use axum::{
 };
 use pipa_api::{
     ConnectionTest, ConnectionTestResponse, DataSourceData, DataSourceResponse, DataSources,
-    DataSourcesResponse, NewDataSource, path,
+    DataSourcesResponse, IngestedTablesUpdate, NewDataSource, SourceTables, SourceTablesResponse,
+    path,
 };
 use serde::Deserialize;
 use uuid::Uuid;
 
 use super::auth::{AuthError, AuthUser};
+use super::convert::source_table_view;
 use super::error::{BaseResponse, Empty, MessageResponse, ResponseCode, error_response};
 
 type SharedDataSourceService = Arc<DataSourceService>;
@@ -37,6 +40,10 @@ pub fn routes() -> Router<SharedDataSourceService> {
             get(get_datasource).delete(delete_datasource),
         )
         .route(path::DATASOURCE_TEST, post(test_datasource))
+        .route(
+            path::DATASOURCE_TABLES,
+            get(list_source_tables).put(choose_ingested_tables),
+        )
 }
 
 /// Query string of `GET /datasources`.
@@ -130,6 +137,50 @@ async fn test_datasource(
     )))
 }
 
+/// The tables of the source's database, read live from it, each flagged with whether it is
+/// ingested. 502 when the database can't be read.
+async fn list_source_tables(
+    auth: AuthUser,
+    State(service): State<SharedDataSourceService>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SourceTablesResponse>, ApiError> {
+    auth.require_developer()?;
+    let datasource = service.get(DataSourceId(id)).await?;
+    auth.require_project(datasource.project_id)?;
+    let tables = service
+        .list_tables(&datasource)
+        .await?
+        .into_iter()
+        .map(|table| source_table_view(&datasource, table))
+        .collect();
+    Ok(Json(BaseResponse::new(
+        ResponseCode::Ok,
+        SourceTables { tables },
+    )))
+}
+
+/// Replaces the tables the source ingests; `pipa-ingestion` picks the change up on its next
+/// refresh of the registered sources.
+async fn choose_ingested_tables(
+    auth: AuthUser,
+    State(service): State<SharedDataSourceService>,
+    Path(id): Path<Uuid>,
+    Json(update): Json<IngestedTablesUpdate>,
+) -> Result<Json<DataSourceResponse>, ApiError> {
+    auth.require_developer()?;
+    let datasource = service.get(DataSourceId(id)).await?;
+    auth.require_project(datasource.project_id)?;
+    let tables = update.tables.into_iter().map(Into::into).collect();
+    let datasource = service
+        .choose_ingested_tables(DataSourceId(id), tables)
+        .await?
+        .into();
+    Ok(Json(BaseResponse::new(
+        ResponseCode::Ok,
+        DataSourceData { datasource },
+    )))
+}
+
 enum ApiError {
     DataSource(DataSourceError),
     Auth(AuthError),
@@ -156,6 +207,9 @@ impl IntoResponse for ApiError {
         let (status, code) = match &err {
             DataSourceError::NotFound(_) => (StatusCode::NOT_FOUND, ResponseCode::NotFound),
             DataSourceError::InvalidField(_) => (StatusCode::BAD_REQUEST, ResponseCode::BadRequest),
+            DataSourceError::SourceUnavailable(_) => {
+                (StatusCode::BAD_GATEWAY, ResponseCode::UpstreamError)
+            }
             DataSourceError::Storage(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 ResponseCode::InternalError,

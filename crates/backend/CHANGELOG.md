@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.10.0] - 2026-10-09
+
+### Added
+
+- Data source explorer: `GET /datasources/{id}/tables` lists the tables of the source's
+  database with their columns (type, nullability, primary key, and the column a foreign key
+  references — the first by constraint name if the column is in several), read live with the source's
+  credentials (502 when the database can't be read), each flagged with whether it is ingested.
+  `PUT /datasources/{id}/tables` replaces the tables the source ingests. Both need a developer
+  or admin with access to the source's project, like the other `/datasources` routes.
+- `DataSource::ingested_tables`, persisted in the `datasources/` JSON that `pipa-ingestion`
+  reads. A source ingests no table until some are chosen.
+- At startup, in the background, every source stored before `ingested_tables` existed — which
+  was captured in full — gets the tables it already has in pipa as its choice, so the explorer
+  shows what is captured. Its database's tables are matched forward to their pipa names
+  (`iceberg::table_for_source_table`, the same sanitized `{schema}__{table}` as
+  `pipa-ingestion`), so the match is exact. A source that can't be reached is retried at the
+  next start; a choice saved meanwhile is never overwritten.
+
 ## [0.9.0] - 2026-10-09
 
 ### Changed

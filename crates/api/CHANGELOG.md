@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.4.0] - 2026-10-09
+
+### Added
+
+- Data source explorer contract: `SourceTableRef`, `SourceColumnView` (with `foreign_key`, a
+  `SourceColumnRef` to the referenced column), `SourceTableView`,
+  `SourceTables`/`SourceTablesResponse` (`GET /datasources/{id}/tables`) and
+  `IngestedTablesUpdate` (`PUT /datasources/{id}/tables`), with the `DATASOURCE_TABLES` path and
+  the `datasource_tables(id)` helper.
+- `DataSourceView::ingested_tables`: the tables a source ingests; empty (the default) for none.
+
+### Changed
+
+- **Breaking:** the new `DataSourceView` field breaks struct literals of it. On the wire it is
+  optional (`#[serde(default)]`).
+
 ## [0.3.0] - 2026-10-08
 
 ### Added

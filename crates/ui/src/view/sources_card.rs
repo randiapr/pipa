@@ -1,14 +1,19 @@
 //! View: the Sources card — a paginated list of registered data sources (a table on desktop,
-//! cards on mobile) with per-source connection-test and remove actions, plus a "register a
-//! data source" form presented as a native `<dialog>` modal (`showModal()`/`close()`) rather
-//! than an inline form. Both layouts share the same dialogs.
+//! cards on mobile) with per-source explore (the tables explorer, where the tables to ingest are
+//! chosen), connection-test and remove actions, plus a "register a data source" form presented
+//! as a [`Modal`] rather than an inline form. Both layouts share the same dialogs; removing asks
+//! for confirmation first ([`ConfirmDialog`]).
 
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 use pipa_api::{ConnectionTestOutcome, DataSourceView, DbEngine};
 
-use crate::view::{Pagination, ResponsiveList, TrashIcon};
+use crate::components::{
+    Badge, Card, CardActions, CardTitle, ConfirmDialog, Field, Modal, ModalActions, Select,
+    TextInput, Tone, TrashIcon, close_dialog, open_dialog,
+};
+use crate::view::{Pagination, ResponsiveList};
 use crate::viewmodel::SourcesViewModel;
 
 #[component]
@@ -17,21 +22,13 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
     let delete_dialog = NodeRef::<html::Dialog>::new();
     let pending_delete = RwSignal::new(Option::<String>::None);
 
-    let open_register = move |_| {
-        if let Some(dialog) = register_dialog.get() {
-            let _ = dialog.show_modal();
-        }
-    };
-
     let on_submit_register = move |ev: SubmitEvent| {
         vm.submit_new(ev);
-        if let Some(dialog) = register_dialog.get() {
-            dialog.close();
-        }
+        close_dialog(register_dialog);
     };
 
-    // Fires on every close, whatever the cause (submit, Cancel, Esc), so the
-    // form always starts empty next time it's opened. Leaves `engine` alone, matching
+    // Runs on every close, whatever the cause (submit, Cancel, Esc), so the form always
+    // starts empty next time it's opened. Leaves `engine` alone, matching
     // `SourcesViewModel::submit_new`'s own reset — the last-picked engine is a sensible
     // default to keep across registrations.
     let on_register_closed = move |_| {
@@ -44,242 +41,162 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
     };
 
     let on_confirm_delete = move |_| {
-        if let Some(id) = pending_delete.get() {
+        if let Some(id) = pending_delete.get_untracked() {
             vm.delete(id);
-        }
-        if let Some(dialog) = delete_dialog.get() {
-            dialog.close();
         }
     };
 
+    let engines = [DbEngine::Postgres, DbEngine::MySql]
+        .map(|engine| {
+            (
+                engine.as_str().to_string(),
+                SourcesViewModel::engine_label(engine).to_string(),
+            )
+        })
+        .to_vec();
+
     view! {
-        <section id="sources" class="card card-border bg-base-100 shadow-xl">
-            <div class="card-body">
-                <div class="flex items-center justify-between">
-                    <h2 class="card-title">"Registered data sources"</h2>
-                    <button class="btn btn-primary btn-sm" type="button" on:click=open_register>
-                        "New Data Source"
-                    </button>
-                </div>
-                <Show
-                    when=move || !vm.list.is_empty()
-                    fallback=|| {
-                        view! { <p class="text-base-content/70">"No data sources registered yet."</p> }
-                    }
+        <Card attr:id="sources" class="shadow-xl">
+            <div class="flex items-center justify-between">
+                <CardTitle>"Registered data sources"</CardTitle>
+                <button
+                    class="btn btn-primary btn-sm"
+                    type="button"
+                    on:click=move |_| open_dialog(register_dialog)
                 >
-                    <ResponsiveList
-                        table=move || {
-                            view! {
-                                <div class="overflow-x-auto">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>"Name"</th>
-                                                <th>"Engine"</th>
-                                                <th>"Connection"</th>
-                                                <th>"Project"</th>
-                                                <th>"Status"</th>
-                                                <th class="text-right">"Actions"</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <For
-                                                each=move || vm.list.paged()
-                                                key=|source| source.id.clone()
-                                                children=move |source| {
-                                                    view! {
-                                                        <SourceRow
-                                                            vm=vm
-                                                            delete_dialog=delete_dialog
-                                                            pending_delete=pending_delete
-                                                            source=source
-                                                        />
-                                                    }
+                    "New Data Source"
+                </button>
+            </div>
+            <Show
+                when=move || !vm.list.is_empty()
+                fallback=|| {
+                    view! { <p class="text-base-content/70">"No data sources registered yet."</p> }
+                }
+            >
+                <ResponsiveList
+                    table=move || {
+                        view! {
+                            <div class="overflow-x-auto">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>"Name"</th>
+                                            <th>"Engine"</th>
+                                            <th>"Connection"</th>
+                                            <th>"Project"</th>
+                                            <th>"Ingesting"</th>
+                                            <th>"Status"</th>
+                                            <th class="text-right">"Actions"</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <For
+                                            each=move || vm.list.paged()
+                                            key=|source| source.id.clone()
+                                            children=move |source| {
+                                                view! {
+                                                    <SourceRow
+                                                        vm=vm
+                                                        delete_dialog=delete_dialog
+                                                        pending_delete=pending_delete
+                                                        source=source
+                                                    />
                                                 }
-                                            />
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
+                                            }
+                                        />
+                                    </tbody>
+                                </table>
+                            </div>
                         }
-                        cards=move || {
-                            view! {
-                                <For
-                                    each=move || vm.list.paged()
-                                    key=|source| source.id.clone()
-                                    children=move |source| {
-                                        view! {
-                                            <SourceItemCard
-                                                vm=vm
-                                                delete_dialog=delete_dialog
-                                                pending_delete=pending_delete
-                                                source=source
-                                            />
-                                        }
+                    }
+                    cards=move || {
+                        view! {
+                            <For
+                                each=move || vm.list.paged()
+                                key=|source| source.id.clone()
+                                children=move |source| {
+                                    view! {
+                                        <SourceItemCard
+                                            vm=vm
+                                            delete_dialog=delete_dialog
+                                            pending_delete=pending_delete
+                                            source=source
+                                        />
                                     }
-                                />
-                            }
+                                }
+                            />
+                        }
+                    }
+                />
+                <CardActions>
+                    <Pagination list=vm.list />
+                </CardActions>
+            </Show>
+        </Card>
+
+        <Modal
+            node_ref=register_dialog
+            title="Register a data source"
+            on_close=on_register_closed
+        >
+            <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_register>
+                <Field legend="Name">
+                    <TextInput value=vm.name required=true />
+                </Field>
+                <Field legend="Engine">
+                    <Select
+                        value=Signal::derive(move || vm.engine.get().as_str().to_string())
+                        options=engines
+                        on_change=move |value: String| {
+                            vm.engine.set(if value == "mysql" { DbEngine::MySql } else { DbEngine::Postgres })
                         }
                     />
-                    <div class="card-actions justify-end">
-                        <Pagination list=vm.list />
-                    </div>
-                </Show>
-            </div>
-        </section>
-
-        <dialog node_ref=register_dialog class="modal" on:close=on_register_closed>
-            <div class="modal-box max-h-[85vh] overflow-y-auto">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| {
-                        if let Some(dialog) = register_dialog.get() {
-                            dialog.close();
-                        }
-                    }
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Register a data source"</h3>
-                <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_register>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Name"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            prop:value=move || vm.name.get()
-                            on:input:target=move |ev| vm.name.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Engine"</legend>
-                        <select
-                            class="select w-full"
-                            prop:value=move || vm.engine.get().as_str()
-                            on:change:target=move |ev| {
-                                let value = ev.target().value();
-                                vm.engine.set(if value == "mysql" { DbEngine::MySql } else { DbEngine::Postgres });
-                            }
-                        >
-                            <option value="postgres">"PostgreSQL"</option>
-                            <option value="mysql">"MySQL"</option>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Host"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            prop:value=move || vm.host.get()
-                            on:input:target=move |ev| vm.host.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Port"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            placeholder=move || vm.engine.get().default_port().to_string()
-                            prop:value=move || vm.port.get()
-                            on:input:target=move |ev| vm.port.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Username"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            prop:value=move || vm.username.get()
-                            on:input:target=move |ev| vm.username.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Password"</legend>
-                        <input
-                            type="password"
-                            class="input w-full"
-                            prop:value=move || vm.password.get()
-                            on:input:target=move |ev| vm.password.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Database"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            prop:value=move || vm.database.get()
-                            on:input:target=move |ev| vm.database.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <div class="modal-action">
-                        <button
-                            class="btn"
-                            type="button"
-                            on:click=move |_| {
-                                if let Some(dialog) = register_dialog.get() {
-                                    dialog.close();
-                                }
-                            }
-                        >
-                            "Cancel"
-                        </button>
-                        <button class="btn btn-primary" type="submit">
-                            "Register"
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </dialog>
-
-        <dialog node_ref=delete_dialog class="modal">
-            <div class="modal-box">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| {
-                        if let Some(dialog) = delete_dialog.get() {
-                            dialog.close();
-                        }
-                    }
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Remove data source"</h3>
-                <p class="py-4">
-                    {move || {
-                        pending_delete
-                            .get()
-                            .and_then(|id| vm.name_of(&id))
-                            .map(|name| {
-                                format!("Are you sure you want to remove \"{name}\"? This cannot be undone.")
-                            })
-                            .unwrap_or_default()
-                    }}
-                </p>
-                <div class="modal-action">
-                    <button
-                        class="btn"
-                        type="button"
-                        on:click=move |_| {
-                            if let Some(dialog) = delete_dialog.get() {
-                                dialog.close();
-                            }
-                        }
-                    >
-                        "Cancel"
+                </Field>
+                <Field legend="Host">
+                    <TextInput value=vm.host required=true />
+                </Field>
+                <Field legend="Port">
+                    <TextInput
+                        value=vm.port
+                        required=true
+                        placeholder=Signal::derive(move || vm.engine.get().default_port().to_string())
+                    />
+                </Field>
+                <Field legend="Username">
+                    <TextInput value=vm.username required=true />
+                </Field>
+                <Field legend="Password">
+                    <TextInput value=vm.password kind="password" />
+                </Field>
+                <Field legend="Database">
+                    <TextInput value=vm.database required=true />
+                </Field>
+                <ModalActions node_ref=register_dialog>
+                    <button class="btn btn-primary" type="submit">
+                        "Register"
                     </button>
-                    <button class="btn btn-error" type="button" on:click=on_confirm_delete>
-                        "Remove"
-                    </button>
-                </div>
-            </div>
-        </dialog>
+                </ModalActions>
+            </form>
+        </Modal>
+
+        <ConfirmDialog
+            node_ref=delete_dialog
+            title="Remove data source"
+            message=move || {
+                pending_delete
+                    .get()
+                    .and_then(|id| vm.name_of(&id))
+                    .map(|name| {
+                        format!(
+                            "Are you sure you want to remove \"{name}\"? It stops being captured. This cannot be undone.",
+                        )
+                    })
+                    .unwrap_or_default()
+            }
+            confirm_label="Remove"
+            danger=true
+            on_confirm=on_confirm_delete
+        />
     }
 }
 
@@ -304,6 +221,7 @@ fn SourceRow(
             <td>{SourcesViewModel::engine_label(source.engine)}</td>
             <td>{SourcesViewModel::connection_label(&source)}</td>
             <td>{move || vm.project_label(&project_id).unwrap_or_else(|| "\u{2014}".to_string())}</td>
+            <td>{SourcesViewModel::ingested_label(&source)}</td>
             <td>
                 <TestStatus vm=vm id=source.id.clone() />
             </td>
@@ -328,35 +246,42 @@ fn SourceItemCard(
     source: DataSourceView,
 ) -> impl IntoView {
     let project_id = source.project_id.clone();
+    // Taken out up front: the components' children closures take what they use by move.
+    let name = source.name.clone();
+    let engine = SourcesViewModel::engine_label(source.engine);
+    let connection = SourcesViewModel::connection_label(&source);
+    let ingesting = format!("Ingesting {}", SourcesViewModel::ingested_label(&source));
+    let id = source.id;
 
     view! {
-        <div class="card card-border card-sm bg-base-100">
-            <div class="card-body">
-                <div class="flex items-start justify-between gap-2">
-                    <h3 class="card-title break-all">{source.name.clone()}</h3>
-                    <span class="badge badge-ghost badge-sm shrink-0">
-                        {SourcesViewModel::engine_label(source.engine)}
-                    </span>
-                </div>
-                <p class="font-mono text-sm break-all">{SourcesViewModel::connection_label(&source)}</p>
-                <p class="text-sm text-base-content/70">
-                    {move || {
-                        vm.project_label(&project_id)
-                            .map(|name| format!("Project: {name}"))
-                            .unwrap_or_else(|| "No project".to_string())
-                    }}
-                </p>
-                <div class="card-actions items-center justify-between">
-                    <TestStatus vm=vm id=source.id.clone() />
-                    <SourceActions
-                        vm=vm
-                        delete_dialog=delete_dialog
-                        pending_delete=pending_delete
-                        id=source.id
-                    />
-                </div>
+        <Card compact=true>
+            <div class="flex items-start justify-between gap-2">
+                <CardTitle level=3 class="break-all">
+                    {name}
+                </CardTitle>
+                <Badge tone=Tone::Ghost small=true class="shrink-0">
+                    {engine}
+                </Badge>
             </div>
-        </div>
+            <p class="font-mono text-sm break-all">{connection}</p>
+            <p class="text-sm text-base-content/70">
+                {move || {
+                    vm.project_label(&project_id)
+                        .map(|name| format!("Project: {name}"))
+                        .unwrap_or_else(|| "No project".to_string())
+                }}
+            </p>
+            <p class="text-sm text-base-content/70">{ingesting}</p>
+            <CardActions class="items-center justify-between">
+                <TestStatus vm=vm id=id.clone() />
+                <SourceActions
+                    vm=vm
+                    delete_dialog=delete_dialog
+                    pending_delete=pending_delete
+                    id=id
+                />
+            </CardActions>
+        </Card>
     }
 }
 
@@ -365,20 +290,23 @@ fn SourceItemCard(
 fn TestStatus(vm: SourcesViewModel, id: String) -> impl IntoView {
     move || {
         vm.test_result(&id).map(|outcome| match outcome {
-            ConnectionTestOutcome::Reachable => {
-                view! { <span class="badge badge-success badge-sm">"reachable"</span> }.into_any()
+            ConnectionTestOutcome::Reachable => view! {
+                <Badge tone=Tone::Success small=true>
+                    "reachable"
+                </Badge>
             }
+            .into_any(),
             ConnectionTestOutcome::Unreachable { reason } => view! {
-                <span class="badge badge-error badge-sm" title=reason>
+                <Badge tone=Tone::Error small=true attr:title=reason>
                     "unreachable"
-                </span>
+                </Badge>
             }
             .into_any(),
         })
     }
 }
 
-/// "Test connection" and remove buttons for one source.
+/// "Explore", "Test connection" and remove buttons for one source.
 #[component]
 fn SourceActions(
     vm: SourcesViewModel,
@@ -386,19 +314,21 @@ fn SourceActions(
     pending_delete: RwSignal<Option<String>>,
     id: String,
 ) -> impl IntoView {
+    let id_for_link = id.clone();
     let id_for_test = id.clone();
     let id_for_delete = id;
 
     let on_test = move |_| vm.test(id_for_test.clone());
     let on_delete = move |_| {
         pending_delete.set(Some(id_for_delete.clone()));
-        if let Some(dialog) = delete_dialog.get() {
-            let _ = dialog.show_modal();
-        }
+        open_dialog(delete_dialog);
     };
 
     view! {
         <div class="join">
+            <a class="join-item btn btn-sm" href=format!("/sources/{id_for_link}")>
+                "Explore"
+            </a>
             <button class="join-item btn btn-sm" on:click=on_test type="button">
                 "Test connection"
             </button>

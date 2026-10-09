@@ -1,10 +1,11 @@
-//! View layer: Leptos components that render from a ViewModel.
+//! View layer: the pages, rendered from a ViewModel.
 //!
 //! Components here read `RwSignal`s straight off a `crate::viewmodel` struct and call its
 //! methods from event handlers. They hold no business logic of their own and never call
-//! `crate::api` directly — that boundary belongs to the ViewModel.
+//! `crate::api` directly — that boundary belongs to the ViewModel. They are built from the
+//! generic daisyUI components in [`crate::components`] rather than raw daisyUI markup.
 
-mod icons;
+mod explorer;
 mod landing;
 mod login;
 mod pagination;
@@ -23,7 +24,7 @@ use leptos_router::{
     path,
 };
 
-pub use icons::{EditIcon, TrashIcon};
+use explorer::Explorer;
 use landing::Landing;
 use login::Login;
 pub use pagination::{PageSizePicker, Pagination};
@@ -35,7 +36,8 @@ use sources_card::SourcesCard;
 use tables::Tables;
 use users::Users;
 
-use crate::viewmodel::{AppViewModel, LayoutViewModel, SessionViewModel};
+use crate::components::{Alert, Badge, BadgeStyle, Select, Toast, Tone};
+use crate::viewmodel::{AppViewModel, LayoutViewModel, SessionViewModel, StatusMessage};
 
 /// Nav destinations shared between the desktop navbar menu and the mobile sidebar drawer.
 /// The "Home" entry that used to lead this list has been replaced by [`ThemeToggle`] (the
@@ -237,6 +239,16 @@ pub fn App() -> impl IntoView {
                                         }
                                     />
                                     <Route
+                                        path=path!("/sources/:id")
+                                        view=|| {
+                                            view! {
+                                                <RequireAuth developer_only=true>
+                                                    <Explorer />
+                                                </RequireAuth>
+                                            }
+                                        }
+                                    />
+                                    <Route
                                         path=path!("/query")
                                         view=|| {
                                             view! {
@@ -310,36 +322,22 @@ fn ProjectSwitcher() -> impl IntoView {
             when=move || session.is_admin() || !session.projects.get().is_empty()
             fallback=|| view! { <span class="text-sm text-base-content/70">"No projects assigned"</span> }
         >
-            <select
-                class="select select-sm w-48"
-                aria-label="Current project"
-                on:change:target=move |ev| {
-                    session.select_project(Some(ev.target().value()).filter(|id| !id.is_empty()))
-                }
-            >
-                <Show when=move || session.is_admin()>
-                    <option value="" prop:selected=move || session.current_project_id.get().is_none()>
-                        "All projects"
-                    </option>
-                </Show>
-                <For
-                    each=move || session.projects.get()
-                    key=|project| (project.id.clone(), project.name.clone())
-                    children=move |project| {
-                        let id = project.id.clone();
-                        view! {
-                            <option
-                                value=project.id
-                                prop:selected=move || {
-                                    session.current_project_id.get().as_deref() == Some(id.as_str())
-                                }
-                            >
-                                {project.name}
-                            </option>
-                        }
-                    }
-                />
-            </select>
+            // "" stands for "All projects", which only an admin has.
+            <Select
+                small=true
+                class="w-48"
+                aria_label="Current project"
+                value=Signal::derive(move || session.current_project_id.get().unwrap_or_default())
+                options=Signal::derive(move || {
+                    let all = session
+                        .is_admin()
+                        .then(|| (String::new(), "All projects".to_string()));
+                    all.into_iter()
+                        .chain(session.projects.get().into_iter().map(|project| (project.id, project.name)))
+                        .collect()
+                })
+                on_change=move |id: String| session.select_project(Some(id).filter(|id| !id.is_empty()))
+            />
         </Show>
     }
 }
@@ -355,9 +353,9 @@ fn UserMenu() -> impl IntoView {
             <span class="text-sm">
                 {move || session.user.get().map(|user| user.username).unwrap_or_default()}
             </span>
-            <span class="badge badge-sm badge-outline">
+            <Badge style=BadgeStyle::Outline small=true>
                 {move || session.role_name()}
-            </span>
+            </Badge>
             <button
                 class="btn btn-sm btn-ghost"
                 type="button"
@@ -424,29 +422,38 @@ fn RequireAuth(
 /// How long a status toast stays on screen before it auto-dismisses.
 pub(crate) const STATUS_TOAST_DURATION: std::time::Duration = std::time::Duration::from_secs(4);
 
+/// Clears `status` [`STATUS_TOAST_DURATION`] after each message, so a toast doesn't linger on
+/// screen forever.
+pub(crate) fn auto_dismiss(status: RwSignal<Option<StatusMessage>>) {
+    Effect::new(move |_| {
+        if status.get().is_some() {
+            set_timeout(move || status.set(None), STATUS_TOAST_DURATION);
+        }
+    });
+}
+
 /// Fetches on mount and whenever the selected project changes (`refresh_all` reads it), and
-/// auto-dismisses the status toast so it doesn't linger on screen forever.
+/// auto-dismisses the status toast.
 fn page_view_model() -> AppViewModel {
     let vm = AppViewModel::new();
     Effect::new(move |_| vm.refresh_all());
-    Effect::new(move |_| {
-        if vm.status.get().is_some() {
-            set_timeout(move || vm.status.set(None), STATUS_TOAST_DURATION);
-        }
-    });
+    auto_dismiss(vm.status);
     vm
 }
 
+/// A page's status message, as a toast in the corner while there is one.
 #[component]
-fn StatusToast(vm: AppViewModel) -> impl IntoView {
+pub(crate) fn StatusToast(status: RwSignal<Option<StatusMessage>>) -> impl IntoView {
     move || {
-        vm.status.get().map(|msg| {
+        status.get().map(|message| {
+            let tone = match message {
+                StatusMessage::Success(_) => Tone::Success,
+                StatusMessage::Error(_) => Tone::Error,
+            };
             view! {
-                <div class="toast toast-top toast-end">
-                    <div role="alert" class=msg.alert_class()>
-                        <span>{msg.text().to_string()}</span>
-                    </div>
-                </div>
+                <Toast>
+                    <Alert tone=tone>{message.text().to_string()}</Alert>
+                </Toast>
             }
         })
     }
@@ -458,7 +465,7 @@ fn ProjectsPage() -> impl IntoView {
 
     view! {
         <div class="flex flex-col gap-6">
-            <StatusToast vm=vm />
+            <StatusToast status=vm.status />
             <ProjectsCard vm=vm.projects />
         </div>
     }
@@ -474,7 +481,7 @@ fn SourcesPage() -> impl IntoView {
                 "Connect and manage OLTP database sources for CDC capture."
             </p>
             <ProjectScopeNote />
-            <StatusToast vm=vm />
+            <StatusToast status=vm.status />
             <SourcesCard vm=vm.sources />
         </div>
     }

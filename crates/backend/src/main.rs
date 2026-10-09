@@ -21,9 +21,12 @@ use axum::{
 };
 use datasource::{
     DataSourceService,
-    infrastructure::{ObjectStoreDataSourceRepository, SqlxConnectionTester},
+    infrastructure::{ObjectStoreDataSourceRepository, SqlxConnectionTester, SqlxSchemaExplorer},
 };
-use iceberg::{IcebergCatalogConfig, QueryService};
+use iceberg::{
+    IcebergCatalogConfig, QueryService, is_metadata_table, namespace_for_source,
+    table_for_source_table,
+};
 use project::{ProjectService, infrastructure::ObjectStoreProjectRepository};
 use storage::ObjectStoreConfig;
 use tower_http::cors::CorsLayer;
@@ -40,8 +43,11 @@ async fn main() -> anyhow::Result<()> {
     let store = store_config.build_store()?;
 
     let datasource_repository = Arc::new(ObjectStoreDataSourceRepository::new(store.clone()));
-    let tester = Arc::new(SqlxConnectionTester);
-    let datasource_service = Arc::new(DataSourceService::new(datasource_repository, tester));
+    let datasource_service = Arc::new(DataSourceService::new(
+        datasource_repository,
+        Arc::new(SqlxConnectionTester),
+        Arc::new(SqlxSchemaExplorer),
+    ));
 
     let project_repository = Arc::new(ObjectStoreProjectRepository::new(store.clone()));
     let project_service = Arc::new(ProjectService::new(project_repository));
@@ -64,6 +70,11 @@ async fn main() -> anyhow::Result<()> {
         ),
         datasources: datasource_service.clone(),
     });
+    tokio::spawn(record_existing_ingested_tables(
+        migration_store,
+        datasource_service.clone(),
+        query_api.clone(),
+    ));
 
     let app =
         router(datasource_service, project_service, user_service, query_api).layer(cors_layer()?);
@@ -134,6 +145,122 @@ async fn migrate_legacy_user_roles(
     Ok(())
 }
 
+/// A data source stored before `ingested_tables` existed was captured in full; read now, the
+/// missing field means no tables. Gives each such source the tables it already has in pipa as
+/// its choice, so the explorer shows what is captured. `pipa-ingestion` doesn't wait for this:
+/// for a source without the field it captures exactly those tables on its own.
+///
+/// Runs in the background at every start (only sources still without the field are touched).
+/// Finding a source's tables means reading its database, so one that can't be reached is left
+/// for the next start.
+async fn record_existing_ingested_tables(
+    store: Arc<dyn object_store::ObjectStore>,
+    datasources: Arc<DataSourceService>,
+    query_api: Arc<http::QueryApi>,
+) {
+    let ids = match sources_without_ingested_tables(store.as_ref()).await {
+        Ok(ids) => ids,
+        Err(err) => {
+            tracing::warn!(error = %err, "could not look for data sources without a table choice");
+            return;
+        }
+    };
+    for id in ids {
+        match record_existing_tables_of(store.as_ref(), &datasources, &query_api.queries, id).await
+        {
+            Ok(Some(count)) => {
+                tracing::info!(%id, tables = count, "recorded the tables the data source has in pipa as its choice");
+            }
+            Ok(None) => {}
+            Err(err) => {
+                tracing::warn!(%id, error = format!("{err:#}"), "could not record the data source's tables yet, retrying at the next start");
+            }
+        }
+    }
+}
+
+/// Records as `id`'s choice the source tables whose pipa table already exists — matched
+/// forward through [`table_for_source_table`], so exactly. `None` if a choice was saved
+/// meanwhile, which is left alone.
+async fn record_existing_tables_of(
+    store: &dyn object_store::ObjectStore,
+    datasources: &DataSourceService,
+    queries: &QueryService,
+    id: datasource::DataSourceId,
+) -> anyhow::Result<Option<usize>> {
+    let in_pipa: std::collections::HashSet<String> = queries
+        .list_tables(std::collections::HashSet::from([namespace_for_source(id)]))
+        .await
+        .context("listing its tables in pipa")?
+        .into_iter()
+        .map(|(_, name)| name)
+        .filter(|name| !is_metadata_table(name))
+        .collect();
+    let tables = if in_pipa.is_empty() {
+        Vec::new()
+    } else {
+        let source = datasources.get(id).await?;
+        datasources
+            .list_tables(&source)
+            .await
+            .context("listing the tables of its database")?
+            .into_iter()
+            .map(|table| table.table)
+            .filter(|table| in_pipa.contains(&table_for_source_table(&table.schema, &table.name)))
+            .collect()
+    };
+
+    if !lacks_ingested_tables(store, id).await? {
+        return Ok(None);
+    }
+    let count = tables.len();
+    datasources
+        .choose_ingested_tables(id, tables)
+        .await
+        .context("saving the choice")?;
+    Ok(Some(count))
+}
+
+/// The data sources whose stored JSON has no `ingested_tables` key. Read raw, since parsed the
+/// missing field is indistinguishable from an empty choice.
+async fn sources_without_ingested_tables(
+    store: &dyn object_store::ObjectStore,
+) -> anyhow::Result<Vec<datasource::DataSourceId>> {
+    use futures::StreamExt;
+    use object_store::{ObjectStoreExt, path::Path};
+
+    let mut listing = store.list(Some(&Path::from("datasources")));
+    let mut ids = Vec::new();
+    while let Some(meta) = listing.next().await {
+        let meta = meta?;
+        let bytes = store.get(&meta.location).await?.bytes().await?;
+        let json: serde_json::Value =
+            serde_json::from_slice(&bytes).with_context(|| format!("reading {}", meta.location))?;
+        if json.get("ingested_tables").is_none() {
+            let id = serde_json::from_value(json["id"].clone())
+                .with_context(|| format!("reading the id of {}", meta.location))?;
+            ids.push(datasource::DataSourceId(id));
+        }
+    }
+    Ok(ids)
+}
+
+/// Whether data source `id`'s stored JSON still has no `ingested_tables` key.
+async fn lacks_ingested_tables(
+    store: &dyn object_store::ObjectStore,
+    id: datasource::DataSourceId,
+) -> anyhow::Result<bool> {
+    use object_store::{ObjectStoreExt, path::Path};
+
+    let bytes = store
+        .get(&Path::from(format!("datasources/{id}.json")))
+        .await?
+        .bytes()
+        .await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    Ok(json.get("ingested_tables").is_none())
+}
+
 /// Creates the first admin from `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD` when no user exists
 /// yet. Once any user exists these are ignored. Fails if there is no way to sign in at all.
 async fn bootstrap_admin(users: &UserService) -> anyhow::Result<()> {
@@ -200,6 +327,7 @@ mod tests {
         let datasources = Arc::new(DataSourceService::new(
             Arc::new(ObjectStoreDataSourceRepository::new(store.clone())),
             Arc::new(SqlxConnectionTester),
+            Arc::new(SqlxSchemaExplorer),
         ));
         let projects = Arc::new(ProjectService::new(Arc::new(
             ObjectStoreProjectRepository::new(store.clone()),
@@ -265,6 +393,64 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK, "{body}");
         body["token"].as_str().unwrap().to_string()
+    }
+
+    /// Must match `pipa-ingestion`'s `target_table_name`.
+    #[test]
+    fn source_tables_map_to_pipa_table_names() {
+        assert_eq!(
+            table_for_source_table("fintech", "ledger_entries"),
+            "fintech__ledger_entries"
+        );
+        assert_eq!(
+            table_for_source_table("Sales", "Order-Items"),
+            "sales__order_items"
+        );
+    }
+
+    #[tokio::test]
+    async fn finds_only_sources_stored_without_a_table_choice() {
+        use object_store::{ObjectStoreExt, PutPayload, path::Path};
+
+        let store: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
+        let legacy = uuid::Uuid::now_v7();
+        let chosen = uuid::Uuid::now_v7();
+        for (id, extra) in [
+            (legacy, json!({})),
+            (chosen, json!({ "ingested_tables": [] })),
+        ] {
+            let mut source = json!({
+                "id": id, "name": "s", "engine": "postgres",
+                "connection": { "host": "h", "port": 5432, "username": "u", "password": "p", "database": "d" },
+                "project_id": null, "registered_at_unix": 0,
+            });
+            source
+                .as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            store
+                .put(
+                    &Path::from(format!("datasources/{id}.json")),
+                    PutPayload::from(source.to_string()),
+                )
+                .await
+                .unwrap();
+        }
+
+        let ids = sources_without_ingested_tables(store.as_ref())
+            .await
+            .unwrap();
+        assert_eq!(ids, vec![datasource::DataSourceId(legacy)]);
+        assert!(
+            lacks_ingested_tables(store.as_ref(), datasource::DataSourceId(legacy))
+                .await
+                .unwrap()
+        );
+        assert!(
+            !lacks_ingested_tables(store.as_ref(), datasource::DataSourceId(chosen))
+                .await
+                .unwrap()
+        );
     }
 
     #[tokio::test]
@@ -533,6 +719,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_developer_chooses_the_tables_their_sources_ingest() {
+        let app = app().await;
+        let admin = login(&app, "root", "root-password").await;
+        let alpha = create_project(&app, &admin, "alpha").await;
+        let beta = create_project(&app, &admin, "beta").await;
+        let alpha_source = register_source(&app, &admin, &alpha).await;
+        let beta_source = register_source(&app, &admin, &beta).await;
+        create_account(&app, &admin, "dev", "developer", &alpha).await;
+        let dev = login(&app, "dev", "dev-password").await;
+
+        // A new source ingests nothing until tables are chosen.
+        let (_, body) = call(
+            &app,
+            "GET",
+            &format!("/datasources/{alpha_source}"),
+            Some(&dev),
+            None,
+        )
+        .await;
+        assert_eq!(body["datasource"]["ingested_tables"], json!([]));
+
+        let orders = json!({ "schema": "public", "name": "orders" });
+        let (status, body) = call(
+            &app,
+            "PUT",
+            &format!("/datasources/{alpha_source}/tables"),
+            Some(&dev),
+            Some(json!({ "tables": [orders, orders] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["datasource"]["ingested_tables"], json!([orders]));
+
+        let (status, _) = call(
+            &app,
+            "PUT",
+            &format!("/datasources/{alpha_source}/tables"),
+            Some(&dev),
+            Some(json!({ "tables": [{ "schema": "public", "name": "" }] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        // Another project's source is off limits, both ways.
+        for (method, body) in [("GET", None), ("PUT", Some(json!({ "tables": [] })))] {
+            let (status, _) = call(
+                &app,
+                method,
+                &format!("/datasources/{beta_source}/tables"),
+                Some(&dev),
+                body,
+            )
+            .await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{method}");
+        }
+
+        // Exploring reads the source's database live; one that can't be reached is a 502.
+        let (status, body) = call(
+            &app,
+            "POST",
+            "/datasources",
+            Some(&dev),
+            Some(json!({
+                "name": "down",
+                "engine": "postgres",
+                "connection": {
+                    "host": "127.0.0.1", "port": 1, "username": "u", "password": "p", "database": "d"
+                },
+                "project_id": alpha,
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let down = body["datasource"]["id"].as_str().unwrap();
+        let (status, _) = call(
+            &app,
+            "GET",
+            &format!("/datasources/{down}/tables"),
+            Some(&dev),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_GATEWAY);
+    }
+
+    #[tokio::test]
     async fn a_plain_user_can_only_browse_tables_of_their_project() {
         let app = app().await;
         let admin = login(&app, "root", "root-password").await;
@@ -544,11 +816,17 @@ mod tests {
         let viewer = login(&app, "viewer", "viewer-password").await;
 
         // Everything that builds, or reveals connection details, is closed to a viewer.
-        let forbidden: [(&str, String, Option<Value>); 7] = [
+        let forbidden: [(&str, String, Option<Value>); 9] = [
             ("GET", "/datasources".into(), None),
             ("GET", format!("/datasources?project_id={alpha}"), None),
             ("GET", format!("/datasources/{alpha_source}"), None),
             ("POST", format!("/datasources/{alpha_source}/test"), None),
+            ("GET", format!("/datasources/{alpha_source}/tables"), None),
+            (
+                "PUT",
+                format!("/datasources/{alpha_source}/tables"),
+                Some(json!({ "tables": [] })),
+            ),
             ("DELETE", format!("/datasources/{alpha_source}"), None),
             (
                 "POST",

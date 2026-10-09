@@ -7,7 +7,7 @@ use sqlx::{Connection, Executor, mysql::MySqlConnectOptions, postgres::PgConnect
 
 use crate::datasource::domain::{ConnectionTestOutcome, ConnectionTester, DataSource, DbEngine};
 
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Verifies data source connectivity by briefly connecting to the OLTP database and running
 /// a trivial query, using the engine-appropriate `sqlx` driver.
@@ -30,13 +30,7 @@ impl ConnectionTester for SqlxConnectionTester {
 
 impl SqlxConnectionTester {
     async fn test_postgres(source: &DataSource) -> Result<(), String> {
-        let options = PgConnectOptions::new()
-            .host(&source.connection.host)
-            .port(source.connection.port)
-            .username(&source.connection.username)
-            .password(&source.connection.password)
-            .database(&source.connection.database);
-
+        let options = postgres_options(source);
         let mut conn =
             tokio::time::timeout(CONNECT_TIMEOUT, sqlx::PgConnection::connect_with(&options))
                 .await
@@ -50,13 +44,7 @@ impl SqlxConnectionTester {
     }
 
     async fn test_mysql(source: &DataSource) -> Result<(), String> {
-        let options = MySqlConnectOptions::new()
-            .host(&source.connection.host)
-            .port(source.connection.port)
-            .username(&source.connection.username)
-            .password(&source.connection.password)
-            .database(&source.connection.database);
-
+        let options = mysql_options(source);
         let mut conn = tokio::time::timeout(
             CONNECT_TIMEOUT,
             sqlx::MySqlConnection::connect_with(&options),
@@ -70,4 +58,22 @@ impl SqlxConnectionTester {
             .map_err(|err| err.to_string())?;
         Ok(())
     }
+}
+
+pub(super) fn postgres_options(source: &DataSource) -> PgConnectOptions {
+    PgConnectOptions::new()
+        .host(&source.connection.host)
+        .port(source.connection.port)
+        .username(&source.connection.username)
+        .password(&source.connection.password)
+        .database(&source.connection.database)
+}
+
+pub(super) fn mysql_options(source: &DataSource) -> MySqlConnectOptions {
+    MySqlConnectOptions::new()
+        .host(&source.connection.host)
+        .port(source.connection.port)
+        .username(&source.connection.username)
+        .password(&source.connection.password)
+        .database(&source.connection.database)
 }

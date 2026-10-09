@@ -2,6 +2,7 @@
 
 use leptos::prelude::*;
 
+use crate::components::{Alert, TextArea, Tone};
 use crate::view::{Pagination, RowsView};
 use crate::viewmodel::{QueryViewModel, SessionViewModel};
 
@@ -31,13 +32,12 @@ pub fn Query() -> impl IntoView {
             </div>
 
             <form class="flex flex-col gap-3" on:submit=move |ev| vm.run(ev)>
-                <textarea
-                    class="textarea h-32 w-full font-mono"
-                    required
+                <TextArea
+                    value=vm.sql
+                    required=true
                     placeholder="SELECT …"
-                    prop:value=move || vm.sql.get()
-                    on:input:target=move |ev| vm.sql.set(ev.target().value())
-                ></textarea>
+                    class="h-32 w-full font-mono"
+                />
                 <div>
                     <button
                         class="btn btn-primary"
@@ -52,13 +52,7 @@ pub fn Query() -> impl IntoView {
             {move || {
                 vm.error
                     .get()
-                    .map(|message| {
-                        view! {
-                            <div role="alert" class="alert alert-error">
-                                <span>{message}</span>
-                            </div>
-                        }
-                    })
+                    .map(|message| view! { <Alert tone=Tone::Error>{message}</Alert> })
             }}
 
             <Show when=move || vm.ran.get()>

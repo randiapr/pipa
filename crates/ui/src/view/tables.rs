@@ -1,13 +1,14 @@
-//! View: the Tables page. Lists the selected project's Iceberg tables as collapses, one per
+//! View: the Tables page. Lists the selected project's pipa tables as collapses, one per
 //! table, and shows the open one's rows inside it, a page at a time. Read-only, so it is open to every
 //! role. For everyone, rows are each table's current rows without the changelog columns
-//! (`TablesViewModel::visible_rows`), and the Iceberg metadata tables aren't listed
+//! (`TablesViewModel::visible_rows`), and the metadata tables aren't listed
 //! (`TablesViewModel::visible_tables`).
 
 use leptos::prelude::*;
 use pipa_api::TableView;
 
-use crate::view::{PageSizePicker, RowsView, STATUS_TOAST_DURATION};
+use crate::components::{Alert, Collapse, Loading, Tone};
+use crate::view::{PageSizePicker, RowsView, StatusToast, auto_dismiss};
 use crate::viewmodel::{SessionViewModel, StatusMessage, TablesViewModel};
 
 #[component]
@@ -25,12 +26,7 @@ pub fn Tables() -> impl IntoView {
         move |_, _, _| vm.reload(),
         false,
     );
-    // Auto-dismiss the status toast so it doesn't linger on screen forever.
-    Effect::new(move |_| {
-        if status.get().is_some() {
-            set_timeout(move || status.set(None), STATUS_TOAST_DURATION);
-        }
-    });
+    auto_dismiss(status);
 
     view! {
         <div class="flex flex-col gap-6">
@@ -44,19 +40,7 @@ pub fn Tables() -> impl IntoView {
                 </p>
             </div>
 
-            {move || {
-                status
-                    .get()
-                    .map(|msg| {
-                        view! {
-                            <div class="toast toast-top toast-end">
-                                <div role="alert" class=msg.alert_class()>
-                                    <span>{msg.text().to_string()}</span>
-                                </div>
-                            </div>
-                        }
-                    })
-            }}
+            <StatusToast status=status />
 
             <Show
                 when=move || !vm.visible_tables().is_empty()
@@ -86,9 +70,8 @@ pub fn Tables() -> impl IntoView {
     }
 }
 
-/// One table as a daisyUI collapse: its name and data source as the title, its rows inside.
-/// Only the table in `vm.open` is expanded (forced with `collapse-open`/`collapse-close`, so
-/// the ViewModel stays the single source of truth); opening another closes it.
+/// One table as a [`Collapse`]: its name and data source as the title, its rows inside. Only
+/// the table in `vm.open` is expanded; opening another closes it.
 #[component]
 fn TableCollapse(vm: TablesViewModel, table: TableView) -> impl IntoView {
     let key = (table.source_id.clone(), table.name.clone());
@@ -99,47 +82,30 @@ fn TableCollapse(vm: TablesViewModel, table: TableView) -> impl IntoView {
         })
     });
     let to_open = table.clone();
-    let toggle = move || {
-        if is_open.get_untracked() {
-            vm.close();
-        } else {
-            vm.open_table(to_open.clone());
-        }
-    };
+    let name = table.name;
+    let source_name = table.source_name;
 
     view! {
-        <div
-            class="collapse collapse-arrow border border-base-300 bg-base-100"
-            class:collapse-open=move || is_open.get()
-            class:collapse-close=move || !is_open.get()
+        <Collapse
+            open=is_open
+            on_toggle=move |_| {
+                if is_open.get_untracked() {
+                    vm.close();
+                } else {
+                    vm.open_table(to_open.clone());
+                }
+            }
+            title=move || {
+                view! {
+                    <div class="flex flex-wrap items-baseline gap-x-3">
+                        <span class="font-mono font-semibold break-all">{name.clone()}</span>
+                        <span class="text-sm text-base-content/70">{source_name.clone()}</span>
+                    </div>
+                }
+            }
         >
-            <div
-                class="collapse-title cursor-pointer ps-12 pe-4 after:start-5 after:end-auto"
-                role="button"
-                tabindex="0"
-                aria-expanded=move || is_open.get().to_string()
-                on:click={
-                    let toggle = toggle.clone();
-                    move |_| toggle()
-                }
-                on:keydown=move |ev: leptos::ev::KeyboardEvent| {
-                    if ev.key() == "Enter" || ev.key() == " " {
-                        ev.prevent_default();
-                        toggle();
-                    }
-                }
-            >
-                <div class="flex flex-wrap items-baseline gap-x-3">
-                    <span class="font-mono font-semibold break-all">{table.name}</span>
-                    <span class="text-sm text-base-content/70">{table.source_name}</span>
-                </div>
-            </div>
-            <div class="collapse-content">
-                <Show when=move || is_open.get()>
-                    <TableRows vm=vm />
-                </Show>
-            </div>
-        </div>
+            <TableRows vm=vm />
+        </Collapse>
     }
 }
 
@@ -152,15 +118,11 @@ fn TableRows(vm: TablesViewModel) -> impl IntoView {
                 vm.error
                     .get()
                     .map(|message| {
-                        view! {
-                            <div role="alert" class="alert alert-error">
-                                <span>{message}</span>
-                            </div>
-                        }
+                        view! { <Alert tone=Tone::Error>{message}</Alert> }
                     })
             }}
             <Show when=move || vm.loading.get()>
-                <span class="loading loading-spinner"></span>
+                <Loading />
             </Show>
             {move || vm.visible_rows().map(|rows| view! { <RowsView rows=rows /> })}
             <div class="flex flex-wrap items-center justify-between gap-3">

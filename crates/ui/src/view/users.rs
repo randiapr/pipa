@@ -1,16 +1,18 @@
 //! View: the Users page (admin only) — a paginated list of accounts (a table on desktop, cards
-//! on mobile), with create and edit each presented as a native `<dialog>` modal, like the
-//! Projects card.
+//! on mobile), with create and edit each presented as a [`Modal`], like the Projects card.
+//! Saving an edit and deleting each ask for confirmation first ([`ConfirmDialog`]).
 
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 use pipa_api::Role;
 
-use crate::view::{EditIcon, Pagination, ResponsiveList, STATUS_TOAST_DURATION, TrashIcon};
-use crate::viewmodel::{
-    SessionViewModel, StatusMessage, UsersViewModel, parse_role, role_badge_class, role_value,
+use crate::components::{
+    Badge, Card, CardActions, CardTitle, Checkbox, ConfirmDialog, EditIcon, Field, Modal,
+    ModalActions, Select, TextInput, Tone, TrashIcon, close_dialog, open_dialog,
 };
+use crate::view::{Pagination, ResponsiveList, StatusToast, auto_dismiss};
+use crate::viewmodel::{SessionViewModel, StatusMessage, UsersViewModel, parse_role, role_value};
 
 #[component]
 pub fn Users() -> impl IntoView {
@@ -20,41 +22,33 @@ pub fn Users() -> impl IntoView {
     Effect::new(move |_| vm.refresh());
     // A brand-new admin may not have loaded the project list yet.
     Effect::new(move |_| session.refresh_projects());
-
-    // Auto-dismiss the status toast so it doesn't linger on screen forever.
-    Effect::new(move |_| {
-        if status.get().is_some() {
-            set_timeout(move || status.set(None), STATUS_TOAST_DURATION);
-        }
-    });
+    auto_dismiss(status);
 
     let create_dialog = NodeRef::<html::Dialog>::new();
     let edit_dialog = NodeRef::<html::Dialog>::new();
+    let confirm_edit_dialog = NodeRef::<html::Dialog>::new();
     let delete_dialog = NodeRef::<html::Dialog>::new();
     let pending_delete = RwSignal::new(Option::<String>::None);
 
-    let close = move |dialog: NodeRef<html::Dialog>| {
-        if let Some(dialog) = dialog.get() {
-            dialog.close();
-        }
-    };
-
     let on_submit_create = move |ev: SubmitEvent| {
         vm.submit_new(ev);
-        close(create_dialog);
+        close_dialog(create_dialog);
     };
+    // Submitting the form only asks; the save happens once that is confirmed.
     let on_submit_edit = move |ev: SubmitEvent| {
         ev.prevent_default();
-        if let Some(id) = vm.editing_id.get() {
+        open_dialog(confirm_edit_dialog);
+    };
+    let on_confirm_edit = move |_| {
+        if let Some(id) = vm.editing_id.get_untracked() {
             vm.save_edit(id);
         }
-        close(edit_dialog);
+        close_dialog(edit_dialog);
     };
     let on_confirm_delete = move |_| {
-        if let Some(id) = pending_delete.get() {
+        if let Some(id) = pending_delete.get_untracked() {
             vm.delete(id);
         }
-        close(delete_dialog);
     };
 
     view! {
@@ -69,29 +63,13 @@ pub fn Users() -> impl IntoView {
                 <button
                     class="btn btn-primary btn-sm"
                     type="button"
-                    on:click=move |_| {
-                        if let Some(dialog) = create_dialog.get() {
-                            let _ = dialog.show_modal();
-                        }
-                    }
+                    on:click=move |_| open_dialog(create_dialog)
                 >
                     "New User"
                 </button>
             </div>
 
-            {move || {
-                status
-                    .get()
-                    .map(|msg| {
-                        view! {
-                            <div class="toast toast-top toast-end">
-                                <div role="alert" class=msg.alert_class()>
-                                    <span>{msg.text().to_string()}</span>
-                                </div>
-                            </div>
-                        }
-                    })
-            }}
+            <StatusToast status=status />
 
             <Show
                 when=move || !vm.list.is_empty()
@@ -157,166 +135,135 @@ pub fn Users() -> impl IntoView {
             </Show>
         </div>
 
-        <dialog node_ref=create_dialog class="modal" on:close=move |_| vm.reset_new()>
-            <div class="modal-box max-h-[85vh] overflow-y-auto">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| close(create_dialog)
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Create user"</h3>
-                <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_create>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Username"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            autocomplete="off"
-                            prop:value=move || vm.username.get()
-                            on:input:target=move |ev| vm.username.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Password"</legend>
-                        <input
-                            type="password"
-                            class="input w-full"
-                            required
-                            minlength="8"
-                            autocomplete="new-password"
-                            prop:value=move || vm.password.get()
-                            on:input:target=move |ev| vm.password.set(ev.target().value())
-                        />
-                        <p class="label">"At least 8 characters."</p>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Role"</legend>
-                        <select
-                            class="select w-full"
-                            prop:value=move || role_value(vm.role.get())
-                            on:change:target=move |ev| vm.role.set(parse_role(&ev.target().value()))
-                        >
-                            <option value="user">"User (view tables only)"</option>
-                            <option value="developer">"Developer"</option>
-                            <option value="admin">"Admin"</option>
-                        </select>
-                    </fieldset>
-                    <ProjectChecklist
-                        selected=vm.project_ids
-                        is_admin=Signal::derive(move || vm.role.get() == Role::Admin)
-                        on_toggle=Callback::new(move |(id, on)| vm.toggle_new_project(id, on))
+        <Modal node_ref=create_dialog title="Create user" on_close=move |_| vm.reset_new()>
+            <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_create>
+                <Field legend="Username">
+                    <TextInput value=vm.username required=true autocomplete="off" />
+                </Field>
+                <Field legend="Password" hint="At least 8 characters.">
+                    <TextInput
+                        value=vm.password
+                        kind="password"
+                        required=true
+                        minlength=8
+                        autocomplete="new-password"
                     />
-                    <div class="modal-action">
-                        <button class="btn" type="button" on:click=move |_| close(create_dialog)>
-                            "Cancel"
-                        </button>
-                        <button class="btn btn-primary" type="submit">
-                            "Create"
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </dialog>
+                </Field>
+                <Field legend="Role">
+                    <RoleSelect role=vm.role />
+                </Field>
+                <ProjectChecklist
+                    selected=vm.project_ids
+                    is_admin=Signal::derive(move || vm.role.get() == Role::Admin)
+                    on_toggle=Callback::new(move |(id, on)| vm.toggle_new_project(id, on))
+                />
+                <ModalActions node_ref=create_dialog>
+                    <button class="btn btn-primary" type="submit">
+                        "Create"
+                    </button>
+                </ModalActions>
+            </form>
+        </Modal>
 
-        <dialog node_ref=edit_dialog class="modal" on:close=move |_| vm.cancel_edit()>
-            <div class="modal-box max-h-[85vh] overflow-y-auto">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| close(edit_dialog)
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">
-                    {move || {
-                        vm.editing_id
-                            .get()
-                            .and_then(|id| vm.find(&id))
-                            .map(|user| format!("Edit {}", user.username))
-                            .unwrap_or_else(|| "Edit user".to_string())
-                    }}
-                </h3>
-                <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_edit>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"New password"</legend>
-                        <input
-                            type="password"
-                            class="input w-full"
-                            minlength="8"
-                            autocomplete="new-password"
-                            placeholder="Leave empty to keep the current one"
-                            prop:value=move || vm.edit_password.get()
-                            on:input:target=move |ev| vm.edit_password.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Role"</legend>
-                        <select
-                            class="select w-full"
-                            prop:value=move || role_value(vm.edit_role.get())
-                            on:change:target=move |ev| {
-                                vm.edit_role.set(parse_role(&ev.target().value()))
-                            }
-                        >
-                            <option value="user">"User (view tables only)"</option>
-                            <option value="developer">"Developer"</option>
-                            <option value="admin">"Admin"</option>
-                        </select>
-                    </fieldset>
-                    <ProjectChecklist
-                        selected=vm.edit_project_ids
-                        is_admin=Signal::derive(move || vm.edit_role.get() == Role::Admin)
-                        on_toggle=Callback::new(move |(id, on)| vm.toggle_edit_project(id, on))
+        <Modal
+            node_ref=edit_dialog
+            title=move || {
+                vm.editing_id
+                    .get()
+                    .and_then(|id| vm.find(&id))
+                    .map(|user| format!("Edit {}", user.username))
+                    .unwrap_or_else(|| "Edit user".to_string())
+            }
+            on_close=move |_| vm.cancel_edit()
+        >
+            <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_edit>
+                <Field legend="New password">
+                    <TextInput
+                        value=vm.edit_password
+                        kind="password"
+                        minlength=8
+                        autocomplete="new-password"
+                        placeholder="Leave empty to keep the current one"
                     />
-                    <div class="modal-action">
-                        <button class="btn" type="button" on:click=move |_| close(edit_dialog)>
-                            "Cancel"
-                        </button>
-                        <button class="btn btn-primary" type="submit">
-                            "Save"
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </dialog>
+                </Field>
+                <Field legend="Role">
+                    <RoleSelect role=vm.edit_role />
+                </Field>
+                <ProjectChecklist
+                    selected=vm.edit_project_ids
+                    is_admin=Signal::derive(move || vm.edit_role.get() == Role::Admin)
+                    on_toggle=Callback::new(move |(id, on)| vm.toggle_edit_project(id, on))
+                />
+                <ModalActions node_ref=edit_dialog>
+                    <button class="btn btn-primary" type="submit">
+                        "Save"
+                    </button>
+                </ModalActions>
+            </form>
+        </Modal>
 
-        <dialog node_ref=delete_dialog class="modal">
-            <div class="modal-box">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| close(delete_dialog)
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Delete user"</h3>
-                <p class="py-4">
-                    {move || {
-                        pending_delete
-                            .get()
-                            .and_then(|id| vm.find(&id))
-                            .map(|user| {
-                                format!(
-                                    "Are you sure you want to delete \"{}\"? This cannot be undone.",
-                                    user.username,
-                                )
-                            })
-                            .unwrap_or_default()
-                    }}
-                </p>
-                <div class="modal-action">
-                    <button class="btn" type="button" on:click=move |_| close(delete_dialog)>
-                        "Cancel"
-                    </button>
-                    <button class="btn btn-error" type="button" on:click=on_confirm_delete>
-                        "Delete"
-                    </button>
-                </div>
-            </div>
-        </dialog>
+        <ConfirmDialog
+            node_ref=confirm_edit_dialog
+            title="Save user"
+            message=move || {
+                let name = vm
+                    .editing_id
+                    .get()
+                    .and_then(|id| vm.find(&id))
+                    .map(|user| user.username)
+                    .unwrap_or_default();
+                let password = if vm.edit_password.get().is_empty() {
+                    ""
+                } else {
+                    " This also sets a new password."
+                };
+                format!(
+                    "Save the changes to \"{name}\"? Their role and projects apply from their next request.{password}",
+                )
+            }
+            confirm_label="Save"
+            on_confirm=on_confirm_edit
+        />
+
+        <ConfirmDialog
+            node_ref=delete_dialog
+            title="Delete user"
+            message=move || {
+                pending_delete
+                    .get()
+                    .and_then(|id| vm.find(&id))
+                    .map(|user| {
+                        format!(
+                            "Are you sure you want to delete \"{}\"? This cannot be undone.",
+                            user.username,
+                        )
+                    })
+                    .unwrap_or_default()
+            }
+            confirm_label="Delete"
+            danger=true
+            on_confirm=on_confirm_delete
+        />
+    }
+}
+
+/// The role picker shared by the create and edit forms.
+#[component]
+fn RoleSelect(role: RwSignal<Role>) -> impl IntoView {
+    let options = [
+        (Role::User, "User (view tables only)"),
+        (Role::Developer, "Developer"),
+        (Role::Admin, "Admin"),
+    ]
+    .map(|(role, label)| (role_value(role).to_string(), label.to_string()))
+    .to_vec();
+
+    view! {
+        <Select
+            value=Signal::derive(move || role_value(role.get()).to_string())
+            options=options
+            on_change=move |value: String| role.set(parse_role(&value))
+        />
     }
 }
 
@@ -331,8 +278,7 @@ fn ProjectChecklist(
     let session = expect_context::<SessionViewModel>();
 
     view! {
-        <fieldset class="fieldset">
-            <legend class="fieldset-legend">"Projects"</legend>
+        <Field legend="Projects">
             <Show
                 when=move || !is_admin.get()
                 fallback=|| {
@@ -352,15 +298,12 @@ fn ProjectChecklist(
                                 let id_for_checked = project.id.clone();
                                 view! {
                                     <label class="label cursor-pointer justify-start gap-3">
-                                        <input
-                                            type="checkbox"
-                                            class="checkbox checkbox-sm"
-                                            prop:checked=move || {
+                                        <Checkbox
+                                            small=true
+                                            checked=Signal::derive(move || {
                                                 selected.with(|ids| ids.contains(&id_for_checked))
-                                            }
-                                            on:change:target=move |ev| {
-                                                on_toggle.run((id.clone(), ev.target().checked()))
-                                            }
+                                            })
+                                            on_change=move |on| on_toggle.run((id.clone(), on))
                                         />
                                         <span>{project.name}</span>
                                     </label>
@@ -370,7 +313,7 @@ fn ProjectChecklist(
                     </div>
                 </Show>
             </Show>
-        </fieldset>
+        </Field>
     }
 }
 
@@ -424,32 +367,30 @@ fn UserItemCard(
     let id_for_projects = id.clone();
 
     view! {
-        <div class="card card-border card-sm bg-base-100">
-            <div class="card-body">
-                <div class="flex items-start justify-between gap-2">
-                    <h3 class="card-title break-all">
-                        <UserName vm=vm id=id_for_name />
-                    </h3>
-                    <RoleBadge vm=vm id=id_for_role />
-                </div>
-                <p class="text-sm text-base-content/70">
-                    {move || {
-                        vm.find(&id_for_projects)
-                            .map(|user| format!("Projects: {}", vm.projects_label(&user)))
-                            .unwrap_or_default()
-                    }}
-                </p>
-                <div class="card-actions justify-end">
-                    <UserActions
-                        vm=vm
-                        edit_dialog=edit_dialog
-                        delete_dialog=delete_dialog
-                        pending_delete=pending_delete
-                        id=id
-                    />
-                </div>
+        <Card compact=true>
+            <div class="flex items-start justify-between gap-2">
+                <CardTitle level=3 class="break-all">
+                    <UserName vm=vm id=id_for_name />
+                </CardTitle>
+                <RoleBadge vm=vm id=id_for_role />
             </div>
-        </div>
+            <p class="text-sm text-base-content/70">
+                {move || {
+                    vm.find(&id_for_projects)
+                        .map(|user| format!("Projects: {}", vm.projects_label(&user)))
+                        .unwrap_or_default()
+                }}
+            </p>
+            <CardActions>
+                <UserActions
+                    vm=vm
+                    edit_dialog=edit_dialog
+                    delete_dialog=delete_dialog
+                    pending_delete=pending_delete
+                    id=id
+                />
+            </CardActions>
+        </Card>
     }
 }
 
@@ -461,7 +402,9 @@ fn UserName(vm: UsersViewModel, id: String) -> impl IntoView {
     view! {
         {move || vm.find(&id).map(|user| user.username).unwrap_or_default()}
         <Show when=move || vm.is_self(&id_for_self)>
-            <span class="badge badge-ghost badge-sm ml-2">"you"</span>
+            <Badge tone=Tone::Ghost small=true class="ml-2">
+                "you"
+            </Badge>
         </Show>
     }
 }
@@ -470,8 +413,21 @@ fn UserName(vm: UsersViewModel, id: String) -> impl IntoView {
 fn RoleBadge(vm: UsersViewModel, id: String) -> impl IntoView {
     move || {
         vm.find(&id).map(|user| {
-            view! { <span class=role_badge_class(user.role)>{role_value(user.role)}</span> }
+            view! {
+                <Badge tone=role_tone(user.role) small=true>
+                    {role_value(user.role)}
+                </Badge>
+            }
         })
+    }
+}
+
+/// Each role's badge color.
+fn role_tone(role: Role) -> Tone {
+    match role {
+        Role::Admin => Tone::Primary,
+        Role::Developer => Tone::Secondary,
+        Role::User => Tone::Neutral,
     }
 }
 
@@ -497,9 +453,7 @@ fn UserActions(
                 aria-label="Edit"
                 on:click=move |_| {
                     vm.start_edit(id_for_edit.clone());
-                    if let Some(dialog) = edit_dialog.get() {
-                        let _ = dialog.show_modal();
-                    }
+                    open_dialog(edit_dialog);
                 }
             >
                 <EditIcon />
@@ -512,9 +466,7 @@ fn UserActions(
                 disabled=move || vm.is_self(&id_for_delete_disabled)
                 on:click=move |_| {
                     pending_delete.set(Some(id_for_delete.clone()));
-                    if let Some(dialog) = delete_dialog.get() {
-                        let _ = dialog.show_modal();
-                    }
+                    open_dialog(delete_dialog);
                 }
             >
                 <TrashIcon />

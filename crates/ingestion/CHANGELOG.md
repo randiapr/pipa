@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.6.0] - 2026-10-09
+
+### Added
+
+- Only the tables chosen for a data source (`ingested_tables` in its `datasources/` JSON) are
+  captured; changes to any other table are skipped without holding back the slot's confirm. A
+  table chosen later is captured from then on, with no backfill of its earlier changes.
+- The registered data sources are read again every `INGESTION_SOURCE_REFRESH_INTERVAL_SECS`
+  (default 30): a changed table choice reaches the running capture without a restart, a newly
+  registered source starts capturing and a removed one stops. A source keeps capturing with no
+  table chosen, so its replication slot keeps advancing rather than holding WAL.
+
+### Changed
+
+- A source without `ingested_tables` (registered before it existed), which used to capture
+  every table, now captures exactly the tables it already has in pipa — worked out by
+  ingestion itself, so it doesn't depend on `pipa-backend` being deployed first. A source
+  whose existing tables can't be listed isn't started until they can (its slot keeps the
+  changes meanwhile).
+
+### Fixed
+
+- Backfilling `pipa.cdc.key_columns` matched source tables to target tables without the
+  target name's sanitizing, so a table whose name has uppercase letters or characters
+  outside `[a-z0-9_]` never got its key recorded.
+
 ## [0.5.0] - 2026-10-09
 
 ### Added

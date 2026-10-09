@@ -384,6 +384,7 @@ mod live_tests {
                 password: "postgres".to_string(),
                 database: "testdb".to_string(),
             },
+            ingested_tables: Some(Vec::new()),
         };
 
         let cdc_source = PostgresWalSource::new();

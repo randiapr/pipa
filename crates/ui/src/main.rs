@@ -11,6 +11,7 @@
 //!   directly.
 
 mod api;
+mod components;
 mod storage;
 mod view;
 mod viewmodel;

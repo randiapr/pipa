@@ -8,7 +8,7 @@
 //! dependency rather than sharing one through `pipa-backend`. Request signing for RustFS's
 //! catalog is the one shared piece: it comes from `pipa-catalog-proxy`, embedded in-process.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use arrow_schema::{DataType, Field, Schema as ArrowSchema, SchemaRef, TimeUnit};
@@ -45,6 +45,7 @@ use crate::storage::ObjectStoreConfig;
 use crate::write::domain::{
     COMMIT_TIMESTAMP_COLUMN, Checkpoint, IcebergWriter, OP_COLUMN, POSITION_COLUMN,
     SOURCE_ID_COLUMN, TargetTable, WriteError, events_to_record_batch, namespace_for_source,
+    target_table_name,
 };
 
 /// Snapshot summary property carrying the checkpoint — the commit position of the last
@@ -360,6 +361,26 @@ impl IcebergWriter for IcebergChangelogWriter {
         }))
     }
 
+    async fn existing_tables(&self, source: &DataSource) -> Result<HashSet<String>, WriteError> {
+        let namespace = NamespaceIdent::new(namespace_for_source(source));
+        if !self
+            .catalog
+            .namespace_exists(&namespace)
+            .await
+            .map_err(|err| WriteError::Catalog(err.to_string()))?
+        {
+            return Ok(HashSet::new());
+        }
+        Ok(self
+            .catalog
+            .list_tables(&namespace)
+            .await
+            .map_err(|err| WriteError::Catalog(err.to_string()))?
+            .into_iter()
+            .map(|ident| ident.name().to_string())
+            .collect())
+    }
+
     async fn record_key_columns(&self, source: &DataSource) -> Result<(), WriteError> {
         let namespace = NamespaceIdent::new(namespace_for_source(source));
         if !self
@@ -400,7 +421,7 @@ impl IcebergWriter for IcebergChangelogWriter {
         let keys: HashMap<String, Vec<String>> = source_key_columns(source)
             .await?
             .into_iter()
-            .map(|((schema, table), columns)| (format!("{schema}__{table}"), columns))
+            .map(|((schema, table), columns)| (target_table_name(&schema, &table), columns))
             .collect();
         for table in missing {
             let name = table.identifier().name().to_string();
