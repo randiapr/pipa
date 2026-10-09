@@ -3,9 +3,10 @@
 
 rustfs_data := "rustfs-data"
 rustfs_alias := "pipa-local"
+postgres_data := "postgres-data"
 logs_dir := "logs"
 
-# bring up rustfs, pipa-backend, pipa-ingestion, and the dashboard dev server, all detached in
+# bring up an example Postgres source (brew), rustfs, pipa-backend, pipa-ingestion, and the dashboard dev server, all detached in
 # the background (ensuring the "pipa" bucket exists via `rc` first) — `up` returns once
 # everything is listening rather than blocking the terminal. Each service's
 # stdout/stderr goes to its own file under `{{logs_dir}}/`; tail them with
@@ -28,6 +29,24 @@ up:
     }
 
     mkdir -p {{rustfs_data}} {{logs_dir}}
+
+    # Example OLTP source for local CDC testing, from brew's postgresql@18 (same user/password/db
+    # as docker-compose's example-source). Its cluster lives in {{postgres_data}}/, initialised on
+    # first run; wal_level=logical is what PostgresWalSource's replication slot needs.
+    pg_bin="$(brew --prefix postgresql@18)/bin"
+    if [ ! -f {{postgres_data}}/PG_VERSION ]; then
+        pwfile="$(mktemp)"; echo pipa > "$pwfile"
+        "$pg_bin/initdb" -D {{postgres_data}} -U pipa --pwfile="$pwfile" --auth=scram-sha-256 >/dev/null
+        rm -f "$pwfile"
+    fi
+    if ! "$pg_bin/pg_isready" -q -h 127.0.0.1 -p 5432; then
+        "$pg_bin/pg_ctl" -D {{postgres_data}} -l {{logs_dir}}/postgres.log \
+            -o "-c wal_level=logical -c listen_addresses=127.0.0.1 -p 5432" -w start
+    fi
+    PGPASSWORD=pipa "$pg_bin/psql" -h 127.0.0.1 -U pipa -d postgres -tAc \
+        "SELECT 1 FROM pg_database WHERE datname = 'testdb'" | grep -q 1 \
+        || PGPASSWORD=pipa "$pg_bin/createdb" -h 127.0.0.1 -U pipa testdb
+    echo "postgres ready on :5432 (pipa/pipa, db testdb)"
 
     # `nohup ... &` + `disown` detaches each service from this script's shell, so it
     # keeps running (logging to its own file) after `up` itself exits — `nohup` stops it
@@ -96,6 +115,12 @@ down:
     #!/usr/bin/env bash
     set -uo pipefail
 
+    pg_bin="$(brew --prefix postgresql@18 2>/dev/null)/bin"
+    if [ -f {{postgres_data}}/PG_VERSION ] && "$pg_bin/pg_ctl" -D {{postgres_data}} status >/dev/null 2>&1; then
+        "$pg_bin/pg_ctl" -D {{postgres_data}} -m fast stop >/dev/null && echo "stopped: postgres"
+        stopped_pg=1
+    fi
+
     patterns=(
         "rustfs server"
         "target/debug/pipa-backend"
@@ -103,7 +128,7 @@ down:
         "trunk serve"
     )
 
-    stopped=0
+    stopped=${stopped_pg:-0}
     for pattern in "${patterns[@]}"; do
         if pkill -f "$pattern" 2>/dev/null; then
             echo "stopped: $pattern"

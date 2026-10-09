@@ -42,16 +42,27 @@ A Cargo workspace of five crates, each versioned independently (see each crate's
 - [`just`](https://github.com/casey/just)
 - [`trunk`](https://trunkrs.dev): `cargo install trunk`
 - [`rustfs`](https://rustfs.com) and its `rc` CLI, for local S3-compatible object storage
+- [`PostgreSQL 18`](https://www.postgresql.org/download) — `just local::up` runs it as the example source database
 - Node.js/npm — only used to resolve daisyUI as a Tailwind plugin (`crates/ui/package.json`); no JS build step otherwise
 
 ## Quickstart
 
 ```sh
-just local::up      # rustfs + pipa-backend + pipa-ingestion + dashboard, all in the background
+just local::up      # example Postgres + rustfs + pipa-backend + pipa-ingestion + dashboard, all in the background
 ```
 
 Open `http://localhost:3000` for the dashboard and `http://localhost:8080/healthz` for the
 API. `just local::log` tails every service's output; `just local::down` stops everything.
+
+`just local::up` also starts an example Postgres source to register as a data source:
+`localhost:5432`, user/password `pipa`, database `testdb`, `wal_level=logical`. Its cluster lives in
+the gitignored `postgres-data/`, initialized on the first run; if something already listens on
+`:5432`, that server is used instead and must have `wal_level=logical` itself.
+
+A newly registered source captures **no tables**: open it in the dashboard (its explorer page lists
+the source's tables live) and choose the tables to capture. `pipa-ingestion` picks the selection up
+on its next read of the registered sources (every 30 seconds by default), and the captured tables
+then show up on the Tables page.
 
 With `just local::up`, sign in as the first admin, `admin` / `admin-password` by default (local-only defaults;
 override with `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD`, and `JWT_SECRET` for the token
@@ -70,6 +81,7 @@ database `testdb`, `wal_level=logical`) to register as a data source:
 
 ```sh
 just docker-up   # first run creates .env with a random JWT secret and admin password
+just docker-logs # follow the stack's logs (or name services: just docker-logs backend ingestion-0)
 just docker-down # stop it, keeping the data volumes (docker-down-clean also deletes them)
 ```
 
