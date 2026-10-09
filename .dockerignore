@@ -1,6 +1,8 @@
 target
 crates/ui/node_modules
 rustfs-data
+postgres-data
+logs
 .git
 .env
 .env.*

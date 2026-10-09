@@ -116,6 +116,15 @@ impl SourcesViewModel {
         )
     }
 
+    /// How many tables a source ingests.
+    pub fn ingested_label(source: &DataSourceView) -> String {
+        match source.ingested_tables.len() {
+            0 => "no tables".to_string(),
+            1 => "1 table".to_string(),
+            count => format!("{count} tables"),
+        }
+    }
+
     pub fn engine_label(engine: DbEngine) -> &'static str {
         match engine {
             DbEngine::Postgres => "PostgreSQL",

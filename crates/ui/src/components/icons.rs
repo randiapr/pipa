@@ -1,5 +1,4 @@
-//! View: inline SVG icons for the icon-only action buttons, shared by a list's table rows and
-//! cards.
+//! Inline SVG icons for icon-only buttons, drawn with the current text color.
 
 use leptos::prelude::*;
 
@@ -17,6 +16,46 @@ pub fn EditIcon() -> impl IntoView {
                 stroke-linejoin="round"
                 stroke-width="2"
                 d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"
+            ></path>
+        </svg>
+    }
+}
+
+/// Two chevrons pointing apart: expand everything.
+#[component]
+pub fn ExpandAllIcon() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            class="h-4 w-4 stroke-current"
+        >
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"
+            ></path>
+        </svg>
+    }
+}
+
+/// Two chevrons pointing together: collapse everything.
+#[component]
+pub fn CollapseAllIcon() -> impl IntoView {
+    view! {
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            class="h-4 w-4 stroke-current"
+        >
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8.25 5.25L12 9l3.75-3.75m-7.5 13.5L12 15l3.75 3.75"
             ></path>
         </svg>
     }

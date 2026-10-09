@@ -3,6 +3,7 @@
 
 use leptos::prelude::*;
 
+use crate::components::Select;
 use crate::viewmodel::{LayoutViewModel, PAGE_SIZE_OPTIONS, PageSize, PagedList};
 
 #[component]
@@ -40,30 +41,26 @@ pub fn Pagination<T: Clone + Send + Sync + 'static>(list: PagedList<T>) -> impl 
 #[component]
 pub fn PageSizePicker(size: PageSize) -> impl IntoView {
     let layout = expect_context::<LayoutViewModel>();
+    let options: Vec<(String, String)> = PAGE_SIZE_OPTIONS
+        .iter()
+        .map(|rows| (rows.to_string(), rows.to_string()))
+        .collect();
 
     view! {
         <Show when=move || layout.renders_desktop()>
             <label class="hidden items-center gap-2 text-sm text-base-content/70 lg:flex">
                 "Rows per page"
-                <select
-                    class="select select-sm w-20"
-                    on:change:target=move |ev| {
-                        if let Ok(rows) = ev.target().value().parse() {
+                <Select
+                    small=true
+                    class="w-20"
+                    value=Signal::derive(move || size.desktop().to_string())
+                    options=options.clone()
+                    on_change=move |value: String| {
+                        if let Ok(rows) = value.parse() {
                             size.set_desktop(rows);
                         }
                     }
-                >
-                    {PAGE_SIZE_OPTIONS
-                        .iter()
-                        .map(|&rows| {
-                            view! {
-                                <option value=rows.to_string() selected=move || size.desktop() == rows>
-                                    {rows.to_string()}
-                                </option>
-                            }
-                        })
-                        .collect_view()}
-                </select>
+                />
             </label>
         </Show>
     }

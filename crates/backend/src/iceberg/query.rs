@@ -41,6 +41,24 @@ pub fn namespace_for_source(id: DataSourceId) -> String {
     format!("cdc_{}", id.0.simple())
 }
 
+/// The table source table `schema.table` lands in: `{schema}__{table}`, lowercased with every
+/// character outside `[a-z0-9]` turned into `_`. Duplicates `target_table_name` in
+/// `crates/ingestion/src/write/domain.rs` on purpose, like [`namespace_for_source`]; keep the
+/// two identical. Map source tables forward through this — a table name can't be split back
+/// apart reliably.
+pub fn table_for_source_table(schema: &str, table: &str) -> String {
+    format!("{schema}__{table}")
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 /// A catalog that only exposes some of another catalog's namespaces, so a query can't name
 /// tables outside them.
 #[derive(Debug)]

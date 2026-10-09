@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use leptos::prelude::*;
 
+use crate::components::Card;
 use crate::view::ResponsiveList;
 use crate::viewmodel::{cell_text, columns_of};
 
@@ -67,22 +68,25 @@ fn RowsTable(rows: Arc<Vec<serde_json::Value>>, columns: Arc<Vec<String>>) -> im
 fn RowsCards(rows: Arc<Vec<serde_json::Value>>, columns: Arc<Vec<String>>) -> impl IntoView {
     rows.iter()
         .map(|row| {
+            // Owned up front: the card's children are a closure that must not borrow `row`.
+            let cells: Vec<(String, String)> = columns
+                .iter()
+                .map(|column| (column.clone(), cell_text(row.get(column))))
+                .collect();
             view! {
-                <div class="card card-border card-sm bg-base-100">
-                    <div class="card-body">
-                        <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-                            {columns
-                                .iter()
-                                .map(|column| {
-                                    view! {
-                                        <dt class="font-mono text-base-content/70">{column.clone()}</dt>
-                                        <dd class="break-all">{cell_text(row.get(column))}</dd>
-                                    }
-                                })
-                                .collect_view()}
-                        </dl>
-                    </div>
-                </div>
+                <Card compact=true>
+                    <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                        {cells
+                            .into_iter()
+                            .map(|(column, value)| {
+                                view! {
+                                    <dt class="font-mono text-base-content/70">{column}</dt>
+                                    <dd class="break-all">{value}</dd>
+                                }
+                            })
+                            .collect_view()}
+                    </dl>
+                </Card>
             }
         })
         .collect_view()

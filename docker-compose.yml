@@ -25,6 +25,10 @@ x-pipa-ingestion-env: &pipa-ingestion-env
   RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
   RUSTFS_ALLOW_HTTP: "true"
   INGESTION_SHARD_COUNT: "2"
+  # How often each instance re-reads the registered data sources: new sources start capturing,
+  # removed ones stop, and a changed table choice (the dashboard's data source explorer) applies
+  # without a restart.
+  INGESTION_SOURCE_REFRESH_INTERVAL_SECS: "30"
   RUST_LOG: info
 
 services:
@@ -48,8 +52,11 @@ services:
       retries: 5
 
   # Example OLTP source for local CDC testing: register it as a data source via pipa-backend's
-  # /datasources API (or pipa-ui) pointing at postgres:5432, then pipa-ingestion picks it up on
-  # its own read of the shared object store (see crates/ingestion/src/datasource.rs). wal_level
+  # /datasources API (or pipa-ui) pointing at example-source:5432 — pipa-backend connects to it
+  # from inside the compose network to test it and list its tables — then choose the tables to
+  # capture in the dashboard's data source explorer; a new source captures none. pipa-ingestion
+  # picks it up on its next read of the shared object store (see
+  # crates/ingestion/src/datasource.rs). wal_level
   # must be logical for PostgresWalSource's replication slot (crates/ingestion/src/capture/
   # infrastructure/postgres) — the default "replica" won't support logical decoding.
   example-source:

@@ -4,6 +4,7 @@
 
 use crate::datasource::domain::{
     ConnectionConfig, ConnectionTestOutcome, DataSource, DataSourceError, DbEngine, NewDataSource,
+    SourceColumn, SourceTable, TableRef,
 };
 use crate::project::{NewProject, Project, ProjectId, ProjectUpdate};
 use crate::user::{
@@ -71,7 +72,55 @@ impl From<DataSource> for pipa_api::DataSourceView {
             connection: source.connection.into(),
             project_id: source.project_id.map(|id| id.to_string()),
             registered_at_unix: source.registered_at_unix,
+            ingested_tables: source.ingested_tables.into_iter().map(Into::into).collect(),
         }
+    }
+}
+
+impl From<TableRef> for pipa_api::SourceTableRef {
+    fn from(table: TableRef) -> Self {
+        Self {
+            schema: table.schema,
+            name: table.name,
+        }
+    }
+}
+
+impl From<pipa_api::SourceTableRef> for TableRef {
+    fn from(table: pipa_api::SourceTableRef) -> Self {
+        Self {
+            schema: table.schema,
+            name: table.name,
+        }
+    }
+}
+
+impl From<SourceColumn> for pipa_api::SourceColumnView {
+    fn from(column: SourceColumn) -> Self {
+        Self {
+            name: column.name,
+            data_type: column.data_type,
+            nullable: column.nullable,
+            primary_key: column.primary_key,
+            foreign_key: column
+                .foreign_key
+                .map(|reference| pipa_api::SourceColumnRef {
+                    schema: reference.table.schema,
+                    table: reference.table.name,
+                    column: reference.column,
+                }),
+        }
+    }
+}
+
+/// `table` of `source`, flagged with whether `source` ingests it.
+pub fn source_table_view(source: &DataSource, table: SourceTable) -> pipa_api::SourceTableView {
+    let ingested = source.ingests(&table.table);
+    pipa_api::SourceTableView {
+        schema: table.table.schema,
+        name: table.table.name,
+        columns: table.columns.into_iter().map(Into::into).collect(),
+        ingested,
     }
 }
 
@@ -286,5 +335,6 @@ mod tests {
         assert_eq!(view.id, id);
         assert_eq!(view.engine, pipa_api::DbEngine::MySql);
         assert_eq!(view.project_id, None);
+        assert!(view.ingested_tables.is_empty());
     }
 }

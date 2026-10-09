@@ -21,17 +21,27 @@
 //! for delivery guarantees because checkpoint state lives durably in Iceberg itself (see
 //! `write::domain::IcebergWriter`), not in-process — a source moving to a different instance
 //! behaves exactly like a cold restart of the old one.
+//!
+//! The registered sources are read again every `INGESTION_SOURCE_REFRESH_INTERVAL_SECS`
+//! (default 30): a newly registered source starts capturing, a removed one stops, and a change
+//! to the tables a source ingests (chosen in the dashboard's data source explorer) is handed to
+//! its running capture, which applies it from the next change on.
 
 mod capture;
 mod datasource;
 mod storage;
 mod write;
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
+use object_store::ObjectStore;
 use tokio::signal::unix::{SignalKind, signal};
+use tokio::sync::watch;
+use tokio::task::JoinHandle;
 
-use datasource::{DataSource, DbEngine};
+use datasource::{DataSource, DataSourceId, DbEngine, TableSelection};
 use storage::ObjectStoreConfig;
 
 use crate::capture::{BatchConfig, CaptureOrchestrator, CdcSource, PostgresWalSource};
@@ -58,13 +68,17 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!(shard_index, shard_count, "pipa-ingestion starting");
 
+    let refresh_interval = Duration::from_secs(
+        std::env::var("INGESTION_SOURCE_REFRESH_INTERVAL_SECS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(30)
+            .max(1),
+    );
+
     let store_config = ObjectStoreConfig::from_env();
     let store = store_config.build_store()?;
-    let sources: Vec<DataSource> = datasource::list_registered(store.as_ref())
-        .await?
-        .into_iter()
-        .filter(|source| shard_of(source, shard_count) == shard_index)
-        .collect();
+    let sources = assigned_sources(store.as_ref(), shard_index, shard_count).await?;
 
     if sources.is_empty() {
         tracing::info!("no OLTP data sources assigned to this shard");
@@ -82,26 +96,156 @@ async fn main() -> anyhow::Result<()> {
         BatchConfig::from_env(),
     ));
 
-    for source in sources {
-        tracing::info!(
-            id = %source.id,
-            engine = ?source.engine,
-            "registered OLTP data source: {}",
-            source.name
-        );
+    let mut captures = Captures::new(orchestrator, Arc::clone(&writer));
+    captures.reconcile(sources).await;
 
-        match source.engine {
-            DbEngine::Postgres => spawn_capture(Arc::clone(&orchestrator), source),
-            DbEngine::MySql => {
-                tracing::warn!(id = %source.id, "MySQL change capture is not implemented yet, skipping");
+    let shutdown = shutdown_signal();
+    tokio::pin!(shutdown);
+    let mut refresh = tokio::time::interval(refresh_interval);
+    refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    refresh.tick().await; // The first tick is immediate; the sources were just read.
+    loop {
+        tokio::select! {
+            result = &mut shutdown => {
+                result?;
+                break;
+            }
+            _ = refresh.tick() => {
+                match assigned_sources(store.as_ref(), shard_index, shard_count).await {
+                    Ok(sources) => captures.reconcile(sources).await,
+                    Err(err) => {
+                        tracing::warn!(error = %err, "could not re-read the registered data sources, keeping the current ones");
+                    }
+                }
             }
         }
     }
-
-    shutdown_signal().await?;
     tracing::info!("pipa-ingestion shutting down");
 
     Ok(())
+}
+
+/// The registered data sources this shard owns.
+async fn assigned_sources(
+    store: &dyn ObjectStore,
+    shard_index: u32,
+    shard_count: u32,
+) -> anyhow::Result<Vec<DataSource>> {
+    Ok(datasource::list_registered(store)
+        .await?
+        .into_iter()
+        .filter(|source| shard_of(source, shard_count) == shard_index)
+        .collect())
+}
+
+/// A source's running capture task, and the handle that keeps its table selection current.
+struct Capture {
+    selection: watch::Sender<TableSelection>,
+    task: JoinHandle<()>,
+}
+
+/// The capture tasks of this shard, kept in line with the registered sources.
+struct Captures {
+    orchestrator: Arc<CaptureOrchestrator>,
+    /// Lists the target tables a source without a saved choice already has.
+    writer: Arc<dyn IcebergWriter>,
+    running: HashMap<DataSourceId, Capture>,
+    /// Sources that can't be captured (MySQL, for now), so they are only warned about once.
+    skipped: HashSet<DataSourceId>,
+}
+
+impl Captures {
+    fn new(orchestrator: Arc<CaptureOrchestrator>, writer: Arc<dyn IcebergWriter>) -> Self {
+        Self {
+            orchestrator,
+            writer,
+            running: HashMap::new(),
+            skipped: HashSet::new(),
+        }
+    }
+
+    /// Starts capturing sources not seen before, hands a changed table selection to running
+    /// ones, and stops those no longer registered. A source's capture keeps running even with
+    /// no table chosen: stopping it would leave its replication slot unconsumed, holding WAL.
+    async fn reconcile(&mut self, sources: Vec<DataSource>) {
+        let registered: HashSet<DataSourceId> = sources.iter().map(|source| source.id).collect();
+
+        for source in sources {
+            let running = self.running.contains_key(&source.id);
+            if !running && source.engine == DbEngine::MySql {
+                if self.skipped.insert(source.id) {
+                    tracing::warn!(id = %source.id, "MySQL change capture is not implemented yet, skipping");
+                }
+                continue;
+            }
+            // Can't tell yet what a source without a saved choice captures: leave a running
+            // capture as it is, and don't start one — its slot keeps the changes meanwhile,
+            // where starting with nothing selected would skip them.
+            let Some(selection) = self.selection_of(&source).await else {
+                continue;
+            };
+
+            if let Some(capture) = self.running.get(&source.id) {
+                let changed = capture.selection.send_if_modified(|current| {
+                    let changed = *current != selection;
+                    if changed {
+                        *current = selection;
+                    }
+                    changed
+                });
+                if changed {
+                    tracing::info!(id = %source.id, tables = %capture.selection.borrow().describe(), "ingested tables changed");
+                }
+                continue;
+            }
+
+            tracing::info!(
+                id = %source.id,
+                engine = ?source.engine,
+                tables = %selection.describe(),
+                "registered OLTP data source: {}",
+                source.name
+            );
+            let (selection_tx, selection_rx) = watch::channel(selection);
+            let orchestrator = Arc::clone(&self.orchestrator);
+            let id = source.id;
+            let task = tokio::spawn(async move {
+                orchestrator.run(source, selection_rx).await;
+            });
+            self.running.insert(
+                id,
+                Capture {
+                    selection: selection_tx,
+                    task,
+                },
+            );
+        }
+
+        self.running.retain(|id, capture| {
+            let keep = registered.contains(id);
+            if !keep {
+                tracing::info!(%id, "data source no longer registered, stopping its capture");
+                capture.task.abort();
+            }
+            keep
+        });
+        self.skipped.retain(|id| registered.contains(id));
+    }
+
+    /// What `source` captures: its saved choice, or — without one — the tables it already has
+    /// in pipa. `None` when those can't be listed just now.
+    async fn selection_of(&self, source: &DataSource) -> Option<TableSelection> {
+        if let Some(chosen) = source.chosen_tables() {
+            return Some(chosen);
+        }
+        match self.writer.existing_tables(source).await {
+            Ok(targets) => Some(TableSelection::Existing(targets)),
+            Err(err) => {
+                tracing::warn!(id = %source.id, error = %err, "could not list the tables a source without a saved choice has, retrying at the next refresh");
+                None
+            }
+        }
+    }
 }
 
 /// Waits for Ctrl-C or SIGTERM. SIGTERM is what `docker stop` sends, and as a container's PID 1
@@ -121,11 +265,4 @@ async fn shutdown_signal() -> anyhow::Result<()> {
 /// across restarts and independent of registration order.
 fn shard_of(source: &DataSource, shard_count: u32) -> u32 {
     (source.id.0.as_u128() % u128::from(shard_count)) as u32
-}
-
-/// Drives capture + write for `source` on its own task via `orchestrator`.
-fn spawn_capture(orchestrator: Arc<CaptureOrchestrator>, source: DataSource) {
-    tokio::spawn(async move {
-        orchestrator.run(source).await;
-    });
 }

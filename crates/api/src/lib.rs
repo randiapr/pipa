@@ -22,7 +22,8 @@ pub mod user;
 pub use datasource::{
     ConnectionConfig, ConnectionTest, ConnectionTestOutcome, ConnectionTestResponse,
     DataSourceData, DataSourceResponse, DataSourceView, DataSources, DataSourcesResponse, DbEngine,
-    NewDataSource,
+    IngestedTablesUpdate, NewDataSource, SourceColumnRef, SourceColumnView, SourceTableRef,
+    SourceTableView, SourceTables, SourceTablesResponse,
 };
 pub use envelope::{BaseResponse, Empty, ErrorBody, ErrorResponse, MessageResponse, ResponseCode};
 pub use project::{

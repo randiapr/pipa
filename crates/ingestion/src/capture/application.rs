@@ -15,6 +15,10 @@
 //! - **Confirm.** The slot is confirmed up to just before the oldest transaction still
 //!   buffered, or — with nothing buffered — as far as the stream has been delivered. An idle
 //!   table never holds it back.
+//! - **Chosen tables only.** Changes to a table the source doesn't ingest
+//!   ([`TableSelection`]) are dropped as they arrive, so they never hold back the confirm
+//!   either. The selection can change while a session runs; a table chosen later is captured
+//!   from then on, with no backfill of what changed before.
 //!
 //! Scoped to Postgres: positions compare as `pgwire_replication::Lsn`'s `u64` total order,
 //! which a future MySQL GTID-set-based source would not have.
@@ -24,10 +28,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use pgwire_replication::Lsn;
+use tokio::sync::watch;
 use tokio::time::Instant;
 
 use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, ChangeStream, StreamItem};
-use crate::datasource::DataSource;
+use crate::datasource::{DataSource, TableSelection};
 use crate::write::domain::{Checkpoint, IcebergWriter, TargetTable};
 
 /// First delay before reconnecting a capture session that ended; doubles on every consecutive
@@ -143,11 +148,14 @@ impl CaptureOrchestrator {
     /// handles: each session recomputes its resume position from Iceberg, events that were only
     /// buffered in memory are redelivered from the slot (nothing past them was ever confirmed),
     /// and redeliveries at or below a table's committed watermark are skipped.
-    pub async fn run(&self, source: DataSource) {
+    ///
+    /// `selection` holds the tables to capture, kept current by the caller as the source's
+    /// registration changes; it is read on every change, so an update applies straight away.
+    pub async fn run(&self, source: DataSource, selection: watch::Receiver<TableSelection>) {
         let mut backoff = RECONNECT_BACKOFF_MIN;
         loop {
             let started = Instant::now();
-            match self.run_once(&source).await {
+            match self.run_once(&source, &selection).await {
                 Ok(()) => tracing::warn!(id = %source.id, "change capture stream ended"),
                 Err(err) => tracing::error!(id = %source.id, error = %err, "change capture failed"),
             }
@@ -169,7 +177,11 @@ impl CaptureOrchestrator {
     /// lowest table checkpoint in Iceberg could pass a transaction that was still buffered for a
     /// table that doesn't exist in Iceberg yet. Redelivery from the slot is what the per-table
     /// dedup is for.
-    async fn run_once(&self, source: &DataSource) -> Result<(), CaptureError> {
+    async fn run_once(
+        &self,
+        source: &DataSource,
+        selection: &watch::Receiver<TableSelection>,
+    ) -> Result<(), CaptureError> {
         tracing::info!(id = %source.id, "starting capture");
         // Not needed for capture itself, so a failure only costs readers the current-rows view.
         if let Err(err) = self.writer.record_key_columns(source).await {
@@ -188,7 +200,10 @@ impl CaptureOrchestrator {
                     match item {
                         Some(Ok(StreamItem::Change(event))) => {
                             progress.in_transaction = true;
-                            self.handle_event(source, &mut tables, event).await;
+                            let wanted = selection.borrow().includes(&event.schema, &event.table);
+                            if wanted {
+                                self.handle_event(source, &mut tables, event).await;
+                            }
                         }
                         Some(Ok(StreamItem::Progress { position })) => {
                             progress.in_transaction = false;
@@ -425,6 +440,7 @@ mod tests {
                 password: "postgres".to_string(),
                 database: "testdb".to_string(),
             },
+            ingested_tables: Some(Vec::new()),
         }
     }
 
@@ -453,6 +469,11 @@ mod tests {
         StreamItem::Progress {
             position: lsn(position),
         }
+    }
+
+    /// Every table the tests change.
+    fn test_tables() -> TableSelection {
+        TableSelection::of([("public", "orders"), ("public", "customers")])
     }
 
     fn batch(max_events: usize) -> BatchConfig {
@@ -590,6 +611,19 @@ mod tests {
         async fn record_key_columns(&self, _source: &DataSource) -> Result<(), WriteError> {
             Ok(())
         }
+
+        async fn existing_tables(
+            &self,
+            _source: &DataSource,
+        ) -> Result<std::collections::HashSet<String>, WriteError> {
+            Ok(self
+                .checkpoints
+                .lock()
+                .unwrap()
+                .keys()
+                .map(|target| target.table.clone())
+                .collect())
+        }
     }
 
     async fn run(
@@ -598,9 +632,20 @@ mod tests {
         config: BatchConfig,
         items: Vec<StreamItem>,
     ) -> Arc<FakeCdcSource> {
+        run_selected(source, writer, config, test_tables(), items).await
+    }
+
+    async fn run_selected(
+        source: &DataSource,
+        writer: &Arc<FakeIcebergWriter>,
+        config: BatchConfig,
+        selection: TableSelection,
+        items: Vec<StreamItem>,
+    ) -> Arc<FakeCdcSource> {
         let cdc = FakeCdcSource::new(items);
+        let (_selection_tx, selection) = watch::channel(selection);
         CaptureOrchestrator::new(cdc.clone(), writer.clone(), config)
-            .run_once(source)
+            .run_once(source, &selection)
             .await
             .unwrap();
         cdc.join().await;
@@ -739,7 +784,9 @@ mod tests {
             },
         );
         let session_source = source.clone();
-        let session = tokio::spawn(async move { orchestrator.run_once(&session_source).await });
+        let (_selection_tx, selection) = watch::channel(test_tables());
+        let session =
+            tokio::spawn(async move { orchestrator.run_once(&session_source, &selection).await });
 
         let (a, b) = (change("orders", 1, 10), change("orders", 2, 10));
         let target = TargetTable::for_event(&source, &a);
@@ -860,6 +907,36 @@ mod tests {
         );
     }
 
+    /// Changes to tables the source doesn't ingest are never committed, and don't hold back the
+    /// confirm while the chosen tables' transactions land.
+    #[tokio::test]
+    async fn only_chosen_tables_are_committed() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let order = change("orders", 1, 10);
+        let customer = change("customers", 2, 20);
+        let selection = TableSelection::of([("public", "orders")]);
+
+        let cdc = run_selected(
+            &source,
+            &writer,
+            batch(1),
+            selection,
+            vec![item(&order), progress(11), item(&customer), progress(21)],
+        )
+        .await;
+        assert_eq!(
+            writer.commits(&TargetTable::for_event(&source, &order)),
+            vec![(vec![order], lsn(10))]
+        );
+        assert!(
+            writer
+                .commits(&TargetTable::for_event(&source, &customer))
+                .is_empty()
+        );
+        assert_eq!(cdc.confirms(), vec![lsn(11), lsn(21)]);
+    }
+
     /// A [`CdcSource`] whose sessions go wrong in a scripted order: the first `stream_changes`
     /// call fails to connect, the second returns a stream that ends straight away (the source
     /// dropping the connection), and every later one stays open. Records when each call happened
@@ -911,7 +988,8 @@ mod tests {
         let cdc = Arc::new(FlakyCdcSource::default());
         let orchestrator = CaptureOrchestrator::new(cdc.clone(), writer, batch(10));
 
-        let task = tokio::spawn(async move { orchestrator.run(source).await });
+        let (_selection_tx, selection) = watch::channel(test_tables());
+        let task = tokio::spawn(async move { orchestrator.run(source, selection).await });
         cdc.reconnected.notified().await;
         task.abort();
 

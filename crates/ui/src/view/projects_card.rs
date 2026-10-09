@@ -1,12 +1,17 @@
 //! View: the Projects card — a paginated list of existing projects (a table on desktop, cards
-//! on mobile), with create and edit each presented as a native `<dialog>` modal
-//! (`showModal()`/`close()`), not inline forms. Both layouts share the same dialogs.
+//! on mobile), with create and edit each presented as a [`Modal`], not inline forms. Both
+//! layouts share the same dialogs. Saving an edit and deleting each ask for confirmation first
+//! ([`ConfirmDialog`]).
 
 use leptos::ev::SubmitEvent;
 use leptos::html;
 use leptos::prelude::*;
 
-use crate::view::{EditIcon, Pagination, ResponsiveList, TrashIcon};
+use crate::components::{
+    Card, CardActions, CardTitle, ConfirmDialog, EditIcon, Field, Modal, ModalActions, TextInput,
+    TrashIcon, close_dialog, open_dialog,
+};
+use crate::view::{Pagination, ResponsiveList};
 use crate::viewmodel::{ProjectsViewModel, SessionViewModel};
 
 #[component]
@@ -15,281 +20,178 @@ pub fn ProjectsCard(vm: ProjectsViewModel) -> impl IntoView {
     let session = expect_context::<SessionViewModel>();
     let create_dialog = NodeRef::<html::Dialog>::new();
     let edit_dialog = NodeRef::<html::Dialog>::new();
+    let confirm_edit_dialog = NodeRef::<html::Dialog>::new();
     let delete_dialog = NodeRef::<html::Dialog>::new();
     let pending_delete = RwSignal::new(Option::<String>::None);
 
-    let open_create = move |_| {
-        if let Some(dialog) = create_dialog.get() {
-            let _ = dialog.show_modal();
-        }
-    };
-
     let on_submit_create = move |ev: SubmitEvent| {
         vm.submit_new(ev);
-        if let Some(dialog) = create_dialog.get() {
-            dialog.close();
-        }
+        close_dialog(create_dialog);
     };
 
-    // Fires on every close, whatever the cause (submit, Cancel, Esc), so the
-    // form always starts empty next time it's opened.
+    // Runs on every close, whatever the cause (submit, Cancel, Esc), so the form always
+    // starts empty next time it's opened.
     let on_create_closed = move |_| {
         vm.name.set(String::new());
         vm.description.set(String::new());
     };
 
+    // Submitting the form only asks; the save happens once that is confirmed.
     let on_submit_edit = move |ev: SubmitEvent| {
         ev.prevent_default();
-        if let Some(id) = vm.editing_id.get() {
+        open_dialog(confirm_edit_dialog);
+    };
+    let on_confirm_edit = move |_| {
+        if let Some(id) = vm.editing_id.get_untracked() {
             vm.save_edit(id);
         }
-        if let Some(dialog) = edit_dialog.get() {
-            dialog.close();
-        }
+        close_dialog(edit_dialog);
     };
 
-    // Fires on every close, whatever the cause, so a dismissed edit doesn't leave a project
-    // stuck looking "in progress" (`vm.is_editing` stays keyed to a row otherwise).
-    let on_edit_closed = move |_| vm.cancel_edit();
-
     let on_confirm_delete = move |_| {
-        if let Some(id) = pending_delete.get() {
+        if let Some(id) = pending_delete.get_untracked() {
             vm.delete(id);
-        }
-        if let Some(dialog) = delete_dialog.get() {
-            dialog.close();
         }
     };
 
     view! {
-        <section id="projects" class="card card-border bg-base-100 shadow-xl">
-            <div class="card-body">
-                <div class="flex items-center justify-between">
-                    <h2 class="card-title">"Projects"</h2>
-                    <Show when=move || session.is_admin()>
-                        <button class="btn btn-primary btn-sm" type="button" on:click=open_create>
-                            "New Project"
-                        </button>
-                    </Show>
-                </div>
-
-                <Show
-                    when=move || !vm.list.is_empty()
-                    fallback=|| view! { <p class="text-base-content/70">"No projects yet."</p> }
-                >
-                    <ResponsiveList
-                        table=move || {
-                            view! {
-                                <div class="overflow-x-auto">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>"Name"</th>
-                                                <th>"Description"</th>
-                                                <Show when=move || session.is_admin()>
-                                                    <th class="text-right">"Actions"</th>
-                                                </Show>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <For
-                                                each=move || vm.list.paged()
-                                                key=|project| project.id.clone()
-                                                children=move |project| {
-                                                    view! {
-                                                        <ProjectRow
-                                                            vm=vm
-                                                            edit_dialog=edit_dialog
-                                                            delete_dialog=delete_dialog
-                                                            pending_delete=pending_delete
-                                                            id=project.id
-                                                        />
-                                                    }
-                                                }
-                                            />
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
-                        }
-                        cards=move || {
-                            view! {
-                                <For
-                                    each=move || vm.list.paged()
-                                    key=|project| project.id.clone()
-                                    children=move |project| {
-                                        view! {
-                                            <ProjectItemCard
-                                                vm=vm
-                                                edit_dialog=edit_dialog
-                                                delete_dialog=delete_dialog
-                                                pending_delete=pending_delete
-                                                id=project.id
-                                            />
-                                        }
-                                    }
-                                />
-                            }
-                        }
-                    />
-                    <div class="card-actions justify-end">
-                        <Pagination list=vm.list />
-                    </div>
+        <Card attr:id="projects" class="shadow-xl">
+            <div class="flex items-center justify-between">
+                <CardTitle>"Projects"</CardTitle>
+                <Show when=move || session.is_admin()>
+                    <button
+                        class="btn btn-primary btn-sm"
+                        type="button"
+                        on:click=move |_| open_dialog(create_dialog)
+                    >
+                        "New Project"
+                    </button>
                 </Show>
             </div>
-        </section>
 
-        <dialog node_ref=create_dialog class="modal" on:close=on_create_closed>
-            <div class="modal-box max-h-[85vh] overflow-y-auto">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| {
-                        if let Some(dialog) = create_dialog.get() {
-                            dialog.close();
+            <Show
+                when=move || !vm.list.is_empty()
+                fallback=|| view! { <p class="text-base-content/70">"No projects yet."</p> }
+            >
+                <ResponsiveList
+                    table=move || {
+                        view! {
+                            <div class="overflow-x-auto">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>"Name"</th>
+                                            <th>"Description"</th>
+                                            <Show when=move || session.is_admin()>
+                                                <th class="text-right">"Actions"</th>
+                                            </Show>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <For
+                                            each=move || vm.list.paged()
+                                            key=|project| project.id.clone()
+                                            children=move |project| {
+                                                view! {
+                                                    <ProjectRow
+                                                        vm=vm
+                                                        edit_dialog=edit_dialog
+                                                        delete_dialog=delete_dialog
+                                                        pending_delete=pending_delete
+                                                        id=project.id
+                                                    />
+                                                }
+                                            }
+                                        />
+                                    </tbody>
+                                </table>
+                            </div>
                         }
                     }
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Create project"</h3>
-                <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_create>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Name"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            prop:value=move || vm.name.get()
-                            on:input:target=move |ev| vm.name.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Description"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            prop:value=move || vm.description.get()
-                            on:input:target=move |ev| vm.description.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <div class="modal-action">
-                        <button
-                            class="btn"
-                            type="button"
-                            on:click=move |_| {
-                                if let Some(dialog) = create_dialog.get() {
-                                    dialog.close();
+                    cards=move || {
+                        view! {
+                            <For
+                                each=move || vm.list.paged()
+                                key=|project| project.id.clone()
+                                children=move |project| {
+                                    view! {
+                                        <ProjectItemCard
+                                            vm=vm
+                                            edit_dialog=edit_dialog
+                                            delete_dialog=delete_dialog
+                                            pending_delete=pending_delete
+                                            id=project.id
+                                        />
+                                    }
                                 }
-                            }
-                        >
-                            "Cancel"
-                        </button>
-                        <button class="btn btn-primary" type="submit">
-                            "Create"
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </dialog>
-
-        <dialog node_ref=edit_dialog class="modal" on:close=on_edit_closed>
-            <div class="modal-box max-h-[85vh] overflow-y-auto">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| {
-                        if let Some(dialog) = edit_dialog.get() {
-                            dialog.close();
+                            />
                         }
                     }
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Edit project"</h3>
-                <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_edit>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Name"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            required
-                            prop:value=move || vm.edit_name.get()
-                            on:input:target=move |ev| vm.edit_name.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">"Description"</legend>
-                        <input
-                            type="text"
-                            class="input w-full"
-                            prop:value=move || vm.edit_description.get()
-                            on:input:target=move |ev| vm.edit_description.set(ev.target().value())
-                        />
-                    </fieldset>
-                    <div class="modal-action">
-                        <button
-                            class="btn"
-                            type="button"
-                            on:click=move |_| {
-                                if let Some(dialog) = edit_dialog.get() {
-                                    dialog.close();
-                                }
-                            }
-                        >
-                            "Cancel"
-                        </button>
-                        <button class="btn btn-primary" type="submit">
-                            "Save"
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </dialog>
+                />
+                <CardActions>
+                    <Pagination list=vm.list />
+                </CardActions>
+            </Show>
+        </Card>
 
-        <dialog node_ref=delete_dialog class="modal">
-            <div class="modal-box">
-                <button
-                    class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-                    type="button"
-                    on:click=move |_| {
-                        if let Some(dialog) = delete_dialog.get() {
-                            dialog.close();
-                        }
-                    }
-                >
-                    "✕"
-                </button>
-                <h3 class="text-lg font-bold">"Delete project"</h3>
-                <p class="py-4">
-                    {move || {
-                        pending_delete
-                            .get()
-                            .and_then(|id| vm.name_of(&id))
-                            .map(|name| {
-                                format!("Are you sure you want to delete \"{name}\"? This cannot be undone.")
-                            })
-                            .unwrap_or_default()
-                    }}
-                </p>
-                <div class="modal-action">
-                    <button
-                        class="btn"
-                        type="button"
-                        on:click=move |_| {
-                            if let Some(dialog) = delete_dialog.get() {
-                                dialog.close();
-                            }
-                        }
-                    >
-                        "Cancel"
+        <Modal node_ref=create_dialog title="Create project" on_close=on_create_closed>
+            <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_create>
+                <Field legend="Name">
+                    <TextInput value=vm.name required=true />
+                </Field>
+                <Field legend="Description">
+                    <TextInput value=vm.description />
+                </Field>
+                <ModalActions node_ref=create_dialog>
+                    <button class="btn btn-primary" type="submit">
+                        "Create"
                     </button>
-                    <button class="btn btn-error" type="button" on:click=on_confirm_delete>
-                        "Delete"
+                </ModalActions>
+            </form>
+        </Modal>
+
+        // Runs on every close, whatever the cause, so a dismissed edit doesn't leave a project
+        // stuck looking "in progress" (`vm.is_editing` stays keyed to a row otherwise).
+        <Modal node_ref=edit_dialog title="Edit project" on_close=move |_| vm.cancel_edit()>
+            <form class="mt-4 flex flex-col gap-4" on:submit=on_submit_edit>
+                <Field legend="Name">
+                    <TextInput value=vm.edit_name required=true />
+                </Field>
+                <Field legend="Description">
+                    <TextInput value=vm.edit_description />
+                </Field>
+                <ModalActions node_ref=edit_dialog>
+                    <button class="btn btn-primary" type="submit">
+                        "Save"
                     </button>
-                </div>
-            </div>
-        </dialog>
+                </ModalActions>
+            </form>
+        </Modal>
+
+        <ConfirmDialog
+            node_ref=confirm_edit_dialog
+            title="Save project"
+            message=move || format!("Save the changes to \"{}\"?", vm.edit_name.get().trim())
+            confirm_label="Save"
+            on_confirm=on_confirm_edit
+        />
+
+        <ConfirmDialog
+            node_ref=delete_dialog
+            title="Delete project"
+            message=move || {
+                pending_delete
+                    .get()
+                    .and_then(|id| vm.name_of(&id))
+                    .map(|name| {
+                        format!("Are you sure you want to delete \"{name}\"? This cannot be undone.")
+                    })
+                    .unwrap_or_default()
+            }
+            confirm_label="Delete"
+            danger=true
+            on_confirm=on_confirm_delete
+        />
     }
 }
 
@@ -340,30 +242,30 @@ fn ProjectItemCard(
     let session = expect_context::<SessionViewModel>();
     let id_for_name = id.clone();
     let id_for_description = id.clone();
+    // Read from inside the `Show` below, which may render it more than once.
+    let id = StoredValue::new(id);
 
     view! {
-        <div class="card card-border card-sm bg-base-100">
-            <div class="card-body">
-                <h3 class="card-title">{move || vm.name_of(&id_for_name).unwrap_or_default()}</h3>
-                <p class="text-base-content/70">
-                    {move || {
-                        vm.description_of(&id_for_description)
-                            .unwrap_or_else(|| "No description".to_string())
-                    }}
-                </p>
-                <Show when=move || session.is_admin()>
-                    <div class="card-actions justify-end">
-                        <ProjectActions
-                            vm=vm
-                            edit_dialog=edit_dialog
-                            delete_dialog=delete_dialog
-                            pending_delete=pending_delete
-                            id=id.clone()
-                        />
-                    </div>
-                </Show>
-            </div>
-        </div>
+        <Card compact=true>
+            <CardTitle level=3>{move || vm.name_of(&id_for_name).unwrap_or_default()}</CardTitle>
+            <p class="text-base-content/70">
+                {move || {
+                    vm.description_of(&id_for_description)
+                        .unwrap_or_else(|| "No description".to_string())
+                }}
+            </p>
+            <Show when=move || session.is_admin()>
+                <CardActions>
+                    <ProjectActions
+                        vm=vm
+                        edit_dialog=edit_dialog
+                        delete_dialog=delete_dialog
+                        pending_delete=pending_delete
+                        id=id.get_value()
+                    />
+                </CardActions>
+            </Show>
+        </Card>
     }
 }
 
@@ -388,9 +290,7 @@ fn ProjectActions(
                 aria-label="Edit"
                 on:click=move |_| {
                     vm.start_edit(id_for_edit.clone());
-                    if let Some(dialog) = edit_dialog.get() {
-                        let _ = dialog.show_modal();
-                    }
+                    open_dialog(edit_dialog);
                 }
             >
                 <EditIcon />
@@ -402,9 +302,7 @@ fn ProjectActions(
                 aria-label="Delete"
                 on:click=move |_| {
                     pending_delete.set(Some(id_for_delete.clone()));
-                    if let Some(dialog) = delete_dialog.get() {
-                        let _ = dialog.show_modal();
-                    }
+                    open_dialog(delete_dialog);
                 }
             >
                 <TrashIcon />

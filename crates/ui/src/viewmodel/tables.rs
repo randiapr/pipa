@@ -1,4 +1,4 @@
-//! ViewModel: the Tables page — the Iceberg tables of the selected project and a paged,
+//! ViewModel: the Tables page — the pipa tables of the selected project and a paged,
 //! read-only view of one table's rows. Open to every role with access to the project; this is
 //! how the view-only `user` role sees data.
 
@@ -9,7 +9,7 @@ use pipa_api::TableView;
 use crate::api;
 use crate::viewmodel::{PageSize, SessionViewModel, StatusMessage};
 
-/// Suffixes of the metadata tables iceberg-datafusion lists next to every Iceberg table
+/// Suffixes of the metadata tables iceberg-datafusion lists next to every pipa table
 /// (`orders$snapshots`, `orders$manifests`). Not data, so the Tables page doesn't list them.
 const METADATA_TABLE_SUFFIXES: [&str; 2] = ["$snapshots", "$manifests"];
 
@@ -79,7 +79,7 @@ impl TablesViewModel {
         });
     }
 
-    /// The tables to list: the data tables, without their Iceberg metadata tables, for every
+    /// The tables to list: the data tables, without their metadata tables, for every
     /// role. The backend already leaves those out; this is display only.
     pub fn visible_tables(&self) -> Vec<TableView> {
         self.tables.with(|tables| {

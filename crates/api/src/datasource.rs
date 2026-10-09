@@ -60,6 +60,59 @@ pub struct DataSourceView {
     pub connection: ConnectionConfig,
     pub project_id: Option<String>,
     pub registered_at_unix: u64,
+    /// The source tables `pipa-ingestion` captures into Iceberg; changes to any other table are
+    /// skipped. Empty until tables are chosen — the default for every source, including one
+    /// registered before tables could be chosen.
+    #[serde(default)]
+    pub ingested_tables: Vec<SourceTableRef>,
+}
+
+/// A table of a data source's database, by schema and name (for MySQL, the schema is the
+/// database).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SourceTableRef {
+    pub schema: String,
+    pub name: String,
+}
+
+/// A column of a source table, as the source database describes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceColumnView {
+    pub name: String,
+    /// The source database's own spelling of the type (e.g. `character varying(255)`).
+    pub data_type: String,
+    pub nullable: bool,
+    /// Part of the table's primary key.
+    pub primary_key: bool,
+    /// The column this one references through a foreign key, if it is part of one (the first
+    /// by constraint name, if several).
+    #[serde(default)]
+    pub foreign_key: Option<SourceColumnRef>,
+}
+
+/// A column of a source table, by schema, table and name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceColumnRef {
+    pub schema: String,
+    pub table: String,
+    pub column: String,
+}
+
+/// A table found in a data source's database by `GET /datasources/{id}/tables`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceTableView {
+    pub schema: String,
+    pub name: String,
+    pub columns: Vec<SourceColumnView>,
+    /// Whether the data source currently ingests this table.
+    pub ingested: bool,
+}
+
+/// `PUT /datasources/{id}/tables` request body: the complete set of tables to ingest, replacing
+/// the previous one. An empty list stops ingesting every table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IngestedTablesUpdate {
+    pub tables: Vec<SourceTableRef>,
 }
 
 /// Outcome of attempting to open a connection to a data source's OLTP database.
@@ -88,9 +141,16 @@ pub struct ConnectionTest {
     pub connection_test: ConnectionTestOutcome,
 }
 
+/// Payload of `GET /datasources/{id}/tables`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceTables {
+    pub tables: Vec<SourceTableView>,
+}
+
 pub type DataSourcesResponse = BaseResponse<DataSources>;
 pub type DataSourceResponse = BaseResponse<DataSourceData>;
 pub type ConnectionTestResponse = BaseResponse<ConnectionTest>;
+pub type SourceTablesResponse = BaseResponse<SourceTables>;
 
 #[cfg(test)]
 mod tests {
@@ -117,6 +177,22 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(source.project_id, None);
+    }
+
+    #[test]
+    fn view_without_ingested_tables_means_no_table() {
+        let view: DataSourceView = serde_json::from_value(serde_json::json!({
+            "id": "01a11ed5",
+            "name": "orders",
+            "engine": "postgres",
+            "connection": {
+                "host": "db", "port": 5432, "username": "u", "password": "p", "database": "d"
+            },
+            "project_id": null,
+            "registered_at_unix": 0,
+        }))
+        .unwrap();
+        assert!(view.ingested_tables.is_empty());
     }
 
     #[test]

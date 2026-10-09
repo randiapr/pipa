@@ -3,7 +3,8 @@
 
 use leptos::prelude::*;
 
-use crate::view::STATUS_TOAST_DURATION;
+use crate::components::{Badge, Card, CardActions, CardTitle, Tone};
+use crate::view::{StatusToast, auto_dismiss};
 use crate::viewmodel::{AppViewModel, SessionViewModel};
 
 #[component]
@@ -15,13 +16,7 @@ pub fn Landing() -> impl IntoView {
         vm.projects.refresh();
         vm.sources.refresh_unscoped();
     });
-
-    // Auto-dismiss the status toast so it doesn't linger on screen forever.
-    Effect::new(move |_| {
-        if vm.status.get().is_some() {
-            set_timeout(move || vm.status.set(None), STATUS_TOAST_DURATION);
-        }
-    });
+    auto_dismiss(vm.status);
 
     view! {
         <div class="flex flex-col gap-6">
@@ -32,37 +27,23 @@ pub fn Landing() -> impl IntoView {
                 </p>
             </div>
 
-            {move || {
-                vm.status
-                    .get()
-                    .map(|msg| {
-                        view! {
-                            <div class="toast toast-top toast-end">
-                                <div role="alert" class=msg.alert_class()>
-                                    <span>{msg.text().to_string()}</span>
-                                </div>
-                            </div>
-                        }
-                    })
-            }}
+            <StatusToast status=vm.status />
 
             <Show
                 when=move || !vm.projects.list.items.get().is_empty()
                 fallback=|| {
                     view! {
-                        <div class="card card-border bg-base-100 shadow-xl">
-                            <div class="card-body items-center text-center">
-                                <h2 class="card-title">"No projects yet"</h2>
-                                <p class="text-base-content/70">
-                                    "Create a project (or ask an admin to assign you one) to start grouping data sources."
-                                </p>
-                                <div class="card-actions">
-                                    <a class="btn btn-primary" href="/projects">
-                                        "Go to projects"
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
+                        <Card class="shadow-xl" body_class="items-center text-center">
+                            <CardTitle>"No projects yet"</CardTitle>
+                            <p class="text-base-content/70">
+                                "Create a project (or ask an admin to assign you one) to start grouping data sources."
+                            </p>
+                            <CardActions class="">
+                                <a class="btn btn-primary" href="/projects">
+                                    "Go to projects"
+                                </a>
+                            </CardActions>
+                        </Card>
                     }
                 }
             >
@@ -99,28 +80,22 @@ fn ProjectCard(
             .filter(|source| source.project_id.as_deref() == Some(id.as_str()))
             .count()
     };
+    let description = description.unwrap_or_else(|| "No description".to_string());
 
     view! {
-        <div
-            class="card card-border bg-base-100 shadow-xl"
-            class=("border-primary", is_selected)
-        >
-            <div class="card-body">
-                <h2 class="card-title">{name}</h2>
-                <p class="text-base-content/70">
-                    {description.unwrap_or_else(|| "No description".to_string())}
-                </p>
-                <div class="badge badge-neutral">{move || format!("{} data source(s)", source_count())}</div>
-                <div class="card-actions justify-end">
-                    <a
-                        class="btn btn-sm btn-primary"
-                        href="/sources"
-                        on:click=move |_| session.select_project(Some(id_for_manage.clone()))
-                    >
-                        "Manage"
-                    </a>
-                </div>
-            </div>
-        </div>
+        <Card class="shadow-xl" highlighted=Signal::derive(is_selected)>
+            <CardTitle>{name}</CardTitle>
+            <p class="text-base-content/70">{description}</p>
+            <Badge tone=Tone::Neutral>{move || format!("{} data source(s)", source_count())}</Badge>
+            <CardActions>
+                <a
+                    class="btn btn-sm btn-primary"
+                    href="/sources"
+                    on:click=move |_| session.select_project(Some(id_for_manage.clone()))
+                >
+                    "Manage"
+                </a>
+            </CardActions>
+        </Card>
     }
 }
