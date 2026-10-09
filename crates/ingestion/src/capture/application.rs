@@ -1,17 +1,23 @@
-//! Orchestration layer driving a [`CdcSource`] and an [`IcebergWriter`] together: computes a
-//! safe resume position on startup, batches captured events per target table, and only
-//! advances the source's own WAL checkpoint (via [`ChangeStream::confirm`]) after a batch has
-//! durably committed to Iceberg.
+//! Orchestration layer driving a [`CdcSource`] and an [`IcebergWriter`] together: batches
+//! captured events per target table, commits them, and only advances the source's own WAL
+//! checkpoint (via [`ChangeStream::confirm`]) over data that has durably landed in Iceberg.
 //!
-//! This is the piece `capture/mod.rs` used to describe as future work before an Iceberg write
-//! path existed. See the root `CLAUDE.md`'s `pipa-ingestion::capture` architecture section for
-//! the exactly-once design this implements: the checkpoint is a per-table high-watermark
-//! position stored *in* the Iceberg snapshot each commit produces (see
-//! [`crate::write::domain::IcebergWriter`]), not a separate side channel — so a crash can
-//! never leave the checkpoint and the data it describes out of sync with each other.
+//! See the root `CLAUDE.md`'s `pipa-ingestion::capture` architecture section for the
+//! exactly-once design this implements. Everything here is ordered by *commit* position
+//! ([`ChangeEvent::commit_position`]), the order transactions are delivered in — never by a
+//! change's own position, which goes backwards whenever transactions overlap:
+//! - **Whole transactions only.** A batch is flushed only between transactions, so a commit to
+//!   Iceberg never holds part of one.
+//! - **Dedup.** Each table's checkpoint is the commit position of the last transaction it
+//!   landed, stored *in* the Iceberg snapshot of that commit (see
+//!   [`crate::write::domain::IcebergWriter`]), so a crash can never leave the checkpoint and
+//!   its data out of sync. A redelivered transaction at or below it is skipped.
+//! - **Confirm.** The slot is confirmed up to just before the oldest transaction still
+//!   buffered, or — with nothing buffered — as far as the stream has been delivered. An idle
+//!   table never holds it back.
 //!
-//! Scoped to Postgres: position comparison here leans on `pgwire_replication::Lsn`'s `u64`
-//! total order, which a future MySQL GTID-set-based source would not have.
+//! Scoped to Postgres: positions compare as `pgwire_replication::Lsn`'s `u64` total order,
+//! which a future MySQL GTID-set-based source would not have.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,9 +26,16 @@ use std::time::Duration;
 use pgwire_replication::Lsn;
 use tokio::time::Instant;
 
-use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, ChangeStream};
+use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, ChangeStream, StreamItem};
 use crate::datasource::DataSource;
-use crate::write::domain::{IcebergWriter, TargetTable};
+use crate::write::domain::{Checkpoint, IcebergWriter, TargetTable};
+
+/// First delay before reconnecting a capture session that ended; doubles on every consecutive
+/// failure up to [`RECONNECT_BACKOFF_MAX`].
+pub const RECONNECT_BACKOFF_MIN: Duration = Duration::from_secs(1);
+/// Longest delay between reconnect attempts. A session that stayed up at least this long
+/// resets the delay back to [`RECONNECT_BACKOFF_MIN`].
+pub const RECONNECT_BACKOFF_MAX: Duration = Duration::from_secs(60);
 
 /// Batching knobs. The right commit cadence is workload-dependent — frequent commits keep the
 /// crash-replay window small but risk Iceberg's small-file problem (more manifests/data files
@@ -53,21 +66,54 @@ impl BatchConfig {
     }
 }
 
-/// Per-table batching/dedup state. `watermark = None` means "no confirmed baseline for this
-/// table yet" — covering both a genuinely fresh table (dedup should let everything through)
-/// and a transient readback failure (dedup and the global confirm floor both fail safe by
-/// treating it the same as fresh: never skip, never let the global checkpoint advance past
-/// it).
+/// A table's committed checkpoint, parsed. `None` (in [`TableState::watermark`]) means nothing
+/// was ever committed to the table, or its checkpoint couldn't be read: nothing is skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Watermark {
+    /// Commit position of the last transaction landed.
+    Commit(u64),
+    /// Change position of the last event landed by a pre-commit-position version
+    /// ([`Checkpoint::LegacyChange`]): events are compared by their own change position until
+    /// the table's next commit.
+    LegacyChange(u64),
+}
+
+impl Watermark {
+    /// Whether `event` (whose commit position is `commit`) is already in the table.
+    fn covers(self, event: &ChangeEvent, commit: u64) -> bool {
+        match self {
+            Watermark::Commit(watermark) => commit <= watermark,
+            Watermark::LegacyChange(watermark) => {
+                parse_position(&event.position).is_ok_and(|position| position <= watermark)
+            }
+        }
+    }
+}
+
+/// Per-table batching/dedup state.
 struct TableState {
     target: TargetTable,
-    watermark: Option<u64>,
-    pending: Vec<ChangeEvent>,
+    watermark: Option<Watermark>,
+    /// Events waiting to be committed, each with its parsed commit position, in order.
+    pending: Vec<(u64, ChangeEvent)>,
     last_flush: Instant,
 }
 
+/// How far one capture session has got: what the stream has delivered and what has been
+/// confirmed back to the source.
+#[derive(Default)]
+struct SessionProgress {
+    /// Inside a transaction: a change arrived and its transaction's `Progress` hasn't yet.
+    in_transaction: bool,
+    /// The highest `Progress` position seen: every transaction committed before it has been
+    /// delivered in full.
+    delivered: Option<u64>,
+    /// The last position sent on `confirm`.
+    confirmed: Option<u64>,
+}
+
 /// Drives capture + write for one data source. Constructed once per Postgres/MySQL adapter and
-/// writer pair; `run` is spawned per registered source, mirroring how `main.rs` already spawns
-/// one task per source for `CdcSource` alone.
+/// writer pair; `run` is spawned per registered source.
 pub struct CaptureOrchestrator {
     cdc_source: Arc<dyn CdcSource>,
     writer: Arc<dyn IcebergWriter>,
@@ -87,50 +133,89 @@ impl CaptureOrchestrator {
         }
     }
 
-    /// Drives `source` until its stream ends or errors. Does not retry/reconnect — mirrors the
-    /// original `spawn_capture`'s behavior of logging and returning; a supervising restart
-    /// policy is future work, orthogonal to the exactly-once mechanism itself (a restart is
-    /// just another crash-and-resume, which this design already handles safely).
+    /// Drives `source` for as long as the process runs. Whenever a capture session ends — the
+    /// source dropped the replication connection (e.g. Postgres restarted), the stream failed,
+    /// or setup failed (source or catalog unreachable) — it reconnects after an exponential
+    /// backoff ([`RECONNECT_BACKOFF_MIN`] doubling up to [`RECONNECT_BACKOFF_MAX`], reset after a
+    /// session that stayed up at least [`RECONNECT_BACKOFF_MAX`]).
+    ///
+    /// A reconnect is just another crash-and-resume, which the exactly-once design already
+    /// handles: each session recomputes its resume position from Iceberg, events that were only
+    /// buffered in memory are redelivered from the slot (nothing past them was ever confirmed),
+    /// and redeliveries at or below a table's committed watermark are skipped.
     pub async fn run(&self, source: DataSource) {
-        if let Err(err) = self.run_once(&source).await {
-            tracing::error!(id = %source.id, error = %err, "capture orchestrator stopped");
+        let mut backoff = RECONNECT_BACKOFF_MIN;
+        loop {
+            let started = Instant::now();
+            match self.run_once(&source).await {
+                Ok(()) => tracing::warn!(id = %source.id, "change capture stream ended"),
+                Err(err) => tracing::error!(id = %source.id, error = %err, "change capture failed"),
+            }
+            if started.elapsed() >= RECONNECT_BACKOFF_MAX {
+                backoff = RECONNECT_BACKOFF_MIN;
+            }
+            tracing::info!(id = %source.id, retry_in = ?backoff, "reconnecting change capture");
+            tokio::time::sleep(backoff).await;
+            backoff = (backoff * 2).min(RECONNECT_BACKOFF_MAX);
         }
     }
 
+    /// One capture session: stream from the source's own checkpoint until the stream ends
+    /// (`Ok`) or can't be opened (`Err`). Pending, uncommitted events are dropped with the
+    /// session; nothing past them was confirmed, so the next session gets them again.
+    ///
+    /// The session starts from the source's checkpoint (`resume_from = None`) rather than from
+    /// Iceberg's: the slot is only ever confirmed over durable data, while starting at the
+    /// lowest table checkpoint in Iceberg could pass a transaction that was still buffered for a
+    /// table that doesn't exist in Iceberg yet. Redelivery from the slot is what the per-table
+    /// dedup is for.
     async fn run_once(&self, source: &DataSource) -> Result<(), CaptureError> {
-        let resume_from = self.resume_position(source).await?;
-        tracing::info!(id = %source.id, resume_from = ?resume_from, "starting capture");
-
-        let mut stream = self
-            .cdc_source
-            .stream_changes(source, resume_from.as_deref())
-            .await?;
+        tracing::info!(id = %source.id, "starting capture");
+        // Not needed for capture itself, so a failure only costs readers the current-rows view.
+        if let Err(err) = self.writer.record_key_columns(source).await {
+            tracing::warn!(id = %source.id, error = %err, "could not record target tables' key columns");
+        }
+        let mut stream = self.cdc_source.stream_changes(source, None).await?;
 
         let mut tables: HashMap<TargetTable, TableState> = HashMap::new();
-        let mut last_confirmed: Option<u64> = None;
+        let mut progress = SessionProgress::default();
         let mut ticker = tokio::time::interval(self.batch.max_flush_interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
             tokio::select! {
-                event = stream.events.recv() => {
-                    match event {
-                        Some(Ok(event)) => {
+                item = stream.events.recv() => {
+                    match item {
+                        Some(Ok(StreamItem::Change(event))) => {
+                            progress.in_transaction = true;
                             self.handle_event(source, &mut tables, event).await;
-                            self.confirm_floor(&stream, &tables, &mut last_confirmed).await;
+                        }
+                        Some(Ok(StreamItem::Progress { position })) => {
+                            progress.in_transaction = false;
+                            match parse_position(&position) {
+                                Ok(position) => {
+                                    progress.delivered = Some(
+                                        progress.delivered.map_or(position, |seen| seen.max(position)),
+                                    );
+                                }
+                                Err(err) => {
+                                    tracing::error!(id = %source.id, error = %err, "ignoring an unparseable progress position");
+                                }
+                            }
+                            self.flush_full(source, &mut tables).await;
+                            self.confirm(&stream, &tables, &mut progress).await;
                         }
                         Some(Err(err)) => {
                             tracing::error!(id = %source.id, error = %err, "change capture error");
                         }
-                        None => {
-                            tracing::warn!(id = %source.id, "change capture stream ended");
-                            break;
-                        }
+                        None => break,
                     }
                 }
                 _ = ticker.tick() => {
-                    self.flush_due(source, &mut tables).await;
-                    self.confirm_floor(&stream, &tables, &mut last_confirmed).await;
+                    if !progress.in_transaction {
+                        self.flush_due(source, &mut tables).await;
+                    }
+                    self.confirm(&stream, &tables, &mut progress).await;
                 }
             }
         }
@@ -138,51 +223,25 @@ impl CaptureOrchestrator {
         Ok(())
     }
 
-    /// Computes the safe resume position across every target table this source has ever
-    /// written to: the `min` of their last committed positions, or `None` (fall back to the
-    /// source adapter's own default) if any existing target has never been durably committed
-    /// to — see [`TableState`]'s doc comment for why that's the safe choice.
-    async fn resume_position(&self, source: &DataSource) -> Result<Option<String>, CaptureError> {
-        let targets = self
-            .writer
-            .existing_targets(source)
-            .await
-            .map_err(|err| CaptureError::Checkpoint(err.to_string()))?;
-
-        let mut floor: Option<u64> = None;
-        for target in &targets {
-            let position = self
-                .writer
-                .last_committed_position(target)
-                .await
-                .map_err(|err| CaptureError::Checkpoint(err.to_string()))?;
-
-            let Some(position) = position else {
-                return Ok(None);
-            };
-
-            let parsed = parse_position(&position)?;
-            floor = Some(floor.map_or(parsed, |current| current.min(parsed)));
-        }
-
-        Ok(floor.map(|lsn| Lsn::from(lsn).to_string()))
-    }
-
-    async fn seed_watermark(&self, target: &TargetTable) -> Option<u64> {
-        match self.writer.last_committed_position(target).await {
-            Ok(Some(position)) => match parse_position(&position) {
-                Ok(parsed) => Some(parsed),
-                Err(err) => {
-                    tracing::error!(?target, error = %err, "unparseable committed position readback, treating table as unconfirmed");
-                    None
-                }
-            },
-            Ok(None) => None,
-            Err(err) => {
-                tracing::error!(?target, error = %err, "failed to read back last committed position, treating table as unconfirmed");
-                None
+    async fn seed_watermark(&self, target: &TargetTable) -> Option<Watermark> {
+        let parsed = match self.writer.last_committed_position(target).await {
+            Ok(Some(Checkpoint::Commit(position))) => {
+                parse_position(&position).map(Watermark::Commit)
             }
-        }
+            Ok(Some(Checkpoint::LegacyChange(position))) => {
+                parse_position(&position).map(Watermark::LegacyChange)
+            }
+            Ok(None) => return None,
+            Err(err) => {
+                tracing::error!(?target, error = %err, "failed to read back the table's checkpoint, skipping nothing");
+                return None;
+            }
+        };
+        parsed
+            .inspect_err(|err| {
+                tracing::error!(?target, error = %err, "unparseable table checkpoint, skipping nothing");
+            })
+            .ok()
     }
 
     async fn handle_event(
@@ -193,10 +252,10 @@ impl CaptureOrchestrator {
     ) {
         let target = TargetTable::for_event(source, &event);
 
-        let position = match parse_position(&event.position) {
-            Ok(position) => position,
+        let commit = match parse_position(&event.commit_position) {
+            Ok(commit) => commit,
             Err(err) => {
-                tracing::error!(id = %source.id, error = %err, "dropping event with an unparseable position");
+                tracing::error!(id = %source.id, error = %err, "dropping event with an unparseable commit position");
                 return;
             }
         };
@@ -216,21 +275,29 @@ impl CaptureOrchestrator {
 
         let state = tables.get_mut(&target).expect("just ensured present");
 
-        if let Some(watermark) = state.watermark
-            && position <= watermark
+        if state
+            .watermark
+            .is_some_and(|watermark| watermark.covers(&event, commit))
         {
-            // Already durably committed in a previous run — a redelivery following a crash
-            // between decode and commit, or after a shard reassignment. Drop it silently.
+            // Already durably committed — a redelivery after a crash between commit and
+            // confirm, a reconnect, or a shard reassignment.
             return;
         }
 
-        state.pending.push(event);
+        state.pending.push((commit, event));
+    }
 
-        if state.pending.len() >= self.batch.max_events {
-            self.flush_table(source, state).await;
+    /// Flushes every table holding at least a full batch. Called between transactions only.
+    async fn flush_full(&self, source: &DataSource, tables: &mut HashMap<TargetTable, TableState>) {
+        for state in tables.values_mut() {
+            if state.pending.len() >= self.batch.max_events {
+                self.flush_table(source, state).await;
+            }
         }
     }
 
+    /// Flushes every table whose oldest pending event has waited a full flush interval. Called
+    /// between transactions only.
     async fn flush_due(&self, source: &DataSource, tables: &mut HashMap<TargetTable, TableState>) {
         let now = Instant::now();
         for state in tables.values_mut() {
@@ -242,47 +309,32 @@ impl CaptureOrchestrator {
         }
     }
 
-    /// Commits `state`'s pending batch. On success, advances `state.watermark` to the batch's
-    /// high-watermark position (its last event — pending events are appended in the WAL's own
-    /// monotonic order, so the last one is always the highest). On failure, leaves `pending`
-    /// and `watermark` untouched so the batch is retried on the next flush trigger.
     async fn flush_table(&self, source: &DataSource, state: &mut TableState) {
-        if state.pending.is_empty() {
-            state.last_flush = Instant::now();
+        let Some(&(high_watermark, _)) = state.pending.last() else {
             return;
-        }
-
-        let high_watermark_position = state
+        };
+        let events: Vec<ChangeEvent> = state
             .pending
-            .last()
-            .expect("checked non-empty above")
-            .position
-            .clone();
+            .iter()
+            .map(|(_, event)| event.clone())
+            .collect();
 
         match self
             .writer
             .commit_batch(
                 source,
                 &state.target,
-                &state.pending,
-                &high_watermark_position,
+                &events,
+                &Lsn::from(high_watermark).to_string(),
             )
             .await
         {
             Ok(()) => {
-                match parse_position(&high_watermark_position) {
-                    Ok(parsed) => state.watermark = Some(parsed),
-                    Err(err) => tracing::error!(
-                        id = %source.id,
-                        target = ?state.target,
-                        error = %err,
-                        "committed batch but couldn't parse its own high-watermark position back",
-                    ),
-                }
+                state.watermark = Some(Watermark::Commit(high_watermark));
                 tracing::info!(
                     id = %source.id,
                     target = ?state.target,
-                    events = state.pending.len(),
+                    events = events.len(),
                     "committed batch to Iceberg",
                 );
                 state.pending.clear();
@@ -299,41 +351,35 @@ impl CaptureOrchestrator {
         }
     }
 
-    /// Sends the `min` watermark across every table touched this run as the new confirm
-    /// position — unless at least one table has no confirmed baseline yet (`watermark ==
-    /// None`), in which case nothing is sent: advancing the WAL past a table with events only
-    /// in memory would let Postgres discard WAL the process hasn't durably landed anywhere. A
-    /// table that hasn't been touched at all this run doesn't block the floor — the source
-    /// stream delivers events in strictly increasing position order, so any table's first
-    /// event from here on can only have a position at or after whatever's already confirmed.
+    /// Confirms the furthest position whose data is all durable, if it moved:
+    /// - with events buffered, just before the oldest buffered transaction's commit — every
+    ///   transaction committed before it was delivered earlier and is either in Iceberg or was
+    ///   skipped as already there;
+    /// - with nothing buffered, the furthest `Progress` position.
     ///
-    /// Only sends when the floor has actually advanced since the last send (`last_confirmed`)
-    /// — recomputing and resending the same value on every event would be harmless (the
-    /// adapter's own checkpoint update is documented as monotonic and cheap) but wasteful.
-    async fn confirm_floor(
+    /// Tables with nothing buffered don't factor in, however old their last commit: an idle
+    /// table must not keep the source from releasing WAL.
+    async fn confirm(
         &self,
         stream: &ChangeStream,
         tables: &HashMap<TargetTable, TableState>,
-        last_confirmed: &mut Option<u64>,
+        progress: &mut SessionProgress,
     ) {
-        if tables.is_empty() {
-            return;
-        }
-
-        let mut floor: Option<u64> = None;
-        for state in tables.values() {
-            match state.watermark {
-                Some(watermark) => {
-                    floor = Some(floor.map_or(watermark, |current| current.min(watermark)))
-                }
+        let oldest_buffered = tables
+            .values()
+            .filter_map(|state| state.pending.first().map(|&(commit, _)| commit))
+            .min();
+        let floor = match oldest_buffered {
+            Some(commit) => commit.saturating_sub(1),
+            None => match progress.delivered {
+                Some(delivered) => delivered,
                 None => return,
-            }
-        }
-
-        let Some(floor) = floor else {
-            return;
+            },
         };
-        if *last_confirmed == Some(floor) {
+        if progress
+            .confirmed
+            .is_some_and(|confirmed| floor <= confirmed)
+        {
             return;
         }
 
@@ -343,7 +389,7 @@ impl CaptureOrchestrator {
             .await
             .is_ok()
         {
-            *last_confirmed = Some(floor);
+            progress.confirmed = Some(floor);
         }
     }
 }
@@ -382,39 +428,60 @@ mod tests {
         }
     }
 
-    fn test_event(position: u64) -> ChangeEvent {
+    fn lsn(position: u64) -> String {
+        Lsn::from(position).to_string()
+    }
+
+    /// A change to `table` at change position `position`, in the transaction committed at
+    /// `commit`.
+    fn change(table: &str, position: u64, commit: u64) -> ChangeEvent {
         ChangeEvent {
             schema: "public".to_string(),
-            table: "orders".to_string(),
+            table: table.to_string(),
             operation: Operation::Insert { after: vec![] },
-            position: Lsn::from(position).to_string(),
+            position: lsn(position),
+            commit_position: lsn(commit),
             commit_timestamp_unix_micros: 0,
         }
     }
 
-    /// A [`CdcSource`] that replays a fixed list of events once, records the `resume_from` it
-    /// was given, and forwards whatever the orchestrator sends on `confirm` into a shared
-    /// `Vec` the test can assert against.
+    fn item(event: &ChangeEvent) -> StreamItem {
+        StreamItem::Change(event.clone())
+    }
+
+    fn progress(position: u64) -> StreamItem {
+        StreamItem::Progress {
+            position: lsn(position),
+        }
+    }
+
+    fn batch(max_events: usize) -> BatchConfig {
+        BatchConfig {
+            max_events,
+            max_flush_interval: Duration::from_secs(3600),
+        }
+    }
+
+    /// A [`CdcSource`] that plays a fixed list of items once, records the `resume_from` it was
+    /// given, and collects whatever the orchestrator sends on `confirm`.
     struct FakeCdcSource {
-        events: Mutex<Option<Vec<ChangeEvent>>>,
-        resume_from: Mutex<Option<String>>,
+        items: Mutex<Option<Vec<StreamItem>>>,
+        resume_from: Mutex<Option<Option<String>>>,
         confirms: Arc<Mutex<Vec<String>>>,
-        /// The confirm-draining task spawned by `stream_changes`. `join` lets a test wait for
-        /// it to fully drain `confirm_rx` (it only exits once the orchestrator's `ChangeStream`
-        /// — and with it, `confirm_tx` — is dropped) before asserting on `confirms`; otherwise
-        /// asserting right after `CaptureOrchestrator::run` returns races the drain, since nothing
-        /// requires a spawned task to have been polled yet by then.
+        /// The task playing the items and draining `confirm`. It only exits once the
+        /// orchestrator drops its `ChangeStream`, so `join` lets a test wait until every
+        /// confirm has been collected.
         task: Mutex<Option<tokio::task::JoinHandle<()>>>,
     }
 
     impl FakeCdcSource {
-        fn new(events: Vec<ChangeEvent>, confirms: Arc<Mutex<Vec<String>>>) -> Self {
-            Self {
-                events: Mutex::new(Some(events)),
+        fn new(items: Vec<StreamItem>) -> Arc<Self> {
+            Arc::new(Self {
+                items: Mutex::new(Some(items)),
                 resume_from: Mutex::new(None),
-                confirms,
+                confirms: Arc::new(Mutex::new(Vec::new())),
                 task: Mutex::new(None),
-            }
+            })
         }
 
         async fn join(&self) {
@@ -422,8 +489,12 @@ mod tests {
             if let Some(handle) = handle {
                 handle
                     .await
-                    .expect("confirm-draining task should not panic");
+                    .expect("the fake source's task should not panic");
             }
+        }
+
+        fn confirms(&self) -> Vec<String> {
+            self.confirms.lock().unwrap().clone()
         }
     }
 
@@ -434,9 +505,9 @@ mod tests {
             _source: &DataSource,
             resume_from: Option<&str>,
         ) -> Result<ChangeStream, CaptureError> {
-            *self.resume_from.lock().unwrap() = resume_from.map(|value| value.to_string());
-            let events = self
-                .events
+            *self.resume_from.lock().unwrap() = Some(resume_from.map(str::to_string));
+            let items = self
+                .items
                 .lock()
                 .unwrap()
                 .take()
@@ -445,16 +516,13 @@ mod tests {
             let (tx, rx) = mpsc::channel(64);
             let (confirm_tx, mut confirm_rx) = mpsc::channel::<String>(64);
             let confirms = Arc::clone(&self.confirms);
-
             let handle = tokio::spawn(async move {
-                for event in events {
-                    if tx.send(Ok(event)).await.is_err() {
+                for item in items {
+                    if tx.send(Ok(item)).await.is_err() {
                         return;
                     }
                 }
-                // All events sent: drop `tx` so the orchestrator's `events.recv()` observes
-                // end-of-stream and returns — but keep draining `confirm_rx` first so a final,
-                // event-triggered flush's confirm isn't lost as the task tears down.
+                // End the stream, but keep collecting confirms until the orchestrator is gone.
                 drop(tx);
                 while let Some(position) = confirm_rx.recv().await {
                     confirms.lock().unwrap().push(position);
@@ -472,13 +540,22 @@ mod tests {
     /// `(committed events, high-watermark position)` per call to `commit_batch`.
     type RecordedCommits = HashMap<TargetTable, Vec<(Vec<ChangeEvent>, String)>>;
 
-    /// An [`IcebergWriter`] that commits into an in-memory map instead of a real Iceberg
-    /// catalog, so the orchestrator's batching/dedup/checkpoint logic can be tested without
-    /// Postgres or RustFS.
+    /// An [`IcebergWriter`] committing into memory, standing in for durable Iceberg state.
     #[derive(Default)]
     struct FakeIcebergWriter {
         commits: Mutex<RecordedCommits>,
-        watermarks: Mutex<HashMap<TargetTable, String>>,
+        checkpoints: Mutex<HashMap<TargetTable, Checkpoint>>,
+    }
+
+    impl FakeIcebergWriter {
+        fn commits(&self, target: &TargetTable) -> Vec<(Vec<ChangeEvent>, String)> {
+            self.commits
+                .lock()
+                .unwrap()
+                .get(target)
+                .cloned()
+                .unwrap_or_default()
+        }
     }
 
     #[async_trait]
@@ -496,169 +573,352 @@ mod tests {
                 .entry(target.clone())
                 .or_default()
                 .push((events.to_vec(), high_watermark_position.to_string()));
-            self.watermarks
-                .lock()
-                .unwrap()
-                .insert(target.clone(), high_watermark_position.to_string());
+            self.checkpoints.lock().unwrap().insert(
+                target.clone(),
+                Checkpoint::Commit(high_watermark_position.to_string()),
+            );
             Ok(())
         }
 
         async fn last_committed_position(
             &self,
             target: &TargetTable,
-        ) -> Result<Option<String>, WriteError> {
-            Ok(self.watermarks.lock().unwrap().get(target).cloned())
+        ) -> Result<Option<Checkpoint>, WriteError> {
+            Ok(self.checkpoints.lock().unwrap().get(target).cloned())
         }
 
-        async fn existing_targets(
-            &self,
-            _source: &DataSource,
-        ) -> Result<Vec<TargetTable>, WriteError> {
-            Ok(self.watermarks.lock().unwrap().keys().cloned().collect())
+        async fn record_key_columns(&self, _source: &DataSource) -> Result<(), WriteError> {
+            Ok(())
         }
     }
 
-    /// The core exactly-once property: a table's already-committed events must never be
-    /// recommitted, even when the capture adapter redelivers them (simulating Postgres
-    /// replaying from the last confirmed LSN after a crash/restart) — proven across two
-    /// separate `CaptureOrchestrator` runs sharing one `FakeIcebergWriter` (standing in for
-    /// durable Iceberg state) but fresh `FakeCdcSource`s each time (standing in for a fresh
-    /// WAL replay).
+    async fn run(
+        source: &DataSource,
+        writer: &Arc<FakeIcebergWriter>,
+        config: BatchConfig,
+        items: Vec<StreamItem>,
+    ) -> Arc<FakeCdcSource> {
+        let cdc = FakeCdcSource::new(items);
+        CaptureOrchestrator::new(cdc.clone(), writer.clone(), config)
+            .run_once(source)
+            .await
+            .unwrap();
+        cdc.join().await;
+        cdc
+    }
+
+    /// The core exactly-once property, across a "crash": a transaction committed in one session
+    /// is skipped when redelivered in the next, and one cut off mid-way is committed whole.
     #[tokio::test]
-    async fn redelivered_events_below_watermark_are_not_recommitted() {
+    async fn redelivered_transactions_are_not_recommitted() {
         let source = test_source();
         let writer = Arc::new(FakeIcebergWriter::default());
-        let batch = BatchConfig {
-            max_events: 2,
-            max_flush_interval: Duration::from_secs(3600),
-        };
+        let (a, b) = (change("orders", 1, 10), change("orders", 2, 10));
+        let (c, d) = (change("orders", 3, 20), change("orders", 4, 20));
+        let target = TargetTable::for_event(&source, &a);
 
-        let events: Vec<ChangeEvent> = (1..=4).map(test_event).collect();
+        // Session 1 stops part-way through transaction 20.
+        let cdc = run(
+            &source,
+            &writer,
+            batch(1),
+            vec![item(&a), item(&b), progress(11), item(&c)],
+        )
+        .await;
+        assert_eq!(*cdc.resume_from.lock().unwrap(), Some(None));
+        assert_eq!(
+            writer.commits(&target),
+            vec![(vec![a.clone(), b.clone()], lsn(10))]
+        );
+        assert_eq!(cdc.confirms(), vec![lsn(11)]);
+
+        // Session 2 gets everything again — more than a slot would redeliver.
+        let cdc = run(
+            &source,
+            &writer,
+            batch(1),
+            vec![
+                item(&a),
+                item(&b),
+                progress(11),
+                item(&c),
+                item(&d),
+                progress(21),
+            ],
+        )
+        .await;
+        let commits = writer.commits(&target);
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[1], (vec![c, d], lsn(20)));
+        assert_eq!(cdc.confirms(), vec![lsn(11), lsn(21)]);
+    }
+
+    /// Transactions overlap: one that started first (lower change position) commits after
+    /// another that has already landed. Dedup compares commit positions, so it is kept.
+    #[tokio::test]
+    async fn a_transaction_committing_after_an_overlapping_one_is_kept() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let committed_first = change("customers", 110, 200);
+        let started_first = change("customers", 100, 300);
+        let target = TargetTable::for_event(&source, &started_first);
+
+        run(
+            &source,
+            &writer,
+            batch(1),
+            vec![
+                item(&committed_first),
+                progress(201),
+                item(&started_first),
+                progress(301),
+            ],
+        )
+        .await;
+
+        assert_eq!(
+            writer.commits(&target),
+            vec![
+                (vec![committed_first], lsn(200)),
+                (vec![started_first], lsn(300)),
+            ]
+        );
+    }
+
+    /// A transaction bigger than a batch is still committed in one piece, at its end.
+    #[tokio::test]
+    async fn a_transaction_is_never_split_across_commits() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let events: Vec<ChangeEvent> = (1..=3).map(|n| change("orders", n, 10)).collect();
         let target = TargetTable::for_event(&source, &events[0]);
 
-        // Run 1: only the first two events have arrived so far.
-        let confirms_1 = Arc::new(Mutex::new(Vec::new()));
-        let cdc_source_1 = Arc::new(FakeCdcSource::new(
-            events[0..2].to_vec(),
-            Arc::clone(&confirms_1),
-        ));
-        let orchestrator_1 = CaptureOrchestrator::new(cdc_source_1.clone(), writer.clone(), batch);
-        orchestrator_1.run(source.clone()).await;
-        cdc_source_1.join().await;
+        let mut items: Vec<StreamItem> = events.iter().map(item).collect();
+        items.push(progress(11));
+        run(&source, &writer, batch(2), items).await;
 
-        assert_eq!(*cdc_source_1.resume_from.lock().unwrap(), None);
-        let commits_after_run_1 = writer
-            .commits
-            .lock()
-            .unwrap()
-            .get(&target)
-            .cloned()
-            .unwrap();
-        assert_eq!(commits_after_run_1.len(), 1);
-        assert_eq!(commits_after_run_1[0].0, events[0..2]);
-        assert_eq!(commits_after_run_1[0].1, events[1].position);
-        assert_eq!(
-            *confirms_1.lock().unwrap(),
-            vec![events[1].position.clone()]
+        assert_eq!(writer.commits(&target), vec![(events, lsn(10))]);
+    }
+
+    /// A [`CdcSource`] whose stream the test feeds by hand.
+    struct ManualCdcSource {
+        stream: Mutex<Option<ChangeStream>>,
+    }
+
+    #[async_trait]
+    impl CdcSource for ManualCdcSource {
+        async fn stream_changes(
+            &self,
+            _source: &DataSource,
+            _resume_from: Option<&str>,
+        ) -> Result<ChangeStream, CaptureError> {
+            Ok(self.stream.lock().unwrap().take().expect("one session"))
+        }
+    }
+
+    /// The flush timer doesn't fire part-way through a transaction.
+    #[tokio::test(start_paused = true)]
+    async fn the_flush_timer_waits_for_the_transaction_to_end() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let (tx, rx) = mpsc::channel(8);
+        let (confirm_tx, _confirm_rx) = mpsc::channel(8);
+        let cdc = Arc::new(ManualCdcSource {
+            stream: Mutex::new(Some(ChangeStream {
+                events: rx,
+                confirm: confirm_tx,
+            })),
+        });
+        let interval = Duration::from_secs(5);
+        let orchestrator = CaptureOrchestrator::new(
+            cdc,
+            writer.clone(),
+            BatchConfig {
+                max_events: 100,
+                max_flush_interval: interval,
+            },
+        );
+        let session_source = source.clone();
+        let session = tokio::spawn(async move { orchestrator.run_once(&session_source).await });
+
+        let (a, b) = (change("orders", 1, 10), change("orders", 2, 10));
+        let target = TargetTable::for_event(&source, &a);
+        tx.send(Ok(item(&a))).await.unwrap();
+        tokio::time::sleep(interval * 3).await;
+        assert!(
+            writer.commits(&target).is_empty(),
+            "flushed mid-transaction"
         );
 
-        // Run 2 ("restart"): the fake adapter redelivers *all four* events, including the two
-        // already committed in run 1 — worse than a real Postgres slot would ever do (it would
-        // only redeliver from the confirmed LSN onward), which makes this the stress case for
-        // the orchestrator's own per-table dedup rather than relying on the adapter to help.
-        let confirms_2 = Arc::new(Mutex::new(Vec::new()));
-        let cdc_source_2 = Arc::new(FakeCdcSource::new(events.clone(), Arc::clone(&confirms_2)));
-        let orchestrator_2 = CaptureOrchestrator::new(cdc_source_2.clone(), writer.clone(), batch);
-        orchestrator_2.run(source.clone()).await;
-        cdc_source_2.join().await;
+        tx.send(Ok(item(&b))).await.unwrap();
+        tx.send(Ok(progress(11))).await.unwrap();
+        tokio::time::sleep(interval * 2).await;
+        assert_eq!(writer.commits(&target), vec![(vec![a, b], lsn(10))]);
 
-        // The orchestrator computed its resume position from the writer's durable state.
-        assert_eq!(
-            *cdc_source_2.resume_from.lock().unwrap(),
-            Some(events[1].position.clone())
-        );
+        drop(tx);
+        session.await.unwrap().unwrap();
+    }
 
-        // Only the two genuinely new events (positions 3 and 4) were committed this run — the
-        // redelivered duplicates of positions 1 and 2 were dropped, not recommitted.
-        let commits_after_run_2 = writer
-            .commits
+    /// A table that stopped changing doesn't hold the confirm at its last commit.
+    #[tokio::test]
+    async fn an_idle_table_does_not_hold_back_the_confirm() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let cdc = run(
+            &source,
+            &writer,
+            batch(1),
+            vec![
+                item(&change("orders", 1, 10)),
+                progress(11),
+                item(&change("customers", 2, 20)),
+                progress(21),
+                item(&change("customers", 3, 30)),
+                progress(31),
+            ],
+        )
+        .await;
+
+        assert_eq!(cdc.confirms(), vec![lsn(11), lsn(21), lsn(31)]);
+    }
+
+    /// While a transaction is buffered, the confirm stays below its commit position, so the
+    /// source keeps the WAL it needs to redeliver it.
+    #[tokio::test]
+    async fn the_confirm_stays_below_the_oldest_buffered_transaction() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let cdc = run(
+            &source,
+            &writer,
+            batch(2),
+            vec![
+                // orders flushes (2 events) -> nothing buffered -> confirm 11.
+                item(&change("orders", 1, 10)),
+                item(&change("orders", 2, 10)),
+                progress(11),
+                // customers buffers transaction 20 -> confirm 19.
+                item(&change("customers", 3, 20)),
+                progress(21),
+                // orders buffers transaction 30; 20 is still the oldest -> no new confirm.
+                item(&change("orders", 4, 30)),
+                progress(31),
+                // customers flushes; orders' transaction 30 is now the oldest -> confirm 29.
+                item(&change("customers", 5, 40)),
+                progress(41),
+            ],
+        )
+        .await;
+
+        assert_eq!(cdc.confirms(), vec![lsn(11), lsn(19), lsn(29)]);
+    }
+
+    /// Progress alone (a source whose captured tables don't change) still advances the
+    /// confirm, so the source can release WAL.
+    #[tokio::test]
+    async fn progress_alone_advances_the_confirm() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let cdc = run(
+            &source,
+            &writer,
+            batch(1),
+            vec![progress(100), progress(200)],
+        )
+        .await;
+
+        assert_eq!(cdc.confirms(), vec![lsn(100), lsn(200)]);
+    }
+
+    /// A table last committed by a version that checkpointed change positions is deduplicated
+    /// by change position until its next commit, which stores a commit position.
+    #[tokio::test]
+    async fn a_legacy_change_position_checkpoint_is_still_honored() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let landed = change("orders", 90, 150);
+        let new = change("orders", 120, 150);
+        let target = TargetTable::for_event(&source, &landed);
+        writer
+            .checkpoints
             .lock()
             .unwrap()
-            .get(&target)
-            .cloned()
-            .unwrap();
-        assert_eq!(commits_after_run_2.len(), 2);
-        assert_eq!(commits_after_run_2[1].0, events[2..4]);
-        assert_eq!(commits_after_run_2[1].1, events[3].position);
-        // The first confirm restates the resume floor on this run's fresh connection (harmless
-        // — monotonic/idempotent per the adapter's own contract); the second reflects the new
-        // high watermark after committing positions 3–4.
+            .insert(target.clone(), Checkpoint::LegacyChange(lsn(100)));
+
+        run(
+            &source,
+            &writer,
+            batch(1),
+            vec![item(&landed), item(&new), progress(151)],
+        )
+        .await;
+
+        assert_eq!(writer.commits(&target), vec![(vec![new], lsn(150))]);
         assert_eq!(
-            *confirms_2.lock().unwrap(),
-            vec![events[1].position.clone(), events[3].position.clone()]
+            writer.checkpoints.lock().unwrap().get(&target),
+            Some(&Checkpoint::Commit(lsn(150)))
         );
     }
 
-    /// Two tables, interleaved so both have events sitting in an unflushed buffer before
-    /// either one flushes: the confirm floor must stay withheld while `customers` still has
-    /// pending, unflushed data, even after `orders` has already committed — advancing past
-    /// `orders`' position would let Postgres discard WAL covering `customers`' still-buffered
-    /// event 2, which exists only in memory at that point. Once `customers` also flushes, the
-    /// floor is free to advance to the lower of the two watermarks.
-    #[tokio::test]
-    async fn confirm_is_withheld_while_a_touched_table_has_unflushed_data() {
+    /// A [`CdcSource`] whose sessions go wrong in a scripted order: the first `stream_changes`
+    /// call fails to connect, the second returns a stream that ends straight away (the source
+    /// dropping the connection), and every later one stays open. Records when each call happened
+    /// and the `resume_from` it was given.
+    #[derive(Default)]
+    struct FlakyCdcSource {
+        calls: Mutex<Vec<(Instant, Option<String>)>>,
+        open_streams: Mutex<Vec<mpsc::Sender<Result<StreamItem, CaptureError>>>>,
+        reconnected: tokio::sync::Notify,
+    }
+
+    #[async_trait]
+    impl CdcSource for FlakyCdcSource {
+        async fn stream_changes(
+            &self,
+            _source: &DataSource,
+            resume_from: Option<&str>,
+        ) -> Result<ChangeStream, CaptureError> {
+            let call = {
+                let mut calls = self.calls.lock().unwrap();
+                calls.push((Instant::now(), resume_from.map(str::to_string)));
+                calls.len()
+            };
+            if call == 1 {
+                return Err(CaptureError::Connect("connection refused".to_string()));
+            }
+
+            let (tx, rx) = mpsc::channel(1);
+            let (confirm_tx, _confirm_rx) = mpsc::channel(1);
+            if call == 2 {
+                drop(tx);
+            } else {
+                self.open_streams.lock().unwrap().push(tx);
+                self.reconnected.notify_one();
+            }
+            Ok(ChangeStream {
+                events: rx,
+                confirm: confirm_tx,
+            })
+        }
+    }
+
+    /// A failed connect and a dropped stream both lead to a reconnect, after a backoff that
+    /// doubles, and every session starts from the source's own checkpoint.
+    #[tokio::test(start_paused = true)]
+    async fn reconnects_with_backoff_after_a_session_ends() {
         let source = test_source();
         let writer = Arc::new(FakeIcebergWriter::default());
-        let batch = BatchConfig {
-            max_events: 2,
-            max_flush_interval: Duration::from_secs(3600),
-        };
+        let cdc = Arc::new(FlakyCdcSource::default());
+        let orchestrator = CaptureOrchestrator::new(cdc.clone(), writer, batch(10));
 
-        let mut customers_event_2 = test_event(2);
-        customers_event_2.table = "customers".to_string();
-        let mut customers_event_4 = test_event(4);
-        customers_event_4.table = "customers".to_string();
+        let task = tokio::spawn(async move { orchestrator.run(source).await });
+        cdc.reconnected.notified().await;
+        task.abort();
 
-        // Order: orders(1), customers(2), orders(3) [orders now at 2 pending -> flushes],
-        // customers(4) [customers now at 2 pending -> flushes].
-        let events = vec![
-            test_event(1),
-            customers_event_2.clone(),
-            test_event(3),
-            customers_event_4.clone(),
-        ];
-        let orders_target = TargetTable::for_event(&source, &events[0]);
-        let customers_target = TargetTable::for_event(&source, &customers_event_2);
-
-        let confirms = Arc::new(Mutex::new(Vec::new()));
-        let cdc_source = Arc::new(FakeCdcSource::new(events, Arc::clone(&confirms)));
-        let orchestrator = CaptureOrchestrator::new(cdc_source.clone(), writer.clone(), batch);
-        orchestrator.run(source.clone()).await;
-        cdc_source.join().await;
-
-        // Both tables committed once each...
-        assert_eq!(
-            writer
-                .commits
-                .lock()
-                .unwrap()
-                .get(&orders_target)
-                .unwrap()
-                .len(),
-            1
-        );
-        assert_eq!(
-            writer
-                .commits
-                .lock()
-                .unwrap()
-                .get(&customers_target)
-                .unwrap()
-                .len(),
-            1
-        );
-        // ...but only one confirm was ever sent, after `customers` finally flushed too — not
-        // right after `orders` flushed, while `customers`' event 2 was still only in memory.
-        assert_eq!(*confirms.lock().unwrap(), vec![Lsn::from(3).to_string()]);
+        let calls = cdc.calls.lock().unwrap();
+        assert_eq!(calls.len(), 3);
+        assert_eq!(calls[1].0 - calls[0].0, RECONNECT_BACKOFF_MIN);
+        assert_eq!(calls[2].0 - calls[1].0, RECONNECT_BACKOFF_MIN * 2);
+        assert!(calls.iter().all(|(_, resume_from)| resume_from.is_none()));
     }
 }

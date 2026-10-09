@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.2.0] - 2026-10-09
+
+### Added
+
+- The crate is now also a library (`pipa_catalog_proxy`): `CatalogProxy` (signing, forwarding,
+  `enable_tables`/`enable_tables_with_retry`, `router`) and the `sigv4` module are public.
+- `CatalogProxy::serve_embedded`: enables S3 Tables on a bucket, then serves the proxy on an
+  ephemeral loopback port inside the calling process and returns the catalog URI to give
+  `iceberg-catalog-rest`. `pipa-backend` and `pipa-ingestion` use it instead of the separate
+  service, so catalog calls no longer cross the network.
+
+### Changed
+
+- The binary is now a thin wrapper over the library; its behavior and configuration are
+  unchanged.
+
 ## [0.1.0] - 2026-10-07
 
 ### Added

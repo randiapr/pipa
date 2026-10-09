@@ -1,6 +1,6 @@
 [package]
 name = "pipa-ingestion"
-version = "0.4.0"
+version = "0.5.0"
 edition.workspace = true
 license.workspace = true
 
@@ -18,6 +18,7 @@ iceberg-storage-opendal.workspace = true
 object_store.workspace = true
 parquet.workspace = true
 pgwire-replication.workspace = true
+pipa-catalog-proxy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
@@ -26,3 +27,6 @@ tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

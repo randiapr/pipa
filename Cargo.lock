@@ -4547,7 +4547,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-backend"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -4562,6 +4562,7 @@ dependencies = [
  "jsonwebtoken",
  "object_store 0.14.2",
  "pipa-api",
+ "pipa-catalog-proxy",
  "serde",
  "serde_json",
  "sqlx",
@@ -4576,7 +4577,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-catalog-proxy"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -4593,7 +4594,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-ingestion"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -4608,6 +4609,7 @@ dependencies = [
  "object_store 0.14.2",
  "parquet",
  "pgwire-replication",
+ "pipa-catalog-proxy",
  "serde",
  "serde_json",
  "sqlx",
@@ -4620,7 +4622,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-ui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "console_error_panic_hook",
  "console_log",

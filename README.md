@@ -16,7 +16,8 @@ A Cargo workspace of five crates, each versioned independently (see each crate's
   Postgres source via logical replication and appends them to Iceberg tables as changelog
   rows (`_op`, `_position`, ... plus the source columns), with effectively-once delivery: the
   checkpoint is committed in the same Iceberg snapshot as the data. A standalone service with
-  no dependency on any other crate here — it reads registered sources directly from the shared
+  no dependency on `pipa-backend` (only on the embedded `pipa-catalog-proxy` signer) — it reads
+  registered sources directly from the shared
   object store, and is designed to run distributed (`INGESTION_SHARD_INDEX`/
   `INGESTION_SHARD_COUNT` split sources across instances).
 - **`pipa-backend`** — the HTTP API: accounts and sign-in (admin/developer/user roles), projects, read-only table browsing, OLTP
@@ -24,10 +25,12 @@ A Cargo workspace of five crates, each versioned independently (see each crate's
   store), plus Apache Iceberg query access (`POST /query`: REST catalog client, DataFusion SQL,
   scoped to the caller's project). Every external caller (the dashboard, any future client)
   talks to this, never to `pipa-ingestion` directly.
-- **`pipa-catalog-proxy`** — a small internal reverse proxy that SigV4-signs requests to
-  RustFS's embedded Iceberg REST catalog, which rejects unsigned ones (`iceberg-catalog-rest`
-  can't sign). The signing is implemented in-house on `hmac`/`sha2`; there is no AWS
-  dependency. Not an external-facing service.
+- **`pipa-catalog-proxy`** — SigV4 signing for RustFS's embedded Iceberg REST catalog, which
+  rejects unsigned requests (`iceberg-catalog-rest` can't sign). A library that `pipa-backend`
+  and `pipa-ingestion` embed in their own process, so catalog calls need no separate service or
+  network hop, plus a binary that runs the same proxy standalone for clients outside this
+  workspace. The signing is implemented in-house on `hmac`/`sha2`; there is no AWS dependency.
+  Not an external-facing service.
 - **`pipa-api`** — the HTTP contract (request/response types, routes) shared by `pipa-backend`
   and `pipa-ui`; builds for both native and wasm32.
 - **`pipa-ui`** — a Leptos dashboard (Tailwind CSS v4 + daisyUI) for signing in and managing
@@ -50,12 +53,6 @@ just local::up      # rustfs + pipa-backend + pipa-ingestion + dashboard, all in
 Open `http://localhost:3000` for the dashboard and `http://localhost:8080/healthz` for the
 API. `just local::log` tails every service's output; `just local::down` stops everything.
 
-`just local::up` does not start `pipa-catalog-proxy`, so locally the Iceberg side (ingestion
-writes and `POST /query`) won't work against RustFS's signed-only catalog until it is running
-and `ICEBERG_CATALOG_URI` points at it, e.g. `CATALOG_PROXY_LISTEN=127.0.0.1:8181 cargo run -p
-pipa-catalog-proxy` plus `ICEBERG_CATALOG_URI=http://localhost:8181/iceberg` for the backend and
-ingestion. The containerized stack below does this for you.
-
 With `just local::up`, sign in as the first admin, `admin` / `admin-password` by default (local-only defaults;
 override with `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD`, and `JWT_SECRET` for the token
 secret). Admins create further accounts on the Users page and assign each non-admin account the
@@ -67,7 +64,7 @@ projects it may access. Roles:
 - **user**: view-only. It can browse the Iceberg tables of its projects (paged, no SQL) but cannot run
   queries or see data sources.
 
-Alternatively, containerized: RustFS, `pipa-catalog-proxy`, `pipa-backend`, two `pipa-ingestion`
+Alternatively, containerized: RustFS, `pipa-backend`, two `pipa-ingestion`
 shards, the dashboard, and an example Postgres source (`localhost:5432`, user/password `pipa`,
 database `testdb`, `wal_level=logical`) to register as a data source:
 
@@ -86,8 +83,9 @@ you can edit; the password needs at least 8 characters). Without `just`, `cp .en
 
 `POST /query` and `pipa-ingestion` talk to RustFS's own embedded Iceberg REST Catalog ("S3 Tables"
 feature). That catalog requires SigV4-signed requests, which `iceberg-catalog-rest` can't send, so
-compose runs `pipa-catalog-proxy` (`catalog`, `crates/catalog-proxy`) in front of it, which also enables
-S3 Tables on the `pipa` bucket at startup — all automatic (see the note at the top of `docker-compose.yml`).
+both embed the `pipa-catalog-proxy` signer (`crates/catalog-proxy`) in their own process and enable
+S3 Tables on the `pipa` bucket at startup — all automatic, locally and in compose, as long as
+`ICEBERG_CATALOG_URI` is left unset (see the note at the top of `docker-compose.yml`).
 
 ## Commands
 
@@ -109,8 +107,8 @@ just build-ui     # production build of the dashboard
 Run `just --list` for the full list (`docker-up`/`docker-down`, `outdated`, `upgrade`, ...).
 
 Environment variables: the compose secrets are in the root `.env.example`, and `pipa-backend`,
-`pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. `pipa-catalog-proxy`'s
-are listed at the top of `crates/catalog-proxy/src/main.rs`.
+`pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. The standalone
+`pipa-catalog-proxy` binary's are listed at the top of `crates/catalog-proxy/src/main.rs`.
 
 ## Contributing
 

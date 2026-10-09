@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
     let query_api = Arc::new(http::QueryApi {
         queries: QueryService::new(
-            IcebergCatalogConfig::from_env(&store_config.endpoint),
+            IcebergCatalogConfig::from_env(&store_config).await?,
             store_config,
         ),
         datasources: datasource_service.clone(),
@@ -215,7 +215,11 @@ mod tests {
             .unwrap();
         let query_api = Arc::new(http::QueryApi {
             queries: QueryService::new(
-                IcebergCatalogConfig::from_env("http://localhost:1"),
+                IcebergCatalogConfig {
+                    name: "pipa".to_string(),
+                    uri: "http://localhost:1/iceberg".to_string(),
+                    warehouse: "pipa".to_string(),
+                },
                 ObjectStoreConfig::from_env(),
             ),
             datasources: datasources.clone(),
@@ -599,6 +603,21 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        // Iceberg metadata tables aren't browsable, for any role.
+        for (who, token) in [("viewer", &viewer), ("admin", &admin)] {
+            for table in ["public__orders$snapshots", "public__orders$manifests"] {
+                let (status, _) = call(
+                    &app,
+                    "POST",
+                    "/tables/rows",
+                    Some(token),
+                    Some(json!({ "project_id": alpha, "source_id": alpha_source, "table": table })),
+                )
+                .await;
+                assert_eq!(status, StatusCode::BAD_REQUEST, "{who} {table}");
+            }
+        }
 
         // Their own project's tables get as far as the (unreachable) catalog.
         let (status, body) = call(

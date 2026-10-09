@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.0] - 2026-10-09
+
+### Added
+
+- Each target table records its source table's row key (replica identity columns, the primary
+  key by default) as the Iceberg table property `pipa.cdc.key_columns` (a JSON array; `[]` for
+  a table without one): on creation, and backfilled for existing tables at the start of every
+  capture session. `pipa-backend` uses it to show current rows from Iceberg alone.
+
+### Changed
+
+- With `ICEBERG_CATALOG_URI` unset (now the default, locally and in compose), ingestion embeds
+  the `pipa-catalog-proxy` signer in its own process on a loopback port and points its catalog
+  client there, instead of going through a separate `catalog` service. It also enables S3 Tables
+  on `RUSTFS_BUCKET` at startup (retrying for about a minute, and failing startup if that never
+  succeeds). Setting `ICEBERG_CATALOG_URI` still selects any other catalog as before. The old
+  unset default, `<RUSTFS_ENDPOINT>/iceberg` unsigned, never worked against RustFS.
+- `pipa-catalog-proxy` is now its one workspace dependency; it still doesn't depend on
+  `pipa-backend`.
+
+### Fixed
+
+- Capture for a source stopped for good when its session ended — e.g. the source Postgres
+  restarted (`Connection reset by peer`) or the source or catalog was unreachable at startup —
+  until the process was restarted. It now reconnects with exponential backoff (1s doubling to
+  60s, reset after a session that stayed up a minute), resuming from the replication slot as on
+  a cold start.
+- SIGTERM (what `docker stop`/`docker compose down` send) was ignored, so containers were only
+  killed after the stop timeout. It now shuts down like Ctrl-C.
+- `_commit_timestamp_us` was 30 years early: Postgres sends commit times as microseconds since
+  2000-01-01, and they were stored unconverted instead of as microseconds since the Unix epoch.
+  Rows written before this fix keep the old values.
+- Overlapping transactions lost data: dedup compared each change's own position with the
+  table's checkpoint, but a transaction that starts first and commits last carries lower change
+  positions than one already landed, so its rows were skipped as "already committed".
+  Checkpoints, dedup and confirms now use the transaction's commit position, and a batch is only
+  committed between transactions so none is ever split. New checkpoints are stored as
+  `pipa.cdc.commit_position`; a table whose last snapshot still carries the old
+  `pipa.cdc.position` is deduplicated the old way until its next commit, so upgrading doesn't
+  duplicate rows. Rows already lost this way are not recovered.
+- A table that stopped changing held the replication slot at its last commit, so the source
+  kept all WAL from there on (and every restart replayed it). The slot is now confirmed up to
+  just below the oldest buffered transaction, or to the latest delivered position when nothing
+  is buffered.
+- The slot never advanced while the source's own tables were idle, even as the server wrote
+  WAL elsewhere. Commits and between-transaction keepalives now count as progress.
+- Startup could skip a transaction that was still buffered for a brand-new table when the
+  previous session stopped: it resumed from the lowest checkpoint in Iceberg, past the slot.
+  Capture now always resumes from the slot's own position.
+
 ## [0.4.0] - 2026-10-07
 
 ### Fixed

@@ -41,11 +41,28 @@ pub struct ChangeEvent {
     pub schema: String,
     pub table: String,
     pub operation: Operation,
-    /// Opaque, source-specific stream position (a Postgres LSN, a MySQL binlog offset, …)
-    /// serialized as text so callers can persist/compare it without depending on the
-    /// source engine's own position type.
+    /// Where this change sits in the source's log (a Postgres change LSN, a MySQL binlog offset,
+    /// …), as text so callers can persist/compare it without depending on the source engine's
+    /// own position type. Orders the changes of one row; written as the `_position` column.
     pub position: String,
+    /// Position of the commit of the transaction this change belongs to (a Postgres commit
+    /// LSN), as text. Transactions are delivered in commit order, so this — not `position` —
+    /// is what checkpoints, dedup and confirms compare: a transaction that started earlier can
+    /// commit later, carrying lower change positions than one already delivered.
+    pub commit_position: String,
     pub commit_timestamp_unix_micros: i64,
+}
+
+/// One item of a [`ChangeStream`], in source order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamItem {
+    /// A captured row change. The changes of one transaction arrive back to back and share a
+    /// `commit_position`.
+    Change(ChangeEvent),
+    /// Every transaction committed before `position` has been delivered in full, and none is
+    /// part-way through. Sent after each transaction and on source heartbeats between
+    /// transactions, so progress can be confirmed even while no captured table changes.
+    Progress { position: String },
 }
 
 /// Errors surfaced while capturing changes from a data source.
@@ -73,7 +90,7 @@ pub enum CaptureError {
 /// [`crate::capture::application::CaptureOrchestrator`], which owns computing a safe confirm
 /// floor across every table a batch of events fans out to.
 pub struct ChangeStream {
-    pub events: mpsc::Receiver<Result<ChangeEvent, CaptureError>>,
+    pub events: mpsc::Receiver<Result<StreamItem, CaptureError>>,
     /// Send the highest position durably persisted so far; the adapter advances the source's
     /// checkpoint only in response, never on decode.
     pub confirm: mpsc::Sender<String>,
@@ -86,11 +103,12 @@ pub struct ChangeStream {
 /// implement without pinning/boxing — the same shape a Debezium-style connector uses.
 #[async_trait]
 pub trait CdcSource: Send + Sync {
-    /// `resume_from`, when `Some`, is the last position the caller durably committed for
-    /// every target this source's stream feeds — read back out of Iceberg itself (see
-    /// [`crate::write::domain::IcebergWriter::last_committed_position`]), not a separate
-    /// checkpoint store. `None` means start from the source's own default (e.g. wherever a
-    /// freshly created Postgres replication slot naturally begins).
+    /// `resume_from`, when `Some`, asks the source to start at that position; `None` starts
+    /// from the source's own checkpoint (a Postgres replication slot's confirmed position).
+    /// [`crate::capture::application::CaptureOrchestrator`] always passes `None`: the slot only
+    /// ever advances on confirms, which never pass data that isn't durable yet, whereas
+    /// starting later than the slot can skip a transaction still buffered when the previous
+    /// session stopped.
     async fn stream_changes(
         &self,
         source: &DataSource,

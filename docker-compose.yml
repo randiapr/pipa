@@ -2,13 +2,14 @@
 #
 # No separate Iceberg REST catalog service is included: RustFS itself serves one natively via
 # its "S3 Tables" feature, at the same host/port as its S3 API under an /iceberg path prefix.
-# Two things sit between it and pipa's Iceberg clients here, both automated below:
-#   - S3 Tables is opt-in per bucket; `catalog` turns it on for the "pipa" bucket at startup.
+# Two things sit between it and pipa's Iceberg clients, both handled inside pipa-backend
+# (querying, POST /query) and pipa-ingestion (writing captured changes,
+# crates/ingestion/src/write/) themselves, with no extra service or network hop:
 #   - The catalog requires every request to be AWS SigV4-signed (signing name "s3"), which
-#     iceberg-catalog-rest can't do, so `catalog` is a small signing reverse proxy
-#     (crates/catalog-proxy) in front of it. pipa-backend (querying, POST /query) and pipa-ingestion
-#     (writing captured changes, crates/ingestion/src/write/) point their own independent
-#     ICEBERG_CATALOG_URI at that proxy instead of at RustFS directly.
+#     iceberg-catalog-rest can't do, so each of them embeds the pipa-catalog-proxy signer
+#     (crates/catalog-proxy) on a loopback port of its own process and points its catalog
+#     client there. Leaving ICEBERG_CATALOG_URI unset is what selects this.
+#   - S3 Tables is opt-in per bucket; each of them turns it on for RUSTFS_BUCKET at startup.
 #
 # Quickstart: cp .env.example .env (fill in the secrets), then docker compose up --build
 
@@ -23,7 +24,6 @@ x-pipa-ingestion-env: &pipa-ingestion-env
   RUSTFS_ACCESS_KEY_ID: rustfsadmin
   RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
   RUSTFS_ALLOW_HTTP: "true"
-  ICEBERG_CATALOG_URI: http://catalog:8080/iceberg
   INGESTION_SHARD_COUNT: "2"
   RUST_LOG: info
 
@@ -53,12 +53,17 @@ services:
   # must be logical for PostgresWalSource's replication slot (crates/ingestion/src/capture/
   # infrastructure/postgres) — the default "replica" won't support logical decoding.
   example-source:
-    image: postgres:18.2-alpine
+    image: postgres:18.6-alpine
     command: ["postgres", "-c", "wal_level=logical"]
     environment:
       POSTGRES_USER: pipa
       POSTGRES_PASSWORD: pipa
       POSTGRES_DB: testdb
+      # The 18+ images default to /var/lib/postgresql/18/docker and refuse to start on data
+      # mounted at the pre-18 path; pin PGDATA to it so the existing postgres-data volume is used
+      # as-is. Dropping this means mounting the volume at /var/lib/postgresql instead, on a fresh
+      # volume.
+      PGDATA: /var/lib/postgresql/data
     ports:
       - "5432:5432"
     volumes:
@@ -84,27 +89,6 @@ services:
         rc alias set pipa http://rustfs:9000 rustfsadmin rustfsadmin &&
         rc bucket create pipa/pipa --ignore-existing
 
-  # SigV4-signing reverse proxy in front of RustFS's Iceberg REST catalog (crates/catalog-proxy,
-  # no AWS dependency): signs each request with RustFS's credentials (signing name "s3") and
-  # forwards it over plain HTTP. File IO (data/metadata files) still goes to RustFS directly.
-  # On startup it also enables S3 Tables on the bucket, so no manual step is needed.
-  catalog:
-    build:
-      context: .
-      target: catalog-proxy
-    depends_on:
-      rustfs:
-        condition: service_healthy
-      create-bucket:
-        condition: service_completed_successfully
-    environment:
-      RUSTFS_ENDPOINT: http://rustfs:9000
-      RUSTFS_BUCKET: pipa
-      RUSTFS_REGION: ap-southeast-3
-      RUSTFS_ACCESS_KEY_ID: rustfsadmin
-      RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
-      RUST_LOG: info
-
   backend:
     build:
       context: .
@@ -114,8 +98,6 @@ services:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
-      catalog:
-        condition: service_started
     environment:
       RUSTFS_ENDPOINT: http://rustfs:9000
       RUSTFS_BUCKET: pipa
@@ -123,7 +105,6 @@ services:
       RUSTFS_ACCESS_KEY_ID: rustfsadmin
       RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
       RUSTFS_ALLOW_HTTP: "true"
-      ICEBERG_CATALOG_URI: http://catalog:8080/iceberg
       # Login: JWT_SECRET signs tokens (>= 32 bytes); the PIPA_ADMIN_* pair creates the first
       # admin when no user exists yet. Compose refuses to start without them — put them in a
       # `.env` file next to this one (see .env.example), never commit real values.
@@ -137,8 +118,8 @@ services:
     ports:
       - "8080:8080"
 
-  # Standalone: no dependency on any other crate in this workspace (see the module doc on
-  # crates/ingestion/src/main.rs), so it's a separate `build.target` here rather than
+  # Standalone: no dependency on pipa-backend, only on the embedded catalog signer (see the module
+  # doc on crates/ingestion/src/main.rs), so it's a separate `build.target` here rather than
   # something wired through pipa-backend — it keeps its own independent copy of
   # the iceberg/iceberg-catalog-rest dependency (crates/ingestion/src/write/) to land captured
   # changes as changelog rows, separate from pipa-backend's own copy used for querying.
@@ -156,8 +137,6 @@ services:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
-      catalog:
-        condition: service_started
     environment:
       <<: *pipa-ingestion-env
       INGESTION_SHARD_INDEX: "0"
@@ -170,8 +149,6 @@ services:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
-      catalog:
-        condition: service_started
     environment:
       <<: *pipa-ingestion-env
       INGESTION_SHARD_INDEX: "1"

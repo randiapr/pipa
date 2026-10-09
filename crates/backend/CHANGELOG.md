@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.9.0] - 2026-10-09
+
+### Changed
+
+- With `ICEBERG_CATALOG_URI` unset (now the default, locally and in compose), the backend embeds
+  the `pipa-catalog-proxy` signer in its own process on a loopback port and points its catalog
+  client there, instead of going through a separate `catalog` service. It also enables S3 Tables
+  on `RUSTFS_BUCKET` at startup (retrying for about a minute, and failing startup if that never
+  succeeds). Setting `ICEBERG_CATALOG_URI` still selects any other catalog as before. The old
+  unset default, `<RUSTFS_ENDPOINT>/iceberg` unsigned, never worked against RustFS.
+- The Iceberg metadata tables (`…$snapshots`, `…$manifests`) are no longer browsable, for any
+  role: `GET /tables` leaves them out, and `POST /tables/rows` answers 400 when one is named.
+  `POST /query` can still select them.
+- `POST /tables/rows` returns a table's current rows, for every role: the latest change per
+  row key, without deleted rows or the changelog columns (`_op`, `_source_id`, `_position`,
+  `_commit_timestamp_us`), sorted by key — so an updated row appears once, with its current
+  values. The key is read from the Iceberg table property `pipa.cdc.key_columns` that
+  `pipa-ingestion` 0.5.0 records; a table without it is returned as stored. The changelog itself
+  stays available through `POST /query`.
+
 ## [0.8.0] - 2026-10-08
 
 ### Added

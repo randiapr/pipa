@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.7.0] - 2026-10-09
+
+### Changed
+
+- The Tables page no longer lists the Iceberg metadata tables (`…$snapshots`, `…$manifests`),
+  for any role.
+- A table's rows on the Tables page are its current rows (one per record, as returned by
+  `pipa-backend`) and no longer show the changelog columns (`_op`, `_source_id`, `_position`,
+  `_commit_timestamp_us`), for every role. The changelog itself is still available on the Query
+  page to roles that can query.
+- The Tables page lists tables as collapses (daisyUI `collapse`, arrow at the start): clicking a
+  table opens its rows and pager inside it, in place of a separate section below the list.
+  One table is open at a time; clicking its title again closes it. The title is keyboard
+  operable (Enter/Space).
+
 ## [0.6.0] - 2026-10-08
 
 ### Added

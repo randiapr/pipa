@@ -207,6 +207,10 @@ _docker-env:
 docker-up: _docker-env build-ui-release
     {{ compose }} up --build
 
+# follow the containerized stack's logs (all services, or the ones named, e.g. `just docker-logs backend ingestion-0`); Ctrl+C stops following, not the stack
+docker-logs *services:
+    {{ compose }} logs --follow --tail 100 {{ services }}
+
 # `down` still interpolates docker-compose.yml, so the two required secrets get throwaway values
 # in the recipes below (they never reach a running container) instead of demanding a real `.env`.
 

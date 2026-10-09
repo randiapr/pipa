@@ -39,6 +39,8 @@ COPY --from=builder /tmp/pipa-backend /usr/local/bin/pipa-backend
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/pipa-backend"]
 
+# Standalone signing proxy for catalog clients outside the workspace; docker-compose.yml doesn't use
+# it, since pipa-backend and pipa-ingestion embed the same proxy in-process.
 FROM gcr.io/distroless/cc-debian13 AS catalog-proxy
 COPY --from=builder /tmp/pipa-catalog-proxy /usr/local/bin/pipa-catalog-proxy
 EXPOSE 8080
