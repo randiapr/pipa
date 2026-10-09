@@ -1,11 +1,13 @@
-//! View: the Tables page. Lists the selected project's Iceberg tables (a table on desktop, cards
-//! on mobile) and shows one table's rows, a page at a time. Read-only, so it is open to every
-//! role, including the view-only `user`.
+//! View: the Tables page. Lists the selected project's Iceberg tables as collapses, one per
+//! table, and shows the open one's rows inside it, a page at a time. Read-only, so it is open to every
+//! role. For everyone, rows are each table's current rows without the changelog columns
+//! (`TablesViewModel::visible_rows`), and the Iceberg metadata tables aren't listed
+//! (`TablesViewModel::visible_tables`).
 
 use leptos::prelude::*;
 use pipa_api::TableView;
 
-use crate::view::{PageSizePicker, ResponsiveList, RowsView, STATUS_TOAST_DURATION};
+use crate::view::{PageSizePicker, RowsView, STATUS_TOAST_DURATION};
 use crate::viewmodel::{SessionViewModel, StatusMessage, TablesViewModel};
 
 #[component]
@@ -57,7 +59,7 @@ pub fn Tables() -> impl IntoView {
             }}
 
             <Show
-                when=move || !vm.tables.get().is_empty()
+                when=move || !vm.visible_tables().is_empty()
                 fallback=move || {
                     view! {
                         <p class="text-base-content/70">
@@ -72,142 +74,129 @@ pub fn Tables() -> impl IntoView {
                     }
                 }
             >
-                <ResponsiveList
-                    table=move || {
-                        view! {
-                            <div class="overflow-x-auto">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>"Table"</th>
-                                            <th>"Data source"</th>
-                                            <th class="text-right">"Actions"</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <For
-                                            each=move || vm.tables.get()
-                                            key=|table| (table.source_id.clone(), table.name.clone())
-                                            children=move |table| {
-                                                let to_open = table.clone();
-                                                view! {
-                                                    <tr>
-                                                        <td class="font-mono text-sm">{table.name}</td>
-                                                        <td>{table.source_name}</td>
-                                                        <td class="text-right">
-                                                            <ViewButton vm=vm table=to_open />
-                                                        </td>
-                                                    </tr>
-                                                }
-                                            }
-                                        />
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
-                    }
-                    cards=move || {
-                        view! {
-                            <For
-                                each=move || vm.tables.get()
-                                key=|table| (table.source_id.clone(), table.name.clone())
-                                children=move |table| {
-                                    let to_open = table.clone();
-                                    view! {
-                                        <div class="card card-border card-sm bg-base-100">
-                                            <div class="card-body">
-                                                <h3 class="card-title font-mono break-all">{table.name}</h3>
-                                                <p class="text-sm text-base-content/70">
-                                                    {format!("Data source: {}", table.source_name)}
-                                                </p>
-                                                <div class="card-actions justify-end">
-                                                    <ViewButton vm=vm table=to_open />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    }
-                                }
-                            />
-                        }
-                    }
-                />
+                <div class="flex flex-col gap-2">
+                    <For
+                        each=move || vm.visible_tables()
+                        key=|table| (table.source_id.clone(), table.name.clone())
+                        children=move |table| view! { <TableCollapse vm=vm table=table /> }
+                    />
+                </div>
             </Show>
-
-            {move || {
-                vm.open
-                    .get()
-                    .map(|table| {
-                        view! {
-                            <div class="flex flex-col gap-3">
-                                <div class="flex items-center justify-between">
-                                    <h2 class="text-lg font-semibold font-mono">{table.name}</h2>
-                                    <button class="btn btn-sm btn-ghost" type="button" on:click=move |_| vm.close()>
-                                        "Close"
-                                    </button>
-                                </div>
-                                {move || {
-                                    vm.error
-                                        .get()
-                                        .map(|message| {
-                                            view! {
-                                                <div role="alert" class="alert alert-error">
-                                                    <span>{message}</span>
-                                                </div>
-                                            }
-                                        })
-                                }}
-                                <Show when=move || vm.loading.get()>
-                                    <span class="loading loading-spinner"></span>
-                                </Show>
-                                {move || vm.rows.get().map(|rows| view! { <RowsView rows=rows /> })}
-                                <div class="flex flex-wrap items-center justify-between gap-3">
-                                    <span class="text-sm text-base-content/70">
-                                        {move || {
-                                            let start = vm.offset.get() + 1;
-                                            match vm.rows.with(|rows| rows.as_ref().map(Vec::len)) {
-                                                Some(count) if count > 0 => {
-                                                    format!("Rows {start}\u{2013}{}", start + count - 1)
-                                                }
-                                                _ => format!("Rows from {start}"),
-                                            }
-                                        }}
-                                    </span>
-                                    <div class="flex flex-wrap items-center gap-3">
-                                        <PageSizePicker size=vm.page_size />
-                                        <div class="join">
-                                            <button
-                                                class="join-item btn btn-sm"
-                                                type="button"
-                                                disabled=move || !vm.has_prev() || vm.loading.get()
-                                                on:click=move |_| vm.prev()
-                                            >
-                                                "\u{ab} Previous"
-                                            </button>
-                                            <button
-                                                class="join-item btn btn-sm"
-                                                type="button"
-                                                disabled=move || !vm.has_next() || vm.loading.get()
-                                                on:click=move |_| vm.next()
-                                            >
-                                                "Next \u{bb}"
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        }
-                    })
-            }}
         </div>
     }
 }
 
-/// Opens `table`'s rows below the list.
+/// One table as a daisyUI collapse: its name and data source as the title, its rows inside.
+/// Only the table in `vm.open` is expanded (forced with `collapse-open`/`collapse-close`, so
+/// the ViewModel stays the single source of truth); opening another closes it.
 #[component]
-fn ViewButton(vm: TablesViewModel, table: TableView) -> impl IntoView {
+fn TableCollapse(vm: TablesViewModel, table: TableView) -> impl IntoView {
+    let key = (table.source_id.clone(), table.name.clone());
+    let is_open = Memo::new(move |_| {
+        vm.open.with(|open| {
+            open.as_ref()
+                .is_some_and(|open| (&open.source_id, &open.name) == (&key.0, &key.1))
+        })
+    });
+    let to_open = table.clone();
+    let toggle = move || {
+        if is_open.get_untracked() {
+            vm.close();
+        } else {
+            vm.open_table(to_open.clone());
+        }
+    };
+
     view! {
-        <button class="btn btn-sm btn-primary" type="button" on:click=move |_| vm.open_table(table.clone())>
-            "View"
-        </button>
+        <div
+            class="collapse collapse-arrow border border-base-300 bg-base-100"
+            class:collapse-open=move || is_open.get()
+            class:collapse-close=move || !is_open.get()
+        >
+            <div
+                class="collapse-title cursor-pointer ps-12 pe-4 after:start-5 after:end-auto"
+                role="button"
+                tabindex="0"
+                aria-expanded=move || is_open.get().to_string()
+                on:click={
+                    let toggle = toggle.clone();
+                    move |_| toggle()
+                }
+                on:keydown=move |ev: leptos::ev::KeyboardEvent| {
+                    if ev.key() == "Enter" || ev.key() == " " {
+                        ev.prevent_default();
+                        toggle();
+                    }
+                }
+            >
+                <div class="flex flex-wrap items-baseline gap-x-3">
+                    <span class="font-mono font-semibold break-all">{table.name}</span>
+                    <span class="text-sm text-base-content/70">{table.source_name}</span>
+                </div>
+            </div>
+            <div class="collapse-content">
+                <Show when=move || is_open.get()>
+                    <TableRows vm=vm />
+                </Show>
+            </div>
+        </div>
+    }
+}
+
+/// The open table's current page, with its error, loading state and pager.
+#[component]
+fn TableRows(vm: TablesViewModel) -> impl IntoView {
+    view! {
+        <div class="flex flex-col gap-3">
+            {move || {
+                vm.error
+                    .get()
+                    .map(|message| {
+                        view! {
+                            <div role="alert" class="alert alert-error">
+                                <span>{message}</span>
+                            </div>
+                        }
+                    })
+            }}
+            <Show when=move || vm.loading.get()>
+                <span class="loading loading-spinner"></span>
+            </Show>
+            {move || vm.visible_rows().map(|rows| view! { <RowsView rows=rows /> })}
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <span class="text-sm text-base-content/70">
+                    {move || {
+                        let start = vm.offset.get() + 1;
+                        match vm.rows.with(|rows| rows.as_ref().map(Vec::len)) {
+                            Some(count) if count > 0 => {
+                                format!("Rows {start}\u{2013}{}", start + count - 1)
+                            }
+                            _ => format!("Rows from {start}"),
+                        }
+                    }}
+                </span>
+                <div class="flex flex-wrap items-center gap-3">
+                    <PageSizePicker size=vm.page_size />
+                    <div class="join">
+                        <button
+                            class="join-item btn btn-sm"
+                            type="button"
+                            disabled=move || !vm.has_prev() || vm.loading.get()
+                            on:click=move |_| vm.prev()
+                        >
+                            "\u{ab} Previous"
+                        </button>
+                        <button
+                            class="join-item btn btn-sm"
+                            type="button"
+                            disabled=move || !vm.has_next() || vm.loading.get()
+                            on:click=move |_| vm.next()
+                        >
+                            "Next \u{bb}"
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     }
 }

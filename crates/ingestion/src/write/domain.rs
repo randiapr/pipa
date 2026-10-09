@@ -90,11 +90,12 @@ pub enum WriteError {
 /// makes no promises about a batch's durability until that point.
 #[async_trait]
 pub trait IcebergWriter: Send + Sync {
-    /// Commits `events` — already confirmed by the caller to be non-empty and all from the
-    /// same `(schema, table)` — to `target`, tagging the resulting Iceberg snapshot with
-    /// `high_watermark_position` (the highest [`ChangeEvent::position`] in the batch). That
-    /// property is what [`IcebergWriter::last_committed_position`] reads back on restart, so
-    /// the checkpoint commits atomically with the data rather than through a side channel.
+    /// Commits `events` — already confirmed by the caller to be non-empty, all from the same
+    /// `(schema, table)` and made of whole transactions — to `target`, tagging the resulting
+    /// Iceberg snapshot with `high_watermark_position` (the highest
+    /// [`ChangeEvent::commit_position`] in the batch). That property is what
+    /// [`IcebergWriter::last_committed_position`] reads back, so the checkpoint commits
+    /// atomically with the data rather than through a side channel.
     async fn commit_batch(
         &self,
         source: &DataSource,
@@ -103,18 +104,30 @@ pub trait IcebergWriter: Send + Sync {
         high_watermark_position: &str,
     ) -> Result<(), WriteError>;
 
-    /// The position last durably committed for `target`, or `None` if the table doesn't exist
-    /// yet / has never been committed to.
+    /// The checkpoint of the last batch durably committed to `target`, or `None` if the table
+    /// doesn't exist yet / has never been committed to.
     async fn last_committed_position(
         &self,
         target: &TargetTable,
-    ) -> Result<Option<String>, WriteError>;
+    ) -> Result<Option<Checkpoint>, WriteError>;
 
-    /// Every target table that already exists for `source` (i.e. was created by some earlier
-    /// run) — used by [`crate::capture::application::CaptureOrchestrator`] on startup to
-    /// compute a safe resume position without needing to know the Iceberg naming convention
-    /// itself. Empty if the source has never had anything committed for it.
-    async fn existing_targets(&self, source: &DataSource) -> Result<Vec<TargetTable>, WriteError>;
+    /// Records the row key (the source table's replica identity columns) on every existing
+    /// target table of `source` that doesn't carry it yet. New tables get it when they are
+    /// created; this backfills tables created before keys were recorded, so readers can
+    /// collapse their changelog to current rows from Iceberg alone.
+    async fn record_key_columns(&self, source: &DataSource) -> Result<(), WriteError>;
+}
+
+/// The checkpoint a target table's latest snapshot carries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Checkpoint {
+    /// Commit position of the last transaction landed in the table.
+    Commit(String),
+    /// Change position of the last event landed, from snapshots written before checkpoints
+    /// tracked commit positions (pipa-ingestion 0.4 and earlier). Only comparable with
+    /// [`ChangeEvent::position`]; replaced by a [`Checkpoint::Commit`] on the table's next
+    /// commit.
+    LegacyChange(String),
 }
 
 /// The changelog row's operation tag and the column values it should be built from:

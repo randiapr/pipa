@@ -13,11 +13,17 @@ use pgwire_replication::{Lsn, ReplicationClient, ReplicationConfig, ReplicationE
 use sqlx::{Connection, PgConnection, postgres::PgConnectOptions};
 use tokio::sync::mpsc;
 
-use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, ChangeStream, Operation};
+use crate::capture::domain::{
+    CaptureError, CdcSource, ChangeEvent, ChangeStream, Operation, StreamItem,
+};
 use crate::datasource::DataSource;
 
 const CHANGE_CHANNEL_CAPACITY: usize = 256;
 const CONFIRM_CHANNEL_CAPACITY: usize = 16;
+
+/// Microseconds from the Unix epoch (1970-01-01) to the Postgres epoch (2000-01-01), which is
+/// what `pgoutput` timestamps such as a transaction's commit time count from.
+const POSTGRES_EPOCH_UNIX_MICROS: i64 = 946_684_800_000_000;
 
 /// Streams changes out of a Postgres data source's write-ahead log via `pgoutput` logical
 /// replication.
@@ -145,6 +151,9 @@ impl CdcSource for PostgresWalSource {
         tokio::spawn(async move {
             let mut relations: HashMap<u32, RelationInfo> = HashMap::new();
             let mut commit_timestamp_unix_micros = 0i64;
+            // The transaction being received: its commit position (from `Begin`), until its
+            // `Commit` arrives.
+            let mut open_transaction: Option<Lsn> = None;
 
             loop {
                 let event = tokio::select! {
@@ -185,17 +194,41 @@ impl CdcSource for PostgresWalSource {
 
                 match event {
                     ReplicationEvent::Begin {
-                        commit_time_micros, ..
+                        final_lsn,
+                        commit_time_micros,
+                        ..
                     } => {
-                        commit_timestamp_unix_micros = commit_time_micros;
+                        commit_timestamp_unix_micros = postgres_to_unix_micros(commit_time_micros);
+                        open_transaction = Some(final_lsn);
                     }
-                    // `Commit`/`KeepAlive` used to unconditionally call `update_applied_lsn`
-                    // here, before any consumer durably persisted the events it covers —
-                    // `pgwire-replication`'s own doc comment for that method says to call it
-                    // "only once you have durably persisted all events up to `lsn`". Advancing
-                    // is now driven exclusively by `confirm_rx`, above.
-                    ReplicationEvent::Commit { .. } => {}
-                    ReplicationEvent::KeepAlive { .. } => {}
+                    // Advancing the slot (`update_applied_lsn`) is driven exclusively by
+                    // `confirm_rx`, above — `pgwire-replication`'s doc comment for that method
+                    // says to call it "only once you have durably persisted all events up to
+                    // `lsn`". `Commit` and between-transaction `KeepAlive`s only tell the caller
+                    // how far the stream has been delivered.
+                    ReplicationEvent::Commit { end_lsn, .. } => {
+                        open_transaction = None;
+                        let progress = StreamItem::Progress {
+                            position: end_lsn.to_string(),
+                        };
+                        if tx.send(Ok(progress)).await.is_err() {
+                            break;
+                        }
+                    }
+                    // A keepalive carries the position the server has decoded and sent up to:
+                    // every transaction committed before it has been delivered. Inside a
+                    // transaction that would say nothing about the rest of it, so only
+                    // between transactions.
+                    ReplicationEvent::KeepAlive { wal_end, .. } => {
+                        if open_transaction.is_none() {
+                            let progress = StreamItem::Progress {
+                                position: wal_end.to_string(),
+                            };
+                            if tx.send(Ok(progress)).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
                     ReplicationEvent::XLogData { wal_end, data, .. } => {
                         if data.is_empty() {
                             continue;
@@ -228,12 +261,13 @@ impl CdcSource for PostgresWalSource {
                                         change,
                                         &relations,
                                         wal_end,
+                                        open_transaction.unwrap_or(wal_end),
                                         commit_timestamp_unix_micros,
                                     )
                                 });
 
                             let sent = match outcome {
-                                Ok(Some(event)) => tx.send(Ok(event)).await,
+                                Ok(Some(event)) => tx.send(Ok(StreamItem::Change(event))).await,
                                 Ok(None) => Ok(()),
                                 Err(err) => tx.send(Err(err)).await,
                             };
@@ -257,10 +291,17 @@ impl CdcSource for PostgresWalSource {
     }
 }
 
+/// Converts a `pgoutput` timestamp (microseconds since 2000-01-01) to microseconds since the Unix
+/// epoch.
+fn postgres_to_unix_micros(postgres_micros: i64) -> i64 {
+    postgres_micros.saturating_add(POSTGRES_EPOCH_UNIX_MICROS)
+}
+
 fn to_change_event(
     change: DecodedChange,
     relations: &HashMap<u32, RelationInfo>,
     wal_end: Lsn,
+    commit_lsn: Lsn,
     commit_timestamp_unix_micros: i64,
 ) -> Option<ChangeEvent> {
     let (relation_oid, operation) = match change {
@@ -286,8 +327,25 @@ fn to_change_event(
         table: relation.name.clone(),
         operation,
         position: wal_end.to_string(),
+        commit_position: commit_lsn.to_string(),
         commit_timestamp_unix_micros,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn converts_postgres_timestamps_to_unix_micros() {
+        // 2000-01-01T00:00:00Z, the Postgres epoch itself.
+        assert_eq!(postgres_to_unix_micros(0), 946_684_800_000_000);
+        // A commit at 2026-10-09T01:43:52.919964Z, as `pgoutput` sends it.
+        assert_eq!(
+            postgres_to_unix_micros(844_825_432_919_964),
+            1_791_510_232_919_964
+        );
+    }
 }
 
 #[cfg(test)]
@@ -361,15 +419,18 @@ mod live_tests {
             .expect("delete");
 
         let mut seen = Vec::new();
-        for _ in 0..3 {
-            let event = tokio::time::timeout(Duration::from_secs(10), stream.events.recv())
+        while seen.len() < 3 {
+            let item = tokio::time::timeout(Duration::from_secs(10), stream.events.recv())
                 .await
                 .expect("timed out waiting for a change event")
                 .expect("change channel closed unexpectedly")
                 .expect("capture reported an error");
+            let StreamItem::Change(event) = item else {
+                continue;
+            };
             stream
                 .confirm
-                .send(event.position.clone())
+                .send(event.commit_position.clone())
                 .await
                 .expect("confirm channel should still be open");
             seen.push(event);
@@ -380,5 +441,11 @@ mod live_tests {
         assert!(matches!(seen[0].operation, Operation::Insert { .. }));
         assert!(matches!(seen[1].operation, Operation::Update { .. }));
         assert!(matches!(seen[2].operation, Operation::Delete { .. }));
+        // Three autocommit statements: three transactions, delivered in commit order.
+        let commits: Vec<Lsn> = seen
+            .iter()
+            .map(|event| event.commit_position.parse().unwrap())
+            .collect();
+        assert!(commits.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }

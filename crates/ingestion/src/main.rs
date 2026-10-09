@@ -1,8 +1,9 @@
 //! Ingestion engine: connects to OLTP databases and streams captured changes into Iceberg.
 //!
-//! Standalone service: it takes no dependency on any other crate in this workspace — not even
-//! `pipa-backend`'s own `iceberg`/`iceberg-catalog-rest` access (`write/`
-//! keeps its own independent copy of that dependency; see the root `CLAUDE.md`). Data sources
+//! Standalone service: the only workspace crate it depends on is `pipa-catalog-proxy`, which it
+//! embeds to sign its requests to RustFS's Iceberg catalog — not `pipa-backend`, not even for its
+//! `iceberg`/`iceberg-catalog-rest` access (`write/` keeps its own independent copy of that
+//! dependency; see the root `CLAUDE.md`). Data sources
 //! are registered through the `pipa-ui` dashboard, which submits them via `pipa-backend`;
 //! `pipa-ingestion` only ever reads what that writes, via the shared RustFS/S3 object store's
 //! `datasources/` JSON layout (`datasource.rs` duplicates just enough of the shape to
@@ -27,6 +28,8 @@ mod storage;
 mod write;
 
 use std::sync::Arc;
+
+use tokio::signal::unix::{SignalKind, signal};
 
 use datasource::{DataSource, DbEngine};
 use storage::ObjectStoreConfig;
@@ -67,7 +70,8 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("no OLTP data sources assigned to this shard");
     }
 
-    let catalog = IcebergCatalogConfig::from_env(&store_config.endpoint)
+    let catalog = IcebergCatalogConfig::from_env(&store_config)
+        .await?
         .build_catalog(&store_config)
         .await?;
     let writer: Arc<dyn IcebergWriter> = Arc::new(IcebergChangelogWriter::new(catalog));
@@ -94,9 +98,22 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    tokio::signal::ctrl_c().await?;
+    shutdown_signal().await?;
     tracing::info!("pipa-ingestion shutting down");
 
+    Ok(())
+}
+
+/// Waits for Ctrl-C or SIGTERM. SIGTERM is what `docker stop` sends, and as a container's PID 1
+/// the process would otherwise ignore it and get killed only after the stop timeout. Nothing
+/// needs flushing on the way out: buffered events were never confirmed, so the next run gets
+/// them again from the slot.
+async fn shutdown_signal() -> anyhow::Result<()> {
+    let mut terminate = signal(SignalKind::terminate())?;
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result?,
+        _ = terminate.recv() => {}
+    }
     Ok(())
 }
 

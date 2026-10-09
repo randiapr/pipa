@@ -5,7 +5,8 @@
 //! Reimplements (rather than imports) the catalog-access pattern `pipa-backend`'s own
 //! `crates/backend/src/iceberg/catalog.rs` uses — see the root `CLAUDE.md`'s note on why
 //! `pipa-ingestion` keeps its own independent copy of the `iceberg`/`iceberg-catalog-rest`
-//! dependency rather than sharing one through `pipa-backend`.
+//! dependency rather than sharing one through `pipa-backend`. Request signing for RustFS's
+//! catalog is the one shared piece: it comes from `pipa-catalog-proxy`, embedded in-process.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,6 +35,7 @@ use iceberg_catalog_rest::{
 };
 use iceberg_storage_opendal::OpenDalStorageFactory;
 use parquet::file::properties::WriterProperties;
+use pipa_catalog_proxy::{CatalogProxy, DEFAULT_SERVICE, sigv4::Signer};
 use sqlx::{Connection, PgConnection, Row, postgres::PgConnectOptions};
 use tokio::sync::Mutex;
 
@@ -41,13 +43,20 @@ use crate::capture::domain::ChangeEvent;
 use crate::datasource::DataSource;
 use crate::storage::ObjectStoreConfig;
 use crate::write::domain::{
-    COMMIT_TIMESTAMP_COLUMN, IcebergWriter, OP_COLUMN, POSITION_COLUMN, SOURCE_ID_COLUMN,
-    TargetTable, WriteError, events_to_record_batch, namespace_for_source,
+    COMMIT_TIMESTAMP_COLUMN, Checkpoint, IcebergWriter, OP_COLUMN, POSITION_COLUMN,
+    SOURCE_ID_COLUMN, TargetTable, WriteError, events_to_record_batch, namespace_for_source,
 };
 
-/// Snapshot summary property carrying the checkpoint — the highest source position landed by
-/// the commit that set it. Read back by [`IcebergChangelogWriter::last_committed_position`].
-const COMMIT_POSITION_PROPERTY: &str = "pipa.cdc.position";
+/// Snapshot summary property carrying the checkpoint — the commit position of the last
+/// transaction landed by that commit (see [`Checkpoint::Commit`]).
+const COMMIT_POSITION_PROPERTY: &str = "pipa.cdc.commit_position";
+/// The checkpoint property snapshots written by pipa-ingestion 0.4 and earlier carry instead: a
+/// change position, read back as [`Checkpoint::LegacyChange`].
+const LEGACY_POSITION_PROPERTY: &str = "pipa.cdc.position";
+/// Table property naming the source table's row key — its replica identity columns (primary
+/// key by default), as a JSON array of column names, `[]` for a table without one. Lets readers
+/// such as `pipa-backend` collapse the changelog to current rows from Iceberg alone.
+const KEY_COLUMNS_PROPERTY: &str = "pipa.cdc.key_columns";
 /// Snapshot summary property carrying the source id a commit came from, for debuggability.
 const COMMIT_SOURCE_ID_PROPERTY: &str = "pipa.cdc.source_id";
 
@@ -65,16 +74,21 @@ pub struct IcebergCatalogConfig {
 
 impl IcebergCatalogConfig {
     /// Reads connection settings from `ICEBERG_CATALOG_*` environment variables, defaulting
-    /// `uri` to `store_endpoint`'s own `/iceberg` path — RustFS's "S3 Tables" feature embeds an
-    /// Iceberg REST Catalog directly into the object store itself.
-    pub fn from_env(store_endpoint: &str) -> Self {
-        Self {
+    /// `uri` to RustFS's "S3 Tables" catalog, which RustFS embeds directly into the object store
+    /// itself. That catalog only accepts SigV4-signed requests, which `iceberg-catalog-rest`
+    /// can't make, so the default starts a `pipa-catalog-proxy` signer inside this process (which
+    /// also enables S3 Tables on `store`'s bucket) and points `uri` at it.
+    pub async fn from_env(store: &ObjectStoreConfig) -> anyhow::Result<Self> {
+        let uri = match std::env::var("ICEBERG_CATALOG_URI") {
+            Ok(uri) if !uri.is_empty() => uri,
+            _ => embedded_catalog_uri(store).await?,
+        };
+        Ok(Self {
             name: std::env::var("ICEBERG_CATALOG_NAME").unwrap_or_else(|_| "pipa".to_string()),
-            uri: std::env::var("ICEBERG_CATALOG_URI")
-                .unwrap_or_else(|_| format!("{}/iceberg", store_endpoint.trim_end_matches('/'))),
+            uri,
             warehouse: std::env::var("ICEBERG_CATALOG_WAREHOUSE")
                 .unwrap_or_else(|_| "pipa".to_string()),
-        }
+        })
     }
 
     /// Builds a REST [`Catalog`] client for this catalog. `store` supplies the RustFS/S3
@@ -109,6 +123,20 @@ impl IcebergCatalogConfig {
             .await?;
         Ok(Arc::new(catalog))
     }
+}
+
+/// Starts the in-process signer in front of RustFS's catalog at `store`'s endpoint, with `store`'s
+/// credentials, and returns its catalog URI.
+async fn embedded_catalog_uri(store: &ObjectStoreConfig) -> anyhow::Result<String> {
+    let signer = Signer::new(
+        store.access_key_id.clone(),
+        store.secret_access_key.clone(),
+        store.region.clone(),
+        DEFAULT_SERVICE.to_string(),
+    );
+    CatalogProxy::new(&store.endpoint, signer)?
+        .serve_embedded(&store.bucket)
+        .await
 }
 
 /// [`IcebergWriter`] adapter: lands changelog rows as append-only Parquet data files, committed
@@ -189,9 +217,17 @@ impl IcebergChangelogWriter {
             })?;
             let iceberg_schema =
                 introspect_iceberg_schema(source, &first.schema, &first.table).await?;
+            let key_columns = source_key_columns(source)
+                .await?
+                .remove(&(first.schema.clone(), first.table.clone()))
+                .unwrap_or_default();
             let creation = TableCreation::builder()
                 .name(target.table.clone())
                 .schema(iceberg_schema)
+                .properties(HashMap::from([(
+                    KEY_COLUMNS_PROPERTY.to_string(),
+                    key_columns_property(&key_columns),
+                )]))
                 .build();
 
             match self.catalog.create_table(ident.namespace(), creation).await {
@@ -293,7 +329,7 @@ impl IcebergWriter for IcebergChangelogWriter {
     async fn last_committed_position(
         &self,
         target: &TargetTable,
-    ) -> Result<Option<String>, WriteError> {
+    ) -> Result<Option<Checkpoint>, WriteError> {
         let ident = Self::table_ident(target);
 
         if !self
@@ -311,44 +347,82 @@ impl IcebergWriter for IcebergChangelogWriter {
             .await
             .map_err(|err| WriteError::Catalog(err.to_string()))?;
 
-        Ok(table
-            .metadata()
-            .current_snapshot()
-            .and_then(|snapshot| {
-                snapshot
-                    .summary()
-                    .additional_properties
-                    .get(COMMIT_POSITION_PROPERTY)
-            })
-            .cloned())
+        Ok(table.metadata().current_snapshot().and_then(|snapshot| {
+            let properties = &snapshot.summary().additional_properties;
+            properties
+                .get(COMMIT_POSITION_PROPERTY)
+                .map(|position| Checkpoint::Commit(position.clone()))
+                .or_else(|| {
+                    properties
+                        .get(LEGACY_POSITION_PROPERTY)
+                        .map(|position| Checkpoint::LegacyChange(position.clone()))
+                })
+        }))
     }
 
-    async fn existing_targets(&self, source: &DataSource) -> Result<Vec<TargetTable>, WriteError> {
-        let namespace_name = namespace_for_source(source);
-        let namespace = NamespaceIdent::new(namespace_name.clone());
-
+    async fn record_key_columns(&self, source: &DataSource) -> Result<(), WriteError> {
+        let namespace = NamespaceIdent::new(namespace_for_source(source));
         if !self
             .catalog
             .namespace_exists(&namespace)
             .await
             .map_err(|err| WriteError::Catalog(err.to_string()))?
         {
-            return Ok(Vec::new());
+            return Ok(());
         }
-
         let idents = self
             .catalog
             .list_tables(&namespace)
             .await
             .map_err(|err| WriteError::Catalog(err.to_string()))?;
 
-        Ok(idents
+        let mut missing = Vec::new();
+        for ident in idents {
+            let table = self
+                .catalog
+                .load_table(&ident)
+                .await
+                .map_err(|err| WriteError::Catalog(err.to_string()))?;
+            if !table
+                .metadata()
+                .properties()
+                .contains_key(KEY_COLUMNS_PROPERTY)
+            {
+                missing.push(table);
+            }
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+
+        // Keyed by the target table name each source table maps to, so matching is exact rather
+        // than splitting `{schema}__{table}` back apart.
+        let keys: HashMap<String, Vec<String>> = source_key_columns(source)
+            .await?
             .into_iter()
-            .map(|ident| TargetTable {
-                namespace: namespace_name.clone(),
-                table: ident.name,
-            })
-            .collect())
+            .map(|((schema, table), columns)| (format!("{schema}__{table}"), columns))
+            .collect();
+        for table in missing {
+            let name = table.identifier().name().to_string();
+            // A target whose source table is gone has no key to record.
+            let Some(columns) = keys.get(&name) else {
+                continue;
+            };
+            let tx = Transaction::new(&table);
+            let tx = tx
+                .update_table_properties()
+                .set(
+                    KEY_COLUMNS_PROPERTY.to_string(),
+                    key_columns_property(columns),
+                )
+                .apply(tx)
+                .map_err(|err| WriteError::Catalog(err.to_string()))?;
+            tx.commit(self.catalog.as_ref())
+                .await
+                .map_err(|err| WriteError::Catalog(err.to_string()))?;
+            tracing::info!(table = %name, ?columns, "recorded key columns");
+        }
+        Ok(())
     }
 }
 
@@ -361,21 +435,67 @@ impl IcebergWriter for IcebergChangelogWriter {
 /// `capture::infrastructure::postgres::PostgresWalSource::ensure_replication_objects`'s own
 /// pattern) rather than threading typed column info through the WAL decode path — this keeps
 /// `capture/domain.rs`'s `ColumnValue` deliberately text-only, per its own doc comment.
-async fn introspect_iceberg_schema(
+/// Every table of `source`'s database with its row key: the replica identity's columns, in
+/// index order — the primary key by default, the chosen index for `REPLICA IDENTITY USING
+/// INDEX`. Tables without one (no primary key, or `REPLICA IDENTITY FULL`/`NOTHING`) map to
+/// nothing.
+async fn source_key_columns(
     source: &DataSource,
-    pg_schema: &str,
-    pg_table: &str,
-) -> Result<IcebergSchema, WriteError> {
+) -> Result<HashMap<(String, String), Vec<String>>, WriteError> {
+    let mut conn = connect_source(source).await?;
+    let rows = sqlx::query(
+        "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name \
+         FROM pg_class c \
+         JOIN pg_namespace n ON n.oid = c.relnamespace \
+         JOIN pg_index i ON i.indrelid = c.oid \
+           AND ((c.relreplident = 'd' AND i.indisprimary) \
+             OR (c.relreplident = 'i' AND i.indisreplident)) \
+         CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord) \
+         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum \
+         WHERE c.relkind IN ('r', 'p') \
+           AND n.nspname NOT IN ('pg_catalog', 'information_schema') \
+         ORDER BY n.nspname, c.relname, k.ord",
+    )
+    .fetch_all(&mut conn)
+    .await
+    .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))?;
+
+    let mut keys: HashMap<(String, String), Vec<String>> = HashMap::new();
+    for row in rows {
+        let get = |name: &str| -> Result<String, WriteError> {
+            row.try_get(name)
+                .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))
+        };
+        keys.entry((get("schema_name")?, get("table_name")?))
+            .or_default()
+            .push(get("column_name")?);
+    }
+    Ok(keys)
+}
+
+/// [`KEY_COLUMNS_PROPERTY`]'s value for `columns`.
+fn key_columns_property(columns: &[String]) -> String {
+    serde_json::to_string(columns).expect("a list of strings always serializes")
+}
+
+async fn connect_source(source: &DataSource) -> Result<PgConnection, WriteError> {
     let options = PgConnectOptions::new()
         .host(&source.connection.host)
         .port(source.connection.port)
         .username(&source.connection.username)
         .password(&source.connection.password)
         .database(&source.connection.database);
-
-    let mut conn = PgConnection::connect_with(&options)
+    PgConnection::connect_with(&options)
         .await
-        .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))?;
+        .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))
+}
+
+async fn introspect_iceberg_schema(
+    source: &DataSource,
+    pg_schema: &str,
+    pg_table: &str,
+) -> Result<IcebergSchema, WriteError> {
+    let mut conn = connect_source(source).await?;
 
     let rows = sqlx::query(
         "SELECT column_name, data_type FROM information_schema.columns \

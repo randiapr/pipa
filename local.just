@@ -3,12 +3,11 @@
 
 rustfs_data := "rustfs-data"
 rustfs_alias := "pipa-local"
-catalog_port := "8081"
 logs_dir := "logs"
 
-# bring up rustfs, pipa-catalog-proxy, pipa-backend, pipa-ingestion, and the dashboard dev
-# server, all detached in the background (ensuring the "pipa" bucket exists via `rc` first) — `up`
-# returns once everything is listening rather than blocking the terminal. Each service's
+# bring up rustfs, pipa-backend, pipa-ingestion, and the dashboard dev server, all detached in
+# the background (ensuring the "pipa" bucket exists via `rc` first) — `up` returns once
+# everything is listening rather than blocking the terminal. Each service's
 # stdout/stderr goes to its own file under `{{logs_dir}}/`; tail them with
 # `just local::log`, stop everything with `just local::down`.
 up:
@@ -51,7 +50,7 @@ up:
     # each -p separately: two concurrent single-package `cargo run` invocations resolve
     # workspace feature unification differently than this combined build, which
     # invalidates and recompiles shared deps all over again.
-    cargo build -p pipa-backend -p pipa-ingestion -p pipa-catalog-proxy
+    cargo build -p pipa-backend -p pipa-ingestion
 
     # Local-only login defaults (like the rustfsadmin credentials above), overridable from the
     # environment: the backend refuses to start without a JWT secret and a first admin.
@@ -60,20 +59,9 @@ up:
     export PIPA_ADMIN_PASSWORD="${PIPA_ADMIN_PASSWORD:-admin-password}"
 
     # RustFS's Iceberg REST catalog rejects unsigned requests with 403 and `iceberg-catalog-rest`
-    # can't sign, so the backend and ingestion reach it through pipa-catalog-proxy, which signs
-    # each request (the same `catalog` service docker-compose.yml runs). It also enables S3
-    # Tables on the bucket before it starts listening, so waiting on its port is enough. It
-    # shares the RUSTFS_* defaults with the other services (endpoint :9000, rustfsadmin, "pipa");
-    # :8080 is the backend's, hence the separate port.
-    CATALOG_PROXY_LISTEN="127.0.0.1:{{catalog_port}}" \
-        nohup ./target/debug/pipa-catalog-proxy > {{logs_dir}}/catalog.log 2>&1 &
-    disown
-
-    echo "waiting for pipa-catalog-proxy on :{{catalog_port}}..."
-    wait_for_port {{catalog_port}} 60 || { echo "see {{logs_dir}}/catalog.log" >&2; exit 1; }
-
-    export ICEBERG_CATALOG_URI="${ICEBERG_CATALOG_URI:-http://localhost:{{catalog_port}}/iceberg}"
-
+    # can't sign, so the backend and ingestion each embed the pipa-catalog-proxy signer on a
+    # loopback port of their own process (ICEBERG_CATALOG_URI unset selects it), which also
+    # enables S3 Tables on the bucket at startup.
     nohup ./target/debug/pipa-backend > {{logs_dir}}/backend.log 2>&1 &
     disown
     nohup ./target/debug/pipa-ingestion > {{logs_dir}}/ingestion.log 2>&1 &
@@ -110,7 +98,6 @@ down:
 
     patterns=(
         "rustfs server"
-        "target/debug/pipa-catalog-proxy"
         "target/debug/pipa-backend"
         "target/debug/pipa-ingestion"
         "trunk serve"

@@ -12,6 +12,7 @@ use iceberg_catalog_rest::{
     REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE, RestCatalogBuilder,
 };
 use iceberg_storage_opendal::OpenDalStorageFactory;
+use pipa_catalog_proxy::{CatalogProxy, DEFAULT_SERVICE, sigv4::Signer};
 use serde::{Deserialize, Serialize};
 
 /// Connection settings for the Iceberg REST catalog backing CDC target tables. Defaults to
@@ -25,18 +26,23 @@ pub struct IcebergCatalogConfig {
 
 impl IcebergCatalogConfig {
     /// Reads connection settings from `ICEBERG_CATALOG_*` environment variables. `uri` defaults to
-    /// `store_endpoint`'s own `/iceberg` path: RustFS's "S3 Tables" feature embeds an Iceberg REST
-    /// Catalog directly into the object store itself (same host/port as its S3 API), so no
-    /// separate catalog service needs to be run — see the note in docker-compose.yml about
-    /// enabling it per-bucket.
-    pub fn from_env(store_endpoint: &str) -> Self {
-        Self {
+    /// RustFS's "S3 Tables" catalog, which RustFS embeds directly into the object store itself
+    /// (`store`'s endpoint, `/iceberg` path), so no separate catalog service needs to be run. That
+    /// catalog only accepts SigV4-signed requests, which `iceberg-catalog-rest` can't make, so the
+    /// default starts a `pipa-catalog-proxy` signer inside this process (which also enables S3
+    /// Tables on `store`'s bucket) and points `uri` at it. Set `ICEBERG_CATALOG_URI` to use some
+    /// other catalog, or a standalone `pipa-catalog-proxy`, instead.
+    pub async fn from_env(store: &ObjectStoreConfig) -> anyhow::Result<Self> {
+        let uri = match std::env::var("ICEBERG_CATALOG_URI") {
+            Ok(uri) if !uri.is_empty() => uri,
+            _ => embedded_catalog_uri(store).await?,
+        };
+        Ok(Self {
             name: std::env::var("ICEBERG_CATALOG_NAME").unwrap_or_else(|_| "pipa".to_string()),
-            uri: std::env::var("ICEBERG_CATALOG_URI")
-                .unwrap_or_else(|_| format!("{}/iceberg", store_endpoint.trim_end_matches('/'))),
+            uri,
             warehouse: std::env::var("ICEBERG_CATALOG_WAREHOUSE")
                 .unwrap_or_else(|_| "pipa".to_string()),
-        }
+        })
     }
 
     /// Builds a REST [`Catalog`] client for this catalog. `store` supplies the RustFS/S3
@@ -73,4 +79,18 @@ impl IcebergCatalogConfig {
 
         Ok(Arc::new(catalog))
     }
+}
+
+/// Starts the in-process signer in front of RustFS's catalog at `store`'s endpoint, with `store`'s
+/// credentials, and returns its catalog URI.
+async fn embedded_catalog_uri(store: &ObjectStoreConfig) -> anyhow::Result<String> {
+    let signer = Signer::new(
+        store.access_key_id.clone(),
+        store.secret_access_key.clone(),
+        store.region.clone(),
+        DEFAULT_SERVICE.to_string(),
+    );
+    CatalogProxy::new(&store.endpoint, signer)?
+        .serve_embedded(&store.bucket)
+        .await
 }

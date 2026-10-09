@@ -3,7 +3,10 @@
 //! `user` role sees data (it gets 403 on `/query` and `/datasources`).
 //!
 //! Both routes are scoped to the project's own data sources: a read names a table of one of
-//! them, and the query session only sees that source's namespace.
+//! them, and the query session only sees that source's namespace. The Iceberg metadata tables
+//! (`…$snapshots`, `…$manifests`) aren't browsable for any role: they are left out of the list
+//! and a read naming one is a bad request (`POST /query` can still select them). Every role reads a table's current rows (one row per key,
+//! without the changelog columns), all from Iceberg; the changelog itself is `/query`'s.
 
 use std::sync::Arc;
 
@@ -19,7 +22,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::datasource::{DataSourceError, DataSourceId};
-use crate::iceberg::{QueryError, namespace_for_source};
+use crate::iceberg::{QueryError, is_metadata_table, namespace_for_source};
 use crate::project::ProjectId;
 
 use super::auth::{AuthError, AuthUser};
@@ -57,6 +60,7 @@ async fn list_tables(
 
     let tables = found
         .into_iter()
+        .filter(|(_, name)| !is_metadata_table(name))
         .filter_map(|(namespace, name)| {
             let source = sources
                 .iter()
@@ -79,6 +83,9 @@ async fn read_table(
     let project = parse_id(&request.project_id, "project_id").map(ProjectId)?;
     let source = parse_id(&request.source_id, "source_id").map(DataSourceId)?;
     auth.require_project(Some(project))?;
+    if is_metadata_table(&request.table) {
+        return Err(ApiError::MetadataTable);
+    }
 
     if !project_sources(&api.datasources, project)
         .await?
@@ -113,6 +120,8 @@ enum ApiError {
     InvalidId(&'static str),
     /// The data source isn't one of the project's.
     UnknownSource,
+    /// The table is one of Iceberg's metadata tables, which aren't browsable.
+    MetadataTable,
 }
 
 impl From<QueryError> for ApiError {
@@ -147,6 +156,11 @@ impl IntoResponse for ApiError {
                 StatusCode::BAD_REQUEST,
                 ResponseCode::BadRequest,
                 "source_id must be a data source of the project",
+            ),
+            Self::MetadataTable => error_response(
+                StatusCode::BAD_REQUEST,
+                ResponseCode::BadRequest,
+                "Iceberg metadata tables can't be browsed; query them with POST /query",
             ),
             Self::DataSource(err) => error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
