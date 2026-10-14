@@ -10,17 +10,15 @@
 //! deserialize it), never through a shared Rust crate. That keeps its release and deploy cycle
 //! fully independent of `pipa-backend`'s.
 //!
-//! Designed to run as multiple independent instances: `INGESTION_SHARD_INDEX`/
-//! `INGESTION_SHARD_COUNT` (default `0`/`1`, i.e. a single instance handling everything) split
-//! the registered sources deterministically by id, so N instances can each own a disjoint
-//! subset without coordinating — necessary because a Postgres replication slot can only be
-//! consumed by one client at a time, so two instances must never both attach to the same
-//! source. This is static sharding, not consistent hashing: changing `INGESTION_SHARD_COUNT`
-//! reassigns most sources to a different shard, briefly interrupting their capture as the old
-//! shard's slot is released and the new shard's instance reattaches. That reassignment is safe
-//! for delivery guarantees because checkpoint state lives durably in Iceberg itself (see
-//! `write::domain::IcebergWriter`), not in-process — a source moving to a different instance
-//! behaves exactly like a cold restart of the old one.
+//! Designed to run as multiple independent instances: the `coordination` module decides which
+//! instance captures which source, because a Postgres replication slot can only be consumed by
+//! one client at a time, so two instances must never both attach to the same source. Without
+//! `REDIS_URL` that is static sharding by id (`INGESTION_SHARD_INDEX`/`INGESTION_SHARD_COUNT`);
+//! with it, instances discover each other through Redis, sources are shared out by rendezvous
+//! hashing and a dead instance's sources move to the others, so instances can be added and
+//! removed freely. Either way, handing a source to another instance is safe for delivery
+//! guarantees because checkpoint state lives durably in Iceberg itself (see
+//! `write::domain::IcebergWriter`), not in-process — it behaves exactly like a cold restart.
 //!
 //! The registered sources are read again every `INGESTION_SOURCE_REFRESH_INTERVAL_SECS`
 //! (default 30): a newly registered source starts capturing, a removed one stops, and a change
@@ -28,6 +26,7 @@
 //! its running capture, which applies it from the next change on.
 
 mod capture;
+mod coordination;
 mod datasource;
 mod storage;
 mod write;
@@ -36,7 +35,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use object_store::ObjectStore;
 use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
@@ -45,28 +43,16 @@ use datasource::{DataSource, DataSourceId, DbEngine, TableSelection};
 use storage::ObjectStoreConfig;
 
 use crate::capture::{BatchConfig, CaptureOrchestrator, CdcSource, PostgresWalSource};
+use crate::coordination::Coordinator;
 use crate::write::{IcebergCatalogConfig, IcebergChangelogWriter, IcebergWriter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
-    let shard_index: u32 = std::env::var("INGESTION_SHARD_INDEX")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(0);
-    let shard_count: u32 = std::env::var("INGESTION_SHARD_COUNT")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(1)
-        .max(1);
-    if shard_index >= shard_count {
-        anyhow::bail!(
-            "INGESTION_SHARD_INDEX ({shard_index}) must be less than INGESTION_SHARD_COUNT ({shard_count})"
-        );
-    }
-
-    tracing::info!(shard_index, shard_count, "pipa-ingestion starting");
+    tracing::info!("pipa-ingestion starting");
+    let coordination = coordination::from_env()?;
+    let coordinator = coordination.coordinator;
 
     let refresh_interval = Duration::from_secs(
         std::env::var("INGESTION_SOURCE_REFRESH_INTERVAL_SECS")
@@ -78,11 +64,6 @@ async fn main() -> anyhow::Result<()> {
 
     let store_config = ObjectStoreConfig::from_env();
     let store = store_config.build_store()?;
-    let sources = assigned_sources(store.as_ref(), shard_index, shard_count).await?;
-
-    if sources.is_empty() {
-        tracing::info!("no OLTP data sources assigned to this shard");
-    }
 
     let catalog = IcebergCatalogConfig::from_env(&store_config)
         .await?
@@ -97,13 +78,18 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let mut captures = Captures::new(orchestrator, Arc::clone(&writer));
-    captures.reconcile(sources).await;
+    let mut assignment = Assignment::new(coordinator);
+    assignment.registered = datasource::list_registered(store.as_ref()).await?;
+    assignment.coordinate(&mut captures, true).await;
 
     let shutdown = shutdown_signal();
     tokio::pin!(shutdown);
     let mut refresh = tokio::time::interval(refresh_interval);
     refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     refresh.tick().await; // The first tick is immediate; the sources were just read.
+    let mut coordinate = tokio::time::interval(coordination.interval);
+    coordinate.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    coordinate.tick().await;
     loop {
         tokio::select! {
             result = &mut shutdown => {
@@ -111,31 +97,107 @@ async fn main() -> anyhow::Result<()> {
                 break;
             }
             _ = refresh.tick() => {
-                match assigned_sources(store.as_ref(), shard_index, shard_count).await {
-                    Ok(sources) => captures.reconcile(sources).await,
+                match datasource::list_registered(store.as_ref()).await {
+                    Ok(registered) => assignment.registered = registered,
                     Err(err) => {
                         tracing::warn!(error = %err, "could not re-read the registered data sources, keeping the current ones");
                     }
                 }
+                assignment.coordinate(&mut captures, true).await;
+            }
+            _ = coordinate.tick() => {
+                assignment.coordinate(&mut captures, false).await;
             }
         }
     }
     tracing::info!("pipa-ingestion shutting down");
+    assignment.leave(&mut captures).await;
 
     Ok(())
 }
 
-/// The registered data sources this shard owns.
-async fn assigned_sources(
-    store: &dyn ObjectStore,
-    shard_index: u32,
-    shard_count: u32,
-) -> anyhow::Result<Vec<DataSource>> {
-    Ok(datasource::list_registered(store)
-        .await?
-        .into_iter()
-        .filter(|source| shard_of(source, shard_count) == shard_index)
-        .collect())
+/// Logs to stdout: JSON, one object per line, with `LOG_FORMAT=json` (what `just local::up` sets,
+/// for the files under `logs/`), otherwise human-readable text — coloured only on a terminal,
+/// so redirecting it to a file doesn't fill it with escape codes.
+fn init_tracing() {
+    use std::io::IsTerminal;
+
+    if std::env::var("LOG_FORMAT").is_ok_and(|format| format.eq_ignore_ascii_case("json")) {
+        tracing_subscriber::fmt().json().flatten_event(true).init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_ansi(std::io::stdout().is_terminal())
+            .init();
+    }
+}
+
+/// What the coordinator says this instance captures out of the registered sources, kept in line
+/// with the running captures.
+struct Assignment {
+    coordinator: Arc<dyn Coordinator>,
+    registered: Vec<DataSource>,
+    owned: HashSet<DataSourceId>,
+}
+
+impl Assignment {
+    fn new(coordinator: Arc<dyn Coordinator>) -> Self {
+        Self {
+            coordinator,
+            registered: Vec::new(),
+            owned: HashSet::new(),
+        }
+    }
+
+    /// Asks the coordinator which sources are ours and applies the answer. The running captures
+    /// are reconciled when the assignment changed, or when `force`d (the registered sources were
+    /// just re-read, which can change a source's table selection without changing who owns it).
+    ///
+    /// When the coordinator can't answer, the current assignment stands: an outage of the
+    /// coordination service never stops a running capture, which would only let its slot hold
+    /// WAL back.
+    async fn coordinate(&mut self, captures: &mut Captures, force: bool) {
+        let ids: Vec<DataSourceId> = self.registered.iter().map(|source| source.id).collect();
+        let owned = match self.coordinator.assign(&ids).await {
+            Ok(owned) => owned,
+            Err(err) => {
+                tracing::warn!(error = %err, "could not coordinate, keeping the current assignment");
+                if !force {
+                    return;
+                }
+                self.owned.clone()
+            }
+        };
+        let changed = owned != self.owned;
+        if !changed && !force {
+            return;
+        }
+
+        let mine: Vec<DataSource> = self
+            .registered
+            .iter()
+            .filter(|source| owned.contains(&source.id))
+            .cloned()
+            .collect();
+        captures.reconcile(mine).await;
+
+        // Only now that those captures are stopped can another instance take the slot.
+        let dropped: Vec<DataSourceId> = self.owned.difference(&owned).copied().collect();
+        if !dropped.is_empty() {
+            tracing::info!(
+                sources = dropped.len(),
+                "no longer capturing sources that moved to another instance or were removed"
+            );
+            self.coordinator.release(&dropped).await;
+        }
+        self.owned = owned;
+    }
+
+    /// Stops every capture and hands the sources back.
+    async fn leave(&mut self, captures: &mut Captures) {
+        captures.reconcile(Vec::new()).await;
+        let held: Vec<DataSourceId> = self.owned.drain().collect();
+        self.coordinator.leave(&held).await;
+    }
 }
 
 /// A source's running capture task, and the handle that keeps its table selection current.
@@ -224,7 +286,7 @@ impl Captures {
         self.running.retain(|id, capture| {
             let keep = registered.contains(id);
             if !keep {
-                tracing::info!(%id, "data source no longer registered, stopping its capture");
+                tracing::info!(%id, "data source no longer registered or assigned to this instance, stopping its capture");
                 capture.task.abort();
             }
             keep
@@ -259,10 +321,4 @@ async fn shutdown_signal() -> anyhow::Result<()> {
         _ = terminate.recv() => {}
     }
     Ok(())
-}
-
-/// Deterministically assigns `source` to one of `shard_count` shards from its id — stable
-/// across restarts and independent of registration order.
-fn shard_of(source: &DataSource, shard_count: u32) -> u32 {
-    (source.id.0.as_u128() % u128::from(shard_count)) as u32
 }

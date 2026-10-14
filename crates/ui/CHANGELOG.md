@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.9.0] - 2026-10-14
+
+### Changed
+
+- daisyUI 5.7.47 → 5.7.50 (`package-lock.json`), which regenerates the dashboard's compiled CSS.
+
 ## [0.8.0] - 2026-10-09
 
 ### Added

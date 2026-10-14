@@ -3,9 +3,11 @@
 
 rustfs_data := "rustfs-data"
 rustfs_alias := "pipa-local"
+postgres_data := "postgres-data"
 logs_dir := "logs"
+redis_port := "6379"
 
-# bring up rustfs, pipa-backend, pipa-ingestion, and the dashboard dev server, all detached in
+# bring up an example Postgres source (brew), redis (brew; coordinates ingestion instances), rustfs, pipa-backend, pipa-ingestion, and the dashboard dev server, all detached in
 # the background (ensuring the "pipa" bucket exists via `rc` first) — `up` returns once
 # everything is listening rather than blocking the terminal. Each service's
 # stdout/stderr goes to its own file under `{{logs_dir}}/`; tail them with
@@ -27,7 +29,47 @@ up:
         exec 3<&- 3>&-
     }
 
+    # A second `up` on a running stack would start duplicates (two rustfs on one data directory,
+    # a trunk that dies on :3000) and truncate the live services' logs: refuse instead.
+    running=""
+    for pattern in "rustfs server" "target/debug/pipa-backend" "target/debug/pipa-ingestion" "trunk serve"; do
+        if pgrep -f "$pattern" >/dev/null; then running="$running\n  $pattern"; fi
+    done
+    if [ -n "$running" ]; then
+        printf "already running:$running\nrun \`just local::down\` first\n" >&2
+        exit 1
+    fi
+
     mkdir -p {{rustfs_data}} {{logs_dir}}
+
+    # Example OLTP source for local CDC testing, from brew's postgresql@18 (same user/password/db
+    # as docker-compose's example-source). Its cluster lives in {{postgres_data}}/, initialised on
+    # first run; wal_level=logical is what PostgresWalSource's replication slot needs.
+    pg_bin="$(brew --prefix postgresql@18)/bin"
+    if [ ! -f {{postgres_data}}/PG_VERSION ]; then
+        pwfile="$(mktemp)"; echo pipa > "$pwfile"
+        "$pg_bin/initdb" -D {{postgres_data}} -U pipa --pwfile="$pwfile" --auth=scram-sha-256 >/dev/null
+        rm -f "$pwfile"
+    fi
+    if ! "$pg_bin/pg_isready" -q -h 127.0.0.1 -p 5432; then
+        "$pg_bin/pg_ctl" -D {{postgres_data}} -l {{logs_dir}}/postgres.log \
+            -o "-c wal_level=logical -c listen_addresses=127.0.0.1 -p 5432" -w start
+    fi
+    PGPASSWORD=pipa "$pg_bin/psql" -h 127.0.0.1 -U pipa -d postgres -tAc \
+        "SELECT 1 FROM pg_database WHERE datname = 'testdb'" | grep -q 1 \
+        || PGPASSWORD=pipa "$pg_bin/createdb" -h 127.0.0.1 -U pipa testdb
+    echo "postgres ready on :5432 (pipa/pipa, db testdb)"
+
+    # Redis (REDIS_URL below): pipa-ingestion's coordination — which instance captures which source,
+    # liveness state only — and pipa-backend's cache of query results. Nothing in it needs to survive
+    # a restart, so no persistence. One already listening on the
+    # port (brew services, say) is used as it is — and left alone by `down`.
+    if ! redis-cli -p {{redis_port}} ping >/dev/null 2>&1; then
+        redis-server --port {{redis_port}} --bind 127.0.0.1 --save "" --appendonly no \
+            --daemonize yes --dir {{logs_dir}} --logfile redis.log --pidfile redis.pid >/dev/null
+        wait_for_port {{redis_port}}
+    fi
+    echo "redis ready on :{{redis_port}}"
 
     # `nohup ... &` + `disown` detaches each service from this script's shell, so it
     # keeps running (logging to its own file) after `up` itself exits — `nohup` stops it
@@ -52,6 +94,10 @@ up:
     # invalidates and recompiles shared deps all over again.
     cargo build -p pipa-backend -p pipa-ingestion
 
+    # JSON, one object per line, so the files under {{logs_dir}}/ are machine-readable (and have
+    # no colour codes in them).
+    export LOG_FORMAT=json
+
     # Local-only login defaults (like the rustfsadmin credentials above), overridable from the
     # environment: the backend refuses to start without a JWT secret and a first admin.
     export JWT_SECRET="${JWT_SECRET:-pipa-local-dev-secret-do-not-use-in-production}"
@@ -62,9 +108,11 @@ up:
     # can't sign, so the backend and ingestion each embed the pipa-catalog-proxy signer on a
     # loopback port of their own process (ICEBERG_CATALOG_URI unset selects it), which also
     # enables S3 Tables on the bucket at startup.
-    nohup ./target/debug/pipa-backend > {{logs_dir}}/backend.log 2>&1 &
+    REDIS_URL="${REDIS_URL:-redis://127.0.0.1:{{redis_port}}}" \
+        nohup ./target/debug/pipa-backend > {{logs_dir}}/backend.log 2>&1 &
     disown
-    nohup ./target/debug/pipa-ingestion > {{logs_dir}}/ingestion.log 2>&1 &
+    REDIS_URL="${REDIS_URL:-redis://127.0.0.1:{{redis_port}}}" \
+        nohup ./target/debug/pipa-ingestion > {{logs_dir}}/ingestion.log 2>&1 &
     disown
 
     echo "waiting for pipa-backend on :8080..."
@@ -96,6 +144,19 @@ down:
     #!/usr/bin/env bash
     set -uo pipefail
 
+    pg_bin="$(brew --prefix postgresql@18 2>/dev/null)/bin"
+    if [ -f {{postgres_data}}/PG_VERSION ] && "$pg_bin/pg_ctl" -D {{postgres_data}} status >/dev/null 2>&1; then
+        "$pg_bin/pg_ctl" -D {{postgres_data}} -m fast stop >/dev/null && echo "stopped: postgres"
+        stopped_pg=1
+    fi
+
+    # Only the Redis `up` started itself (it leaves a pid file); one that was already running is
+    # not ours to stop.
+    if [ -f {{logs_dir}}/redis.pid ] && kill "$(cat {{logs_dir}}/redis.pid)" 2>/dev/null; then
+        echo "stopped: redis"
+        stopped_redis=1
+    fi
+
     patterns=(
         "rustfs server"
         "target/debug/pipa-backend"
@@ -103,7 +164,7 @@ down:
         "trunk serve"
     )
 
-    stopped=0
+    stopped=$(( ${stopped_pg:-0} | ${stopped_redis:-0} ))
     for pattern in "${patterns[@]}"; do
         if pkill -f "$pattern" 2>/dev/null; then
             echo "stopped: $pattern"

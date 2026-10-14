@@ -3,6 +3,7 @@
 //! data sources back out of the shared object store (via its own standalone duplicate of this
 //! read path, not a dependency on this crate) to drive CDC capture.
 
+mod cache;
 mod datasource;
 mod http;
 mod iceberg;
@@ -19,6 +20,7 @@ use axum::{
     middleware,
     routing::get,
 };
+use cache::{CacheConfig, CachedQueries};
 use datasource::{
     DataSourceService,
     infrastructure::{ObjectStoreDataSourceRepository, SqlxConnectionTester, SqlxSchemaExplorer},
@@ -37,7 +39,7 @@ use user::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
     let store_config = ObjectStoreConfig::from_env();
     let store = store_config.build_store()?;
@@ -64,9 +66,13 @@ async fn main() -> anyhow::Result<()> {
     bootstrap_admin(&user_service).await?;
 
     let query_api = Arc::new(http::QueryApi {
-        queries: QueryService::new(
-            IcebergCatalogConfig::from_env(&store_config).await?,
-            store_config,
+        queries: CachedQueries::new(
+            QueryService::new(
+                IcebergCatalogConfig::from_env(&store_config).await?,
+                store_config,
+            ),
+            cache::from_env()?,
+            CacheConfig::from_env(),
         ),
         datasources: datasource_service.clone(),
     });
@@ -84,6 +90,21 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// Logs to stdout: JSON, one object per line, with `LOG_FORMAT=json` (what `just local::up` sets,
+/// for the files under `logs/`), otherwise human-readable text — coloured only on a terminal,
+/// so redirecting it to a file doesn't fill it with escape codes.
+fn init_tracing() {
+    use std::io::IsTerminal;
+
+    if std::env::var("LOG_FORMAT").is_ok_and(|format| format.eq_ignore_ascii_case("json")) {
+        tracing_subscriber::fmt().json().flatten_event(true).init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_ansi(std::io::stdout().is_terminal())
+            .init();
+    }
 }
 
 /// Every route. Everything except `/healthz` and `/auth/login` requires a signed-in user; what a
@@ -166,7 +187,13 @@ async fn record_existing_ingested_tables(
         }
     };
     for id in ids {
-        match record_existing_tables_of(store.as_ref(), &datasources, &query_api.queries, id).await
+        match record_existing_tables_of(
+            store.as_ref(),
+            &datasources,
+            query_api.queries.uncached(),
+            id,
+        )
+        .await
         {
             Ok(Some(count)) => {
                 tracing::info!(%id, tables = count, "recorded the tables the data source has in pipa as its choice");
@@ -342,13 +369,17 @@ mod tests {
             .await
             .unwrap();
         let query_api = Arc::new(http::QueryApi {
-            queries: QueryService::new(
-                IcebergCatalogConfig {
-                    name: "pipa".to_string(),
-                    uri: "http://localhost:1/iceberg".to_string(),
-                    warehouse: "pipa".to_string(),
-                },
-                ObjectStoreConfig::from_env(),
+            queries: CachedQueries::new(
+                QueryService::new(
+                    IcebergCatalogConfig {
+                        name: "pipa".to_string(),
+                        uri: "http://localhost:1/iceberg".to_string(),
+                        warehouse: "pipa".to_string(),
+                    },
+                    ObjectStoreConfig::from_env(),
+                ),
+                Arc::new(cache::infrastructure::InMemoryCache::new(16)),
+                CacheConfig::default(),
             ),
             datasources: datasources.clone(),
         });

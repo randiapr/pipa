@@ -22,7 +22,7 @@ fn env_or(key: &str, default: &str) -> String {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    init_tracing();
 
     let proxy = Arc::new(CatalogProxy::new(
         &env_or("RUSTFS_ENDPOINT", "http://localhost:9000"),
@@ -43,4 +43,19 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(%listen, upstream = %proxy.upstream(), "pipa-catalog-proxy listening");
     axum::serve(listener, proxy.router()).await?;
     Ok(())
+}
+
+/// Logs to stdout: JSON, one object per line, with `LOG_FORMAT=json` (what `just local::up` sets,
+/// for the files under `logs/`), otherwise human-readable text — coloured only on a terminal,
+/// so redirecting it to a file doesn't fill it with escape codes.
+fn init_tracing() {
+    use std::io::IsTerminal;
+
+    if std::env::var("LOG_FORMAT").is_ok_and(|format| format.eq_ignore_ascii_case("json")) {
+        tracing_subscriber::fmt().json().flatten_event(true).init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_ansi(std::io::stdout().is_terminal())
+            .init();
+    }
 }

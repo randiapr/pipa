@@ -24,7 +24,9 @@ x-pipa-ingestion-env: &pipa-ingestion-env
   RUSTFS_ACCESS_KEY_ID: rustfsadmin
   RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
   RUSTFS_ALLOW_HTTP: "true"
-  INGESTION_SHARD_COUNT: "2"
+  # Instances find each other through Redis and share the registered sources between them: add
+  # or remove an ingestion-N service freely, and a stopped one's sources move to the others.
+  REDIS_URL: redis://redis:6379
   # How often each instance re-reads the registered data sources: new sources start capturing,
   # removed ones stop, and a changed table choice (the dashboard's data source explorer) applies
   # without a restart.
@@ -47,6 +49,19 @@ services:
       - "9001:9001"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:9000/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Coordination for the pipa-ingestion instances below (who is alive, and which of them captures
+  # which data source: crates/ingestion/src/coordination/) and pipa-backend's cache of query
+  # results (crates/backend/src/cache/). Nothing here has to survive a restart, so there is no
+  # volume and no persistence. It holds query results: don't publish its port.
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -105,7 +120,13 @@ services:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
+      # Shared cache of POST /query results and the table list. Unset, each backend instance
+      # keeps a small cache in its own memory. CACHE_QUERY_TTL_SECS/CACHE_TABLES_TTL_SECS (30)
+      # bound how stale a result can be; 0 turns that cache off.
+      REDIS_URL: redis://redis:6379
       RUSTFS_ENDPOINT: http://rustfs:9000
       RUSTFS_BUCKET: pipa
       RUSTFS_REGION: ap-southeast-3
@@ -130,12 +151,12 @@ services:
   # something wired through pipa-backend — it keeps its own independent copy of
   # the iceberg/iceberg-catalog-rest dependency (crates/ingestion/src/write/) to land captured
   # changes as changelog rows, separate from pipa-backend's own copy used for querying.
-  # Distributed across INGESTION_SHARD_COUNT instances below (a Postgres replication slot only
-  # tolerates one consumer, so each source's id is statically partitioned by shard — see
-  # shard_of() in main.rs); bump the shared INGESTION_SHARD_COUNT anchor and add matching
-  # ingestion-N services to scale further. All shards share one `image:` tag, so compose
-  # builds pipa-ingestion once and every shard's container just runs it — not one build per
-  # shard.
+  # Distributed across the ingestion-N instances below: a Postgres replication slot only tolerates
+  # one consumer, so each source is captured by exactly one of them, chosen through Redis (see
+  # crates/ingestion/src/coordination/). Add another ingestion-N service to scale out. All of them
+  # share one `image:` tag, so compose builds pipa-ingestion once and every container just runs it
+  # — not one build per instance. INGESTION_INSTANCE_ID names each one among its peers and must
+  # be unique; being stable, it lets a restarted container pick its sources up where it left off.
   ingestion-0:
     image: pipa-ingestion
     build: *pipa-ingestion-build
@@ -144,9 +165,11 @@ services:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       <<: *pipa-ingestion-env
-      INGESTION_SHARD_INDEX: "0"
+      INGESTION_INSTANCE_ID: ingestion-0
 
   ingestion-1:
     image: pipa-ingestion
@@ -156,9 +179,11 @@ services:
         condition: service_healthy
       create-bucket:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     environment:
       <<: *pipa-ingestion-env
-      INGESTION_SHARD_INDEX: "1"
+      INGESTION_INSTANCE_ID: ingestion-1
 
   # Trunk-built wasm32 SPA (crates/ui/), served statically by static-web-server. The host's native
   # Trunk does the build (`just build-ui-release`, which `just docker-up` runs first — plain

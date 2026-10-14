@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.11.0] - 2026-10-14
+
+### Added
+
+- A cache for the two expensive reads, `POST /query` and the Iceberg listing behind
+  `GET /tables`. It lives in memory by default (`CACHE_MAX_ENTRIES`, 256) and in Redis when
+  `REDIS_URL` is set, shared by every backend instance. Entries are keyed by the SQL and the
+  set of namespaces the session may see, so one project's entries never answer another's, and
+  are shared across users and roles only because handlers authorize before looking up. Staleness
+  is bounded by a TTL rather than invalidated: `CACHE_QUERY_TTL_SECS`/`CACHE_TABLES_TTL_SECS`
+  (30 each, 0 turns that cache off), so a hit can be that old and `now()` is frozen for that
+  long. Only successes up to `CACHE_MAX_ENTRY_BYTES` (1 MiB) are stored; the table rows browser
+  isn't cached. An unreachable Redis counts as a miss and is skipped for 5 seconds, so a cache
+  outage costs speed, never availability.
+- `LOG_FORMAT=json` makes the logs one JSON object per line; otherwise they stay human-readable,
+  now coloured only when stdout is a terminal.
+
+### Changed
+
+- The startup migration that records existing ingested tables reads the catalog uncached, so it
+  never works from a stale listing.
+
 ## [0.10.0] - 2026-10-09
 
 ### Added

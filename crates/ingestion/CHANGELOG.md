@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.7.0] - 2026-10-14
+
+### Added
+
+- Instances can now share sources dynamically. With `REDIS_URL` set they register in Redis,
+  split the registered sources by rendezvous hashing and renew a lease on each source they own,
+  so an instance can be added or removed with only about 1/N of the sources moving, and a dead
+  instance's sources move to the others once its keys lapse (three intervals;
+  `INGESTION_COORDINATION_INTERVAL_SECS`, default 5). `INGESTION_INSTANCE_ID` names an instance
+  and must be unique; unset, one is generated per process. A source is handed over only after
+  its old owner has stopped the capture and released the lease, and delivery stays
+  effectively-once because the replication slot and the Iceberg checkpoints hold all the
+  state. If Redis can't be reached the current assignment stands: running captures continue and
+  nothing is rebalanced until it answers.
+- `LOG_FORMAT=json` makes the logs one JSON object per line; otherwise they stay human-readable,
+  now coloured only when stdout is a terminal.
+
+### Changed
+
+- Without `REDIS_URL` the static `INGESTION_SHARD_INDEX`/`INGESTION_SHARD_COUNT` split behaves
+  as before, now behind the same coordination interface; the assignment is re-evaluated on
+  its own interval, and shutdown stops every capture before handing the sources back.
+
 ## [0.6.0] - 2026-10-09
 
 ### Added
