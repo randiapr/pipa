@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.0] - 2026-10-14
+
+### Added
+
+- The standalone binary honors `LOG_FORMAT=json` (one JSON object per line); otherwise its logs
+  stay human-readable, now coloured only when stdout is a terminal.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

@@ -134,10 +134,20 @@ outdated-ui: ui-deps
 upgrade-ui: ui-deps
     cd crates/ui && npm update
 
-# remove build artifacts (target/, crates/ui/dist/) — leaves rustfs-data/ and node_modules/ alone
+# remove build artifacts (target/, crates/ui/dist/) and the local stack's logs (logs/) — leaves
+# rustfs-data/ and node_modules/ alone. A running stack's logs go too (its services keep writing to
+# the deleted files), except the pid file of a Redis `just local::up` started, which `just
+# local::down` needs to stop it.
 clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
     cargo clean
     rm -rf crates/ui/dist
+    if [ -f logs/redis.pid ] && kill -0 "$(cat logs/redis.pid)" 2>/dev/null; then
+        find logs -mindepth 1 ! -name redis.pid -delete
+    else
+        rm -rf logs
+    fi
 
 # make sure the mandatory compose secrets exist (PIPA_JWT_SECRET, PIPA_ADMIN_PASSWORD; see
 # docker-compose.yml): creates `.env` from `.env.example` if missing, then fills any of them that is

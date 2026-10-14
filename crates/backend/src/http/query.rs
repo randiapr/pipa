@@ -15,18 +15,19 @@ use axum::{
 use pipa_api::{QueryRequest, Rows, RowsResponse, path};
 use uuid::Uuid;
 
+use crate::cache::CachedQueries;
 use crate::datasource::domain::DataSource;
 use crate::datasource::{DataSourceError, DataSourceService};
-use crate::iceberg::{QueryError, QueryService, namespace_for_source};
+use crate::iceberg::{QueryError, namespace_for_source};
 use crate::project::ProjectId;
 
 use super::auth::{AuthError, AuthUser};
 use super::error::{BaseResponse, ResponseCode, error_response};
 
-/// What `/query` needs: the query engine, plus the data sources to work out which tables belong
+/// What `/query` and `/tables` need: the query engine (with its result cache), plus the data sources to work out which tables belong
 /// to a project.
 pub struct QueryApi {
-    pub queries: QueryService,
+    pub queries: CachedQueries,
     pub datasources: Arc<DataSourceService>,
 }
 
