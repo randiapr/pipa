@@ -1,0 +1,31 @@
+# Changelog
+
+All notable changes to `pipa-integration-test` are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+(pre-1.0: MINOR bumps may include breaking changes).
+
+## [0.1.0] - 2026-10-15
+
+### Added
+
+- End-to-end tests (`cargo test -p pipa-integration-test --test e2e`, or `just test-integration`;
+  Docker required) that run the real `pipa-backend` and `pipa-ingestion` binaries against RustFS,
+  Postgres and Redis started with testcontainers, driven over HTTP with the `pipa-api` types. 269
+  tests, positive and negative, with authorization checked for each role:
+  - sign-in, tokens, CORS and the backend's startup refusals (`auth`);
+  - accounts, including the last-admin protection (`users`), and projects (`projects`);
+  - data sources: registering, connection test, the table explorer, choosing tables
+    (`datasources`);
+  - change capture from Postgres into Iceberg: inserts, updates, deletes, transactions, column
+    types, ingestion stopped, crashed and restarted without loss or duplicates (`cdc`);
+  - table browsing (`tables`) and project-scoped SQL (`query`);
+  - the query cache in memory and in Redis (`cache`);
+  - how ingestion instances share sources through Redis or static shards, and hand them over
+    (`coordination`).
+- Most tests share one backend (and one ingestion instance), each making its own projects,
+  accounts, databases and sources, so the suite runs in about a minute; tests that need a pristine
+  store, their own settings, or to stop ingestion start their own.
+- Regression tests for the list-during-delete 500 and the project delete/update 404s fixed in
+  `pipa-backend` 0.12.0.

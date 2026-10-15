@@ -42,14 +42,15 @@ impl ProjectService {
         id: ProjectId,
         update: ProjectUpdate,
     ) -> Result<Project, ProjectError> {
-        self.ensure_name_available(&update.name, Some(id)).await?;
         let mut project = self.get(id).await?;
+        self.ensure_name_available(&update.name, Some(id)).await?;
         project.apply_update(update)?;
         self.repository.save(&project).await?;
         Ok(project)
     }
 
     pub async fn remove(&self, id: ProjectId) -> Result<(), ProjectError> {
+        self.get(id).await?;
         self.repository.delete(id).await
     }
 
@@ -69,5 +70,64 @@ impl ProjectService {
             return Err(ProjectError::DuplicateName(name.to_string()));
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use object_store::memory::InMemory;
+
+    use super::*;
+    use crate::project::infrastructure::ObjectStoreProjectRepository;
+
+    fn service() -> ProjectService {
+        ProjectService::new(Arc::new(ObjectStoreProjectRepository::new(Arc::new(
+            InMemory::new(),
+        ))))
+    }
+
+    fn new_project(name: &str) -> NewProject {
+        NewProject {
+            name: name.to_string(),
+            description: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn removing_an_unknown_project_is_not_found() {
+        let err = service().remove(ProjectId::new()).await.unwrap_err();
+        assert!(matches!(err, ProjectError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn a_removed_project_is_gone() {
+        let service = service();
+        let project = service.register(new_project("alpha")).await.unwrap();
+        service.remove(project.id).await.unwrap();
+        assert!(matches!(
+            service.get(project.id).await,
+            Err(ProjectError::NotFound(_))
+        ));
+        assert!(matches!(
+            service.remove(project.id).await,
+            Err(ProjectError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn updating_an_unknown_project_is_not_found_even_with_a_taken_name() {
+        let service = service();
+        service.register(new_project("taken")).await.unwrap();
+        let err = service
+            .update(
+                ProjectId::new(),
+                ProjectUpdate {
+                    name: "Taken".to_string(),
+                    description: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ProjectError::NotFound(_)));
     }
 }
