@@ -213,9 +213,9 @@ _docker-env:
         echo "sign in at http://localhost:3000 once the stack is up"
     fi
 
-# bring up the containerized stack (docker-compose.yml), building the dashboard on the host and images first; creates .env with random secrets on first run
-docker-up: _docker-env build-ui-release
-    {{ compose }} up --build
+# bring up the containerized stack (docker-compose.yml) from the published ghcr.io images; creates .env with random secrets on first run
+docker-up: _docker-env
+    {{ compose }} up
 
 # follow the containerized stack's logs (all services, or the ones named, e.g. `just docker-logs backend ingestion-0`); Ctrl+C stops following, not the stack
 docker-logs *services:

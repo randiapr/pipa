@@ -3,6 +3,9 @@ name: Publish images
 # Runs when a release is published (the draft that draft-release.yaml maintains), not on merges:
 # the images get the semver tags of its vX.Y.Z tag, i.e. `X.Y.Z`, `X.Y` and, from 1.0 on, `X`,
 # plus `sha-<short>` and `latest` (metadata-action adds `latest` itself for a non-prerelease).
+# Every image is multi-arch (linux/amd64 + linux/arm64): each architecture is built natively on its
+# own runner (Rust under QEMU would take hours) and pushed by digest, then the `merge` job
+# stitches the per-arch images into one tagged manifest list.
 on:
   release:
     types: [published]
@@ -18,15 +21,16 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build & push (backend, ingestion, ui)
+  # The `ui` image only packages crates/ui/dist/ (see the Dockerfile), and a wasm32 build is the same
+  # for every architecture, so the dashboard is built once here with Trunk, exactly as
+  # `just build-ui-release` does locally, and handed to the per-arch builds as an artifact.
+  dist:
+    name: Build dashboard (Trunk)
     runs-on: ubuntu-latest
     steps:
       # Checks out the release's tag, so the images are built from the exact commit released.
       - uses: actions/checkout@v4
 
-      # The `ui` image only packages crates/ui/dist/ (see the Dockerfile), so the dashboard is
-      # built here with Trunk first, exactly as `just build-ui-release` does locally.
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -44,6 +48,35 @@ jobs:
       - run: trunk build --release
         working-directory: crates/ui
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: crates/ui/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Build ${{ matrix.platform }} (backend, ingestion, ui)
+    needs: dist
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-dist
+          path: crates/ui/dist
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -52,73 +85,131 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # metadata-action lowercases the image names (GHCR requires it; the owner can be
-      # mixed-case on a fork). The semver rules skip `X` while the major is 0.
-      - name: Tags for pipa-backend
-        id: meta-backend
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/pipa-backend
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-
-      - name: Tags for pipa-ingestion
-        id: meta-ingestion
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/pipa-ingestion
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
-
-      - name: Tags for pipa-ui
-        id: meta-ui
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/pipa-ui
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-
+      # GHCR requires lowercase names, but the owner can be mixed-case on a fork.
+      - name: Image names
+        run: echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pipa-" >> "$GITHUB_ENV"
 
       # The three builds share one buildx builder, so the Dockerfile's `builder` stage (the
       # whole `cargo build --release`) is compiled by the first and reused by the next two.
-      # linux/amd64 only: building Rust under QEMU for arm64 would take hours.
+      # Each image is pushed by digest only, without a tag: the `merge` job tags the manifest list.
+      - name: Labels for pipa-backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}backend
+
       - name: Push pipa-backend
+        id: push-backend
         uses: docker/build-push-action@v6
         with:
           context: .
           target: backend
-          push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}backend,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+
+      - name: Labels for pipa-ingestion
+        id: meta-ingestion
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}ingestion
 
       - name: Push pipa-ingestion
+        id: push-ingestion
         uses: docker/build-push-action@v6
         with:
           context: .
           target: ingestion
-          push: true
-          tags: ${{ steps.meta-ingestion.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta-ingestion.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}ingestion,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+
+      - name: Labels for pipa-ui
+        id: meta-ui
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}ui
 
       - name: Push pipa-ui
+        id: push-ui
         uses: docker/build-push-action@v6
         with:
           context: .
           target: ui
-          push: true
-          tags: ${{ steps.meta-ui.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta-ui.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}ui,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+
+      # One empty file per image, named after its digest, for the `merge` job to collect.
+      - name: Export digests
+        env:
+          BACKEND: ${{ steps.push-backend.outputs.digest }}
+          INGESTION: ${{ steps.push-ingestion.outputs.digest }}
+          UI: ${{ steps.push-ui.outputs.digest }}
+        run: |
+          for image in backend ingestion ui; do
+            var=${image^^}
+            digest=${!var}
+            mkdir -p "/tmp/digests/$image"
+            touch "/tmp/digests/$image/${digest#sha256:}"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish ${{ matrix.image }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [backend, ingestion, ui]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pipa-${{ matrix.image }}" >> "$GITHUB_ENV"
+
+      # metadata-action lowercases the image names too. The semver rules skip `X` while the major is 0.
+      - name: Tags for pipa-${{ matrix.image }}
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests/${{ matrix.image }}
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "$IMAGE@sha256:%s " *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
