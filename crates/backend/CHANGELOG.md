@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.12.0] - 2026-10-15
+
+### Added
+
+- `BACKEND_LISTEN` sets the address the API listens on (default `0.0.0.0:8080`, as before). It
+  lets several backends run side by side on one host, as the new end-to-end tests do.
+
+### Changed
+
+- `DELETE /projects/{id}` for a project that does not exist is now a 404, like it is for users
+  and data sources, instead of a 200. A client that relied on the delete being idempotent must
+  now accept the 404.
+- `crates/backend/.env.example` documents `BACKEND_LISTEN` (it said the address was not
+  configurable).
+
+### Fixed
+
+- Listing users, projects or data sources no longer fails with a 500 when one of them is deleted
+  at the same moment: the entry that vanished between the listing and the read is skipped
+  instead of reported as a storage error. That also made sign-in, creating accounts and every
+  project-scoped request fail with a 500 for that moment.
+- `PUT /projects/{id}` for a project that does not exist is a 404 even when the name in the
+  request is already another project's (it was a 409).
+
 ## [0.11.1] - 2026-10-15
 
 ### Changed

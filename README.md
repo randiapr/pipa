@@ -9,7 +9,7 @@ planned but not implemented yet.
 
 ## Workspace
 
-A Cargo workspace of five crates, each versioned independently (see each crate's own
+A Cargo workspace of six crates, each versioned independently (see each crate's own
 `CHANGELOG.md`):
 
 - **`pipa-ingestion`** — the CDC engine. Streams row-level changes out of a registered
@@ -35,6 +35,10 @@ A Cargo workspace of five crates, each versioned independently (see each crate's
   Not an external-facing service.
 - **`pipa-api`** — the HTTP contract (request/response types, routes) shared by `pipa-backend`
   and `pipa-ui`; builds for both native and wasm32.
+- **`pipa-integration-test`** — end-to-end tests: the real `pipa-backend` and `pipa-ingestion`
+  binaries against RustFS, Postgres and Redis in containers ([testcontainers](https://github.com/testcontainers/testcontainers-rs)),
+  driven over HTTP with positive and negative cases for every area. Needs Docker; run with
+  `just test-integration`. Not part of `just test`.
 - **`pipa-ui`** — a Leptos dashboard (Tailwind CSS v4 + daisyUI) for signing in and managing
   projects, OLTP data sources, users and queries.
 
@@ -139,11 +143,24 @@ both embed the `pipa-catalog-proxy` signer (`crates/catalog-proxy`) in their own
 S3 Tables on the `pipa` bucket at startup — all automatic, locally and in compose, as long as
 `ICEBERG_CATALOG_URI` is left unset (see the note at the top of `docker-compose.yml`).
 
+## Known limitations
+
+**Upstream (DataFusion / `iceberg-datafusion`).** `SELECT count(*)` over an Iceberg metadata table
+(`…$snapshots`, `…$manifests`, which `POST /query` can read) fails with a 400 carrying DataFusion's
+"Physical input schema should be the same as the one converted from logical input schema"
+internal error. It appears to be the metadata table provider mishandling a query that needs no
+columns, so it is not something `pipa-backend` can work around. Select a column instead, e.g.
+`SELECT snapshot_id FROM "…$snapshots"`, and count the rows of the result. Data tables are not
+affected, and the end-to-end test `query::iceberg_metadata_tables_can_be_queried` selects a column
+for this reason. This has not been reported upstream yet; recheck after bumping `iceberg`
+/ `datafusion-iceberg`.
+
 ## Commands
 
 ```sh
 just check-all    # cargo check, native crates + pipa-ui (wasm32)
 just test         # run tests for native crates
+just test-integration  # end-to-end tests in containers (needs Docker); `just test-integration cdc::` runs some
 just clippy       # lint native crates
 just fmt          # format all crates
 just clean        # remove build artifacts (target/, crates/ui/dist/)
@@ -166,6 +183,7 @@ Optional runtime settings (all set in compose and by `just local::up` where it m
 
 | Variable | Used by | Effect |
 |---|---|---|
+| `BACKEND_LISTEN` | backend | Address the API listens on (default `0.0.0.0:8080`). Leave it for compose, which publishes 8080; set it to run several backends on one host. |
 | `REDIS_URL` | backend, ingestion | Backend: results cache in Redis, shared by all instances (unset: in-process memory). Ingestion: instances discover each other and share sources (unset: static `INGESTION_SHARD_INDEX`/`INGESTION_SHARD_COUNT`). No TLS (`rediss://`) yet, and Redis holds query results, so keep it private. |
 | `CACHE_QUERY_TTL_SECS`, `CACHE_TABLES_TTL_SECS` | backend | Age a cached `POST /query` / `GET /tables` answer may reach (30 each; 0 turns that cache off). Staleness is bounded by this, not invalidated. |
 | `CACHE_MAX_ENTRIES`, `CACHE_MAX_ENTRY_BYTES` | backend | In-memory cache size (256) and the largest result stored (1 MiB). |

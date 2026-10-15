@@ -109,13 +109,26 @@ build-ui-release: _target-guard ui-deps
 test: _target-guard
     cargo test {{ native }}
 
+# end-to-end tests: the real pipa-backend and pipa-ingestion binaries against RustFS, Postgres and
+# Redis in containers (testcontainers, so Docker must be running). Takes a few minutes; pass a
+# filter to run some, e.g. `just test-integration cdc::` or `just test-integration login`
+test-integration *filter: _target-guard
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Colima, Rancher Desktop and rootless Docker keep their socket elsewhere than /var/run/docker.sock
+    if [ -z "${DOCKER_HOST:-}" ] && [ ! -S /var/run/docker.sock ]; then
+        host=$(docker context inspect --format '{{ "{{" }}.Endpoints.docker.Host}}' 2>/dev/null || true)
+        [ -z "$host" ] || export DOCKER_HOST="$host"
+    fi
+    cargo test -p pipa-integration-test --test e2e -- {{ filter }}
+
 # format all crates
 fmt:
     cargo fmt --all
 
 # lint native crates
 clippy: _target-guard
-    cargo clippy {{ native }} -- -D warnings
+    cargo clippy {{ native }} -p pipa-integration-test --all-targets -- -D warnings
 
 # check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
 outdated:

@@ -61,14 +61,16 @@ impl UserRepository for ObjectStoreUserRepository {
 
         while let Some(meta) = listing.next().await {
             let meta = meta.map_err(|err| UserError::Storage(err.to_string()))?;
-            let bytes = self
-                .store
-                .get(&meta.location)
-                .await
-                .map_err(|err| UserError::Storage(err.to_string()))?
-                .bytes()
-                .await
-                .map_err(|err| UserError::Storage(err.to_string()))?;
+            // An object listed a moment ago may have been deleted since: that is not an error,
+            // the entry is simply gone.
+            let bytes = match self.store.get(&meta.location).await {
+                Ok(result) => result
+                    .bytes()
+                    .await
+                    .map_err(|err| UserError::Storage(err.to_string()))?,
+                Err(object_store::Error::NotFound { .. }) => continue,
+                Err(err) => return Err(UserError::Storage(err.to_string())),
+            };
             let user = serde_json::from_slice(&bytes)
                 .map_err(|err| UserError::Storage(err.to_string()))?;
             users.push(user);

@@ -44,9 +44,23 @@ jobs:
 
       # Same package set as the justfile's `native` variable. Tests marked #[ignore] (the live
       # Postgres WAL test) need a real database and are skipped by default.
-      - run: cargo clippy -p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion --all-targets -- -D warnings
+      - run: cargo clippy -p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion -p pipa-integration-test --all-targets -- -D warnings
 
       - run: cargo test -p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion
+
+  integration:
+    # Starts RustFS, Postgres and Redis with testcontainers (Docker is on the runner) and drives the
+    # real backend and ingestion binaries; see crates/integration-test.
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo test -p pipa-integration-test --test e2e
 
   ui:
     name: Clippy (ui, wasm32)

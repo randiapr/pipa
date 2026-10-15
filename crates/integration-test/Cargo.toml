@@ -1,0 +1,25 @@
+[package]
+name = "pipa-integration-test"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "End-to-end tests: the real pipa-backend and pipa-ingestion binaries against RustFS, Postgres and Redis in containers"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+pipa-api.workspace = true
+pipa-catalog-proxy.workspace = true
+redis.workspace = true
+reqwest = { workspace = true, features = ["json"] }
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+# `watchdog` removes the containers on Ctrl-C; a normal run removes them in `infra`'s exit hook.
+testcontainers = { workspace = true, features = ["http_wait_plain", "watchdog"] }
+tokio.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true

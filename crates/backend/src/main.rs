@@ -85,7 +85,10 @@ async fn main() -> anyhow::Result<()> {
     let app =
         router(datasource_service, project_service, user_service, query_api).layer(cors_layer()?);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    let listen = std::env::var("BACKEND_LISTEN").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    let listener = tokio::net::TcpListener::bind(&listen)
+        .await
+        .with_context(|| format!("binding BACKEND_LISTEN={listen}"))?;
     tracing::info!("pipa-backend listening on {}", listener.local_addr()?);
     axum::serve(listener, app).await?;
 
