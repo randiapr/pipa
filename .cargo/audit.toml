@@ -1,0 +1,16 @@
+# Read by `cargo audit`, so by `just audit` and the audit workflow alike.
+[advisories]
+ignore = [
+    # Marvin attack on RSA decryption. `rsa` comes in through jsonwebtoken's `rust_crypto` feature,
+    # and pipa-backend only signs and verifies HS256 tokens (HMAC), so no RSA key is ever used.
+    # No patched `rsa` release exists. Revisit when one does or jsonwebtoken drops the dependency.
+    "RUSTSEC-2023-0071",
+
+    # quick-xml 0.39.4: unbounded namespace allocation and quadratic attribute checks on crafted
+    # XML. Fixed in 0.41, but `iceberg-storage-opendal` 0.10.1 pins `opendal` ^0.57, which uses
+    # 0.39, so `cargo update` can't move it. opendal parses only the S3 API's XML replies, from
+    # the RustFS endpoint the operator configures, not user input. Drop both IDs once an
+    # `iceberg-storage-opendal` release builds on a newer `opendal`.
+    "RUSTSEC-2026-0195",
+    "RUSTSEC-2026-0194",
+]

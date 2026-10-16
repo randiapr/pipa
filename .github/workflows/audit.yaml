@@ -1,0 +1,55 @@
+name: Security audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "**/Cargo.toml"
+      - Cargo.lock
+  push:
+    branches:
+      - main
+    paths:
+      - "**/Cargo.toml"
+      - Cargo.lock
+  # New advisories are published without any change to this repo.
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # rustsec/audit-check publishes its result as a check run, and scheduled runs open an issue
+  # per new advisory.
+  checks: write
+  issues: write
+
+concurrency:
+  group: audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The read-only counterpart of `just audit`: that recipe runs `cargo audit fix` and edits the
+      # manifests, CI only reports. Both read Cargo.lock, so they see the same advisories.
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Rules advisories don't cover (deny.toml): no wildcard version requirements, crates.io only.
+  # Advisories are left to the job above so their ignore list lives in one place.
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans sources
