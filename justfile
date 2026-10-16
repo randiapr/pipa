@@ -135,6 +135,16 @@ outdated:
     @DEPS=$(awk '/^\[/{s=$0} s~/\[workspace\.dependencies\]/ && /^[a-zA-Z]/{sub(/[[:space:]=].*/,""); print}' Cargo.toml | tr '\n' '|' | sed 's/|$//'); \
       cargo update --dry-run 2>&1 | grep -E " ($DEPS) " || echo "All direct dependencies are up to date"
 
+# audit Cargo.lock for known security advisories and upgrade the vulnerable dependencies it can (requires cargo-audit
+# with the fix feature: cargo install cargo-audit --locked --features fix). Edits Cargo.toml for direct dependencies
+# only; a transitive one needs `cargo update -p <crate>`. `just audit --dry-run` previews; plain `cargo audit` only reports.
+audit *args:
+    cargo audit fix {{ args }}
+
+# check dependency bans and sources (no wildcard versions, crates.io only; see deny.toml; requires cargo-deny: cargo install cargo-deny --locked)
+deny:
+    cargo deny check bans sources
+
 # upgrade Rust dependencies to the latest semver-compatible versions (requires cargo-edit: cargo install cargo-edit)
 upgrade:
     cargo upgrade

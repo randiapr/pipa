@@ -1,0 +1,18 @@
+# cargo-deny: the supply-chain rules `cargo audit` doesn't cover. Advisories stay with `cargo audit`
+# (`just audit`, .cargo/audit.toml, .github/workflows/audit.yaml), so the ignore list lives in one place.
+# Run: `just deny` (requires cargo-deny: cargo install cargo-deny --locked).
+
+[bans]
+# A `*` version requirement accepts any release, including a malicious one.
+wildcards = "deny"
+# Workspace crates depend on each other by path, which is not a wildcard.
+allow-wildcard-paths = true
+# The dependency tree is large (datafusion, iceberg) and duplicates are not ours to fix.
+multiple-versions = "allow"
+
+[sources]
+# Everything comes from crates.io today; a git or alternate-registry dependency must be a
+# deliberate change to this file.
+unknown-git = "deny"
+unknown-registry = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
