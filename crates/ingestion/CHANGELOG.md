@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.8.0] - 2026-10-16
+
+### Added
+
+- Table maintenance. Every `INGESTION_MAINTENANCE_INTERVAL_SECS` (default 300; 0 turns it off),
+  each instance maintains the target tables of the sources it captures, one table at a time:
+  - **Compaction**: runs of small data files (under `INGESTION_COMPACTION_TARGET_FILE_BYTES` ×
+    `INGESTION_COMPACTION_SMALL_FILE_RATIO`, 128 MiB × 0.75) are rewritten into files of up to
+    the target size once `INGESTION_COMPACTION_MIN_INPUT_FILES` (8) have built up, at most
+    `INGESTION_COMPACTION_MAX_INPUT_BYTES` (1 GiB) per table per run. Files are grouped in commit
+    order, so each new file covers one contiguous range of commits. Each rewrite is an Iceberg
+    `replace` snapshot carrying the table's checkpoint forward, so dedup is unaffected. A
+    rewrite racing an ingestion commit is rebuilt on top of it and retried, and one whose input
+    files are gone is dropped. Rows are counted before and after: a mismatch replaces nothing.
+  - **Snapshot expiry**: snapshots older than `INGESTION_SNAPSHOT_MAX_AGE_SECS` (3600) are
+    expired, keeping at least `INGESTION_SNAPSHOT_MIN_TO_KEEP` (10), and the files no remaining
+    snapshot mentions are deleted. No data goes with them: every change is still a changelog
+    row. Only time travel to older table states is lost.
+  - **Orphan sweep**: Parquet data files and Avro manifests under a table's location that
+    nothing references (left by commits that never landed) are deleted once older than
+    `INGESTION_ORPHAN_CLEANUP_AGE_SECS` (3 days; 0 turns it off). Each table is swept at most
+    hourly.
+
+### Changed
+
+- The checkpoint is read from the nearest snapshot that carries one. Previously it was read
+  from the current snapshot only, so a snapshot made by another engine (for example its own
+  compaction) no longer resets dedup.
+
 ## [0.7.1] - 2026-10-15
 
 ### Changed

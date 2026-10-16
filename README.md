@@ -20,7 +20,9 @@ A Cargo workspace of six crates, each versioned independently (see each crate's 
   registered sources directly from the shared
   object store, and is designed to run distributed: with `REDIS_URL` set, instances share the sources through
   Redis and a stopped one's sources move to the others; without it, `INGESTION_SHARD_INDEX`/
-  `INGESTION_SHARD_COUNT` split sources statically.
+  `INGESTION_SHARD_COUNT` split sources statically. It also maintains the tables it writes:
+  small data files are compacted and old snapshots expired, so tables stay fast to read
+  however long ingestion runs.
 - **`pipa-backend`** — the HTTP API: accounts and sign-in (admin/developer/user roles), projects, read-only table browsing, OLTP
   data source management (registering/testing sources, over the shared RustFS/S3 object
   store), plus Apache Iceberg query access (`POST /query`: REST catalog client, DataFusion SQL,
@@ -190,6 +192,10 @@ Optional runtime settings (all set in compose and by `just local::up` where it m
 | `INGESTION_INSTANCE_ID` | ingestion | Names an instance among its peers; must be unique. Unset: generated per process. |
 | `INGESTION_COORDINATION_INTERVAL_SECS` | ingestion | How often an instance renews its claims and rebalances (5). |
 | `INGESTION_SOURCE_REFRESH_INTERVAL_SECS` | ingestion | How often the registered sources are re-read (30). |
+| `INGESTION_MAINTENANCE_INTERVAL_SECS` | ingestion | How often the tables of the sources an instance captures are compacted and their snapshots expired (300; 0 turns maintenance off). |
+| `INGESTION_COMPACTION_TARGET_FILE_BYTES`, `INGESTION_COMPACTION_SMALL_FILE_RATIO`, `INGESTION_COMPACTION_MIN_INPUT_FILES`, `INGESTION_COMPACTION_MAX_INPUT_BYTES` | ingestion | Compaction: files under target × ratio (128 MiB × 0.75) are rewritten into files of up to the target once 8 have built up, at most 1 GiB per table per run. |
+| `INGESTION_SNAPSHOT_MAX_AGE_SECS`, `INGESTION_SNAPSHOT_MIN_TO_KEEP` | ingestion | Snapshots older than this (3600) are expired, keeping at least this many (10). No data goes with them — every change is still a changelog row — only time travel to older table states. |
+| `INGESTION_ORPHAN_CLEANUP_AGE_SECS` | ingestion | Files under a table's location that nothing references (left by failed commits) are deleted once this old (259200, 3 days; 0 turns the sweep off). |
 | `LOG_FORMAT=json` | all binaries | One JSON object per log line (`just local::up` sets it, for the files under `logs/`); default is text. |
 
 ## Contributing

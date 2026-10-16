@@ -13,6 +13,7 @@ mod cdc;
 mod common;
 mod coordination;
 mod datasources;
+mod maintenance;
 mod projects;
 mod query;
 mod tables;

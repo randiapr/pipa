@@ -16,16 +16,17 @@ use async_trait::async_trait;
 use iceberg::io::{
     S3_ACCESS_KEY_ID, S3_ENDPOINT, S3_PATH_STYLE_ACCESS, S3_REGION, S3_SECRET_ACCESS_KEY,
 };
-use iceberg::spec::{DataFileFormat, Schema as IcebergSchema};
+use iceberg::spec::{DataFileFormat, Schema as IcebergSchema, Snapshot};
 use iceberg::table::Table;
 use iceberg::transaction::{ApplyTransactionAction, Transaction};
+pub(crate) use iceberg::writer::IcebergWriter as IcebergFileWriter;
+use iceberg::writer::IcebergWriterBuilder;
 use iceberg::writer::base_writer::data_file_writer::DataFileWriterBuilder;
 use iceberg::writer::file_writer::ParquetWriterBuilder;
 use iceberg::writer::file_writer::location_generator::{
     DefaultFileNameGenerator, DefaultLocationGenerator,
 };
 use iceberg::writer::file_writer::rolling_writer::RollingFileWriterBuilder;
-use iceberg::writer::{IcebergWriter as IcebergFileWriter, IcebergWriterBuilder};
 use iceberg::{
     Catalog, CatalogBuilder, ErrorKind, NamespaceIdent, TableCreation, TableIdent,
     arrow::{arrow_schema_to_schema_auto_assign_ids, schema_to_arrow_schema},
@@ -50,16 +51,16 @@ use crate::write::domain::{
 
 /// Snapshot summary property carrying the checkpoint — the commit position of the last
 /// transaction landed by that commit (see [`Checkpoint::Commit`]).
-const COMMIT_POSITION_PROPERTY: &str = "pipa.cdc.commit_position";
+pub(crate) const COMMIT_POSITION_PROPERTY: &str = "pipa.cdc.commit_position";
 /// The checkpoint property snapshots written by pipa-ingestion 0.4 and earlier carry instead: a
 /// change position, read back as [`Checkpoint::LegacyChange`].
-const LEGACY_POSITION_PROPERTY: &str = "pipa.cdc.position";
+pub(crate) const LEGACY_POSITION_PROPERTY: &str = "pipa.cdc.position";
 /// Table property naming the source table's row key — its replica identity columns (primary
 /// key by default), as a JSON array of column names, `[]` for a table without one. Lets readers
 /// such as `pipa-backend` collapse the changelog to current rows from Iceberg alone.
 const KEY_COLUMNS_PROPERTY: &str = "pipa.cdc.key_columns";
 /// Snapshot summary property carrying the source id a commit came from, for debuggability.
-const COMMIT_SOURCE_ID_PROPERTY: &str = "pipa.cdc.source_id";
+pub(crate) const COMMIT_SOURCE_ID_PROPERTY: &str = "pipa.cdc.source_id";
 
 /// Connection settings for the Iceberg REST catalog CDC target tables commit to.
 ///
@@ -270,29 +271,7 @@ impl IcebergWriter for IcebergChangelogWriter {
         let (table, arrow_schema) = self.ensure_table(source, target, events).await?;
         let batch = events_to_record_batch(&arrow_schema, &source.id.to_string(), events)?;
 
-        let location_generator = DefaultLocationGenerator::new(table.metadata())
-            .map_err(|err| WriteError::Commit(err.to_string()))?;
-        // The generator's counter restarts at 0 for every batch, so a fixed prefix would name each
-        // batch's file `pipa-cdc-00000.parquet` and the second commit would collide with the first.
-        let file_name_generator = DefaultFileNameGenerator::new(
-            format!("pipa-cdc-{}", uuid::Uuid::now_v7().simple()),
-            None,
-            DataFileFormat::Parquet,
-        );
-        let parquet_writer_builder = ParquetWriterBuilder::new(
-            WriterProperties::default(),
-            table.metadata().current_schema().clone(),
-        );
-        let rolling_writer_builder = RollingFileWriterBuilder::new_with_default_file_size(
-            parquet_writer_builder,
-            table.file_io().clone(),
-            location_generator,
-            file_name_generator,
-        );
-        let data_file_writer_builder = DataFileWriterBuilder::new(rolling_writer_builder);
-
-        let mut writer = data_file_writer_builder
-            .build(None)
+        let mut writer = new_data_file_writer(&table, "pipa-cdc")
             .await
             .map_err(|err| WriteError::Commit(err.to_string()))?;
         writer
@@ -348,17 +327,7 @@ impl IcebergWriter for IcebergChangelogWriter {
             .await
             .map_err(|err| WriteError::Catalog(err.to_string()))?;
 
-        Ok(table.metadata().current_snapshot().and_then(|snapshot| {
-            let properties = &snapshot.summary().additional_properties;
-            properties
-                .get(COMMIT_POSITION_PROPERTY)
-                .map(|position| Checkpoint::Commit(position.clone()))
-                .or_else(|| {
-                    properties
-                        .get(LEGACY_POSITION_PROPERTY)
-                        .map(|position| Checkpoint::LegacyChange(position.clone()))
-                })
-        }))
+        Ok(latest_checkpoint(&table))
     }
 
     async fn existing_tables(&self, source: &DataSource) -> Result<HashSet<String>, WriteError> {
@@ -445,6 +414,67 @@ impl IcebergWriter for IcebergChangelogWriter {
         }
         Ok(())
     }
+}
+
+/// A fresh writer of Parquet data files for `table` in its current schema, rolling over at the
+/// default target file size. File names are `{prefix}-{uuid}-NNNNN.parquet`: the generator's
+/// counter restarts at 0 for every writer, so without the per-writer uuid the second commit's
+/// files would collide with the first's.
+pub(crate) async fn new_data_file_writer(
+    table: &Table,
+    prefix: &str,
+) -> iceberg::Result<Box<dyn IcebergFileWriter>> {
+    let location_generator = DefaultLocationGenerator::new(table.metadata())?;
+    let file_name_generator = DefaultFileNameGenerator::new(
+        format!("{prefix}-{}", uuid::Uuid::now_v7().simple()),
+        None,
+        DataFileFormat::Parquet,
+    );
+    let parquet_writer_builder = ParquetWriterBuilder::new(
+        WriterProperties::default(),
+        table.metadata().current_schema().clone(),
+    );
+    let rolling_writer_builder = RollingFileWriterBuilder::new_with_default_file_size(
+        parquet_writer_builder,
+        table.file_io().clone(),
+        location_generator,
+        file_name_generator,
+    );
+    let writer = DataFileWriterBuilder::new(rolling_writer_builder)
+        .build(None)
+        .await?;
+    Ok(Box::new(writer))
+}
+
+/// The checkpoint `snapshot`'s summary carries, if any.
+pub(crate) fn checkpoint_of(snapshot: &Snapshot) -> Option<Checkpoint> {
+    let properties = &snapshot.summary().additional_properties;
+    properties
+        .get(COMMIT_POSITION_PROPERTY)
+        .map(|position| Checkpoint::Commit(position.clone()))
+        .or_else(|| {
+            properties
+                .get(LEGACY_POSITION_PROPERTY)
+                .map(|position| Checkpoint::LegacyChange(position.clone()))
+        })
+}
+
+/// The checkpoint of `table`'s latest commit by this crate: the current snapshot's, or — when
+/// that snapshot was made by something that doesn't carry the checkpoint forward (another
+/// engine's compaction, say) — the nearest ancestor's that has one. Every snapshot pipa makes
+/// carries it, so the walk normally stops at the first. An ancestor already expired ends it.
+pub(crate) fn latest_checkpoint(table: &Table) -> Option<Checkpoint> {
+    let metadata = table.metadata();
+    let mut snapshot = metadata.current_snapshot();
+    while let Some(current) = snapshot {
+        if let Some(checkpoint) = checkpoint_of(current) {
+            return Some(checkpoint);
+        }
+        snapshot = current
+            .parent_snapshot_id()
+            .and_then(|parent| metadata.snapshot_by_id(parent));
+    }
+    None
 }
 
 /// Introspects `pg_schema.pg_table`'s columns via `information_schema` and builds the target
