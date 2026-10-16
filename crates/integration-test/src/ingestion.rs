@@ -15,6 +15,8 @@ pub struct IngestionConfig {
     pub instance_id: Option<String>,
     /// Without Redis: this instance's `(index, count)` of the static partitioning.
     pub shard: Option<(u32, u32)>,
+    /// Any other environment variable (e.g. `INGESTION_MAINTENANCE_INTERVAL_SECS`).
+    pub extra_env: Vec<(String, String)>,
 }
 
 impl IngestionConfig {
@@ -24,6 +26,7 @@ impl IngestionConfig {
             redis_url: None,
             instance_id: None,
             shard: None,
+            extra_env: Vec::new(),
         }
     }
 }
@@ -64,6 +67,7 @@ impl Ingestion {
         let envs: Vec<(String, String)> = envs
             .into_iter()
             .map(|(key, value)| (key.to_string(), value))
+            .chain(config.extra_env)
             .collect();
 
         let mut process = Process::spawn("ingestion", &binaries::binary(INGESTION), &envs)?;

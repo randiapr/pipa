@@ -5,7 +5,7 @@ use pipa_api::{DataSourceView, ProjectView};
 use serde_json::Value;
 
 use crate::env::{TestEnv, unique};
-use crate::ingestion::Ingestion;
+use crate::ingestion::{Ingestion, IngestionConfig};
 use crate::postgres::{self, Database};
 use crate::wait;
 
@@ -58,6 +58,21 @@ impl Pipeline {
             EnvRef::Owned(Box::new(env)),
             schema_sql,
             tables,
+            Some(ingestion),
+        )
+        .await
+    }
+
+    /// Like [`Self::start`], with the ingestion instance configured by `configure`.
+    pub async fn start_configured(
+        env: TestEnv,
+        configure: impl FnOnce(&mut IngestionConfig),
+    ) -> Self {
+        let ingestion = env.ingestion_with(configure).await;
+        Self::assemble(
+            EnvRef::Owned(Box::new(env)),
+            SCHEMA,
+            &[("public", "orders")],
             Some(ingestion),
         )
         .await

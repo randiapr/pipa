@@ -157,7 +157,14 @@ impl TestEnv {
     }
 
     pub async fn ingestion(&self) -> Ingestion {
-        Ingestion::start(IngestionConfig::new(&self.bucket))
+        self.ingestion_with(|_| {}).await
+    }
+
+    /// An ingestion instance on this environment's bucket, configured by `configure`.
+    pub async fn ingestion_with(&self, configure: impl FnOnce(&mut IngestionConfig)) -> Ingestion {
+        let mut config = IngestionConfig::new(&self.bucket);
+        configure(&mut config);
+        Ingestion::start(config)
             .await
             .expect("starting pipa-ingestion")
     }

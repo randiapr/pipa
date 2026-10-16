@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.2.0] - 2026-10-16
+
+### Added
+
+- `maintenance`: small data files are compacted and old snapshots expired while every row,
+  and ingestion itself, carries on unchanged.
+- `IngestionConfig::extra_env`, `TestEnv::ingestion_with` and `Pipeline::start_configured`,
+  for tests that tune their ingestion instance.
+
 ## [0.1.0] - 2026-10-15
 
 ### Added

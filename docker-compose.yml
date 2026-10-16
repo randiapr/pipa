@@ -36,6 +36,9 @@ x-pipa-ingestion-env: &pipa-ingestion-env
   # removed ones stop, and a changed table choice (the dashboard's data source explorer) applies
   # without a restart.
   INGESTION_SOURCE_REFRESH_INTERVAL_SECS: "30"
+  # How often each instance compacts the tables of the sources it captures and expires their
+  # snapshots older than INGESTION_SNAPSHOT_MAX_AGE_SECS (see crates/ingestion/.env.example).
+  INGESTION_MAINTENANCE_INTERVAL_SECS: "300"
   RUST_LOG: info
 
 services:

@@ -24,10 +24,15 @@
 //! (default 30): a newly registered source starts capturing, a removed one stops, and a change
 //! to the tables a source ingests (chosen in the dashboard's data source explorer) is handed to
 //! its running capture, which applies it from the next change on.
+//!
+//! Every `INGESTION_MAINTENANCE_INTERVAL_SECS` (default 300), the target tables of the sources an
+//! instance captures are compacted and their old snapshots expired (`maintenance`), so they stay
+//! fast to read however long ingestion runs.
 
 mod capture;
 mod coordination;
 mod datasource;
+mod maintenance;
 mod storage;
 mod write;
 
@@ -44,6 +49,10 @@ use storage::ObjectStoreConfig;
 
 use crate::capture::{BatchConfig, CaptureOrchestrator, CdcSource, PostgresWalSource};
 use crate::coordination::Coordinator;
+use crate::maintenance::{
+    IcebergTableMaintainer, MaintenanceConfig, MaintenanceScheduler, OrphanSweeper,
+    RestSnapshotCommitter,
+};
 use crate::write::{IcebergCatalogConfig, IcebergChangelogWriter, IcebergWriter};
 
 #[tokio::main]
@@ -65,11 +74,10 @@ async fn main() -> anyhow::Result<()> {
     let store_config = ObjectStoreConfig::from_env();
     let store = store_config.build_store()?;
 
-    let catalog = IcebergCatalogConfig::from_env(&store_config)
-        .await?
-        .build_catalog(&store_config)
-        .await?;
-    let writer: Arc<dyn IcebergWriter> = Arc::new(IcebergChangelogWriter::new(catalog));
+    let catalog_config = IcebergCatalogConfig::from_env(&store_config).await?;
+    let catalog = catalog_config.build_catalog(&store_config).await?;
+    let writer: Arc<dyn IcebergWriter> =
+        Arc::new(IcebergChangelogWriter::new(Arc::clone(&catalog)));
     let postgres_source: Arc<dyn CdcSource> = Arc::new(PostgresWalSource::new());
     let orchestrator = Arc::new(CaptureOrchestrator::new(
         Arc::clone(&postgres_source),
@@ -77,8 +85,40 @@ async fn main() -> anyhow::Result<()> {
         BatchConfig::from_env(),
     ));
 
+    let (owned_tx, owned_rx) = watch::channel(Vec::new());
+    let maintenance_config = MaintenanceConfig::from_env();
+    let maintenance = match maintenance_config.interval {
+        Some(interval) => {
+            let orphans = maintenance_config.orphan_min_age.map(|min_age| {
+                OrphanSweeper::new(
+                    Arc::clone(&store),
+                    format!("s3://{}/", store_config.bucket),
+                    min_age,
+                )
+            });
+            let maintainer = Arc::new(IcebergTableMaintainer::new(
+                Arc::clone(&catalog),
+                Arc::new(RestSnapshotCommitter::new(&catalog_config)),
+                maintenance_config.compaction,
+                maintenance_config.expiry,
+                orphans,
+            ));
+            tracing::info!(
+                interval_secs = interval.as_secs(),
+                "table maintenance enabled"
+            );
+            Some(tokio::spawn(
+                MaintenanceScheduler::new(maintainer, interval).run(owned_rx),
+            ))
+        }
+        None => {
+            tracing::info!("table maintenance disabled");
+            None
+        }
+    };
+
     let mut captures = Captures::new(orchestrator, Arc::clone(&writer));
-    let mut assignment = Assignment::new(coordinator);
+    let mut assignment = Assignment::new(coordinator, owned_tx);
     assignment.registered = datasource::list_registered(store.as_ref()).await?;
     assignment.coordinate(&mut captures, true).await;
 
@@ -111,6 +151,10 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     tracing::info!("pipa-ingestion shutting down");
+    // Before the sources are handed back, so their new owners don't race a compaction here.
+    if let Some(maintenance) = maintenance {
+        maintenance.abort();
+    }
     assignment.leave(&mut captures).await;
 
     Ok(())
@@ -137,14 +181,20 @@ struct Assignment {
     coordinator: Arc<dyn Coordinator>,
     registered: Vec<DataSource>,
     owned: HashSet<DataSourceId>,
+    /// The sources captured here, for table maintenance.
+    owned_sources: watch::Sender<Vec<DataSource>>,
 }
 
 impl Assignment {
-    fn new(coordinator: Arc<dyn Coordinator>) -> Self {
+    fn new(
+        coordinator: Arc<dyn Coordinator>,
+        owned_sources: watch::Sender<Vec<DataSource>>,
+    ) -> Self {
         Self {
             coordinator,
             registered: Vec::new(),
             owned: HashSet::new(),
+            owned_sources,
         }
     }
 
@@ -178,7 +228,8 @@ impl Assignment {
             .filter(|source| owned.contains(&source.id))
             .cloned()
             .collect();
-        captures.reconcile(mine).await;
+        captures.reconcile(mine.clone()).await;
+        self.owned_sources.send_replace(mine);
 
         // Only now that those captures are stopped can another instance take the slot.
         let dropped: Vec<DataSourceId> = self.owned.difference(&owned).copied().collect();
@@ -195,6 +246,7 @@ impl Assignment {
     /// Stops every capture and hands the sources back.
     async fn leave(&mut self, captures: &mut Captures) {
         captures.reconcile(Vec::new()).await;
+        self.owned_sources.send_replace(Vec::new());
         let held: Vec<DataSourceId> = self.owned.drain().collect();
         self.coordinator.leave(&held).await;
     }
