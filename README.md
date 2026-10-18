@@ -177,6 +177,32 @@ just build-ui     # production build of the dashboard
 
 Run `just --list` for the full list (`docker-up`/`docker-down`, `outdated`, `upgrade`, ...).
 
+### Static analysis (SonarQube)
+
+A local [SonarQube Community Build](https://docs.sonarsource.com/sonarqube-community-build/) (the
+`sonarqube:community` image) analyzes the workspace, Rust included. It runs from its own
+`docker-compose.sonar.yml`, apart from the pipa stack, and needs only Docker (about 2 GiB of memory
+for it):
+
+```sh
+just sonar::scan        # start SonarQube if needed, run Clippy (+ coverage) on the host, then the scanner
+just sonar::up          # only start SonarQube: http://localhost:9100 (9000 is RustFS)
+just sonar::logs        # follow its logs
+just sonar::down        # stop it, keeping its history (sonar::down-clean also deletes it)
+```
+
+The first scan replaces SonarQube's default `admin`/`admin` login with a generated password and
+creates an analysis token; both go into the gitignored `.env` (`SONAR_ADMIN_PASSWORD`, `SONAR_TOKEN`),
+and the password is the one to sign in to the UI with. Results are at
+`http://localhost:9100/dashboard?id=pipa`.
+
+SonarQube's own Clippy run needs cargo, which the scanner image lacks, so `sonar-project.properties`
+turns it off and the scan imports a Clippy JSON report built on the host instead (the native crates,
+plus `pipa-ui` when the wasm32 target is installed). Coverage is included when
+[`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) is installed
+(`cargo install cargo-llvm-cov --locked`); it covers the unit tests of the native crates, not the
+`#[ignore]`d live tests or `pipa-integration-test`. Reports are written under `target/sonar/`.
+
 Environment variables: the compose secrets are in the root `.env.example`, and `pipa-backend`,
 `pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. The standalone
 `pipa-catalog-proxy` binary's are listed at the top of `crates/catalog-proxy/src/main.rs`.

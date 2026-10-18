@@ -5,6 +5,9 @@ set dotenv-load
 # local dev stack orchestration (`just local::up` brings up everything at once)
 mod local
 
+# SonarQube static analysis in Docker (`just sonar::scan`; see sonar.just)
+mod sonar
+
 # native crates only (pipa-ui targets wasm32 and is excluded; pipa-api also builds for wasm32 via pipa-ui)
 native := "-p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion"
 
