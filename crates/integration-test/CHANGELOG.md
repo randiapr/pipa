@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.2.1] - 2026-10-18
+
+### Changed
+
+- The RustFS container is `rustfs/rustfs:1.0.3` (was 1.0.1), matching `docker-compose.yml`. The
+  suite passes against 1.0.2, and 1.0.3 keeps its server code.
+
 ## [0.2.0] - 2026-10-16
 
 ### Added

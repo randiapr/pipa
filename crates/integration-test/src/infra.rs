@@ -17,7 +17,7 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, CopyTargetOptions, GenericImage, ImageExt};
 
 /// Same images (and credentials) as `docker-compose.yml`.
-const RUSTFS_IMAGE: (&str, &str) = ("rustfs/rustfs", "1.0.1");
+const RUSTFS_IMAGE: (&str, &str) = ("rustfs/rustfs", "1.0.3");
 const POSTGRES_IMAGE: (&str, &str) = ("postgres", "18.6-alpine");
 const REDIS_IMAGE: (&str, &str) = ("redis", "8.2-alpine");
 
