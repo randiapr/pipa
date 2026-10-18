@@ -91,8 +91,8 @@ impl Pipeline {
     }
 
     /// Creates `schema_sql` in a new database, registers it in a new project, chooses `tables`,
-    /// and waits until ingestion has attached to the source (changes made before that are not
-    /// captured: a new replication slot starts from where it is created).
+    /// and waits until ingestion has attached to the source and backfilled the (empty) tables,
+    /// so the changes a test makes are captured as changes rather than read as existing rows.
     async fn assemble(
         env: EnvRef,
         schema_sql: &str,
@@ -105,6 +105,7 @@ impl Pipeline {
         let source = env.source(Some(&project), &unique("source"), &db).await;
         env.ingest(&source, tables).await;
         wait_for_slot(&source).await;
+        wait_for_backfill(&env, &project, &source, tables).await;
         Self {
             env,
             project,
@@ -166,6 +167,46 @@ pub async fn wait_for_slot(source: &DataSourceView) {
     })
     .await;
     tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+}
+
+/// Waits until ingestion's snapshot backfill has read each of `tables` of `source`: its target
+/// table exists from then on, an empty source table's included. Reads `POST /tables/rows`, which
+/// isn't cached, so a cached table list can't answer for it.
+pub async fn wait_for_backfill(
+    env: &TestEnv,
+    project: &ProjectView,
+    source: &DataSourceView,
+    tables: &[(&str, &str)],
+) {
+    for (schema, table) in tables {
+        let target = target_table(schema, table);
+        wait::eventually(&format!("the backfill of {schema}.{table}"), || async {
+            let reply = env
+                .table_rows(&env.admin, project, source, &target, None, None)
+                .await;
+            if reply.status == 200 {
+                Ok(())
+            } else {
+                Err(reply.body.to_string())
+            }
+        })
+        .await;
+    }
+}
+
+/// The Iceberg table source table `schema.table` lands in: `{schema}__{table}`, lowercased,
+/// anything but ASCII letters and digits replaced by `_` (as `pipa-ingestion` names it).
+pub fn target_table(schema: &str, table: &str) -> String {
+    format!("{schema}__{table}")
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 /// `(id, status)` of every row of an `orders` result, sorted by id.

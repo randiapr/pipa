@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.9.0] - 2026-10-18
+
+### Added
+
+- Snapshot backfill. The rows a chosen table already holds are read and written to its target
+  table, so its current rows are the whole table rather than only the rows changed since it was
+  chosen. Rows are read with plain key-ordered pages (`INGESTION_BACKFILL_CHUNK_ROWS`, 5000), so
+  no lock is held on the source. Each row lands as a changelog row with `_op = 'read'` and
+  `_position = '0/0'`, below every captured change, so any change captured after the backfill
+  began wins over it. Each page commits together with the table property `pipa.cdc.backfill`
+  (`running` with the last key, then `done`), so a backfill that stops resumes after the last
+  page that landed. The table's checkpoint is carried forward unchanged. Tables without a row
+  key are not backfilled (`skipped`). `INGESTION_BACKFILL=off` turns it off.
+
+### Changed
+
+- Upgrading backfills every chosen table once, including tables that were already being
+  captured. Expect read load on the sources while that runs, or set `INGESTION_BACKFILL=off`
+  first.
+- Choosing a table creates its target table straight away, even while the source table is
+  empty.
+- A table is backfilled once. A table chosen again after being unchosen isn't read again.
+
 ## [0.8.1] - 2026-10-16
 
 ### Changed

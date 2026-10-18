@@ -18,7 +18,8 @@
 //! - **Chosen tables only.** Changes to a table the source doesn't ingest
 //!   ([`TableSelection`]) are dropped as they arrive, so they never hold back the confirm
 //!   either. The selection can change while a session runs; a table chosen later is captured
-//!   from then on, with no backfill of what changed before.
+//!   from then on, and the rows it already held are backfilled (see
+//!   [`crate::capture::backfill`]), committed by the session task alongside the changes.
 //!
 //! Scoped to Postgres: positions compare as `pgwire_replication::Lsn`'s `u64` total order,
 //! which a future MySQL GTID-set-based source would not have.
@@ -28,11 +29,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use pgwire_replication::Lsn;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
+use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use crate::capture::domain::{CaptureError, CdcSource, ChangeEvent, ChangeStream, StreamItem};
+use crate::capture::backfill::{BackfillConfig, BackfillStep, Backfiller};
+use crate::capture::domain::{
+    CaptureError, CdcSource, ChangeEvent, ChangeStream, SnapshotSource, StreamItem,
+};
 use crate::datasource::{DataSource, TableSelection};
+use crate::write::domain::BackfillState;
 use crate::write::domain::{Checkpoint, IcebergWriter, TargetTable};
 
 /// First delay before reconnecting a capture session that ended; doubles on every consecutive
@@ -123,6 +129,18 @@ pub struct CaptureOrchestrator {
     cdc_source: Arc<dyn CdcSource>,
     writer: Arc<dyn IcebergWriter>,
     batch: BatchConfig,
+    /// Where chosen tables' existing rows are read from; `None` turns backfilling off.
+    backfill: Option<(Arc<dyn SnapshotSource>, BackfillConfig)>,
+}
+
+/// Aborts the task it holds when dropped, so a session's backfill ends with the session however
+/// the session ends.
+struct AbortOnDrop(JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 impl CaptureOrchestrator {
@@ -135,7 +153,18 @@ impl CaptureOrchestrator {
             cdc_source,
             writer,
             batch,
+            backfill: None,
         }
+    }
+
+    /// Backfills chosen tables' existing rows from `snapshots` (see [`crate::capture::backfill`]).
+    pub fn with_backfill(
+        mut self,
+        snapshots: Arc<dyn SnapshotSource>,
+        config: BackfillConfig,
+    ) -> Self {
+        self.backfill = Some((snapshots, config));
+        self
     }
 
     /// Drives `source` for as long as the process runs. Whenever a capture session ends — the
@@ -189,6 +218,26 @@ impl CaptureOrchestrator {
         }
         let mut stream = self.cdc_source.stream_changes(source, None).await?;
 
+        // Started only now that the stream is open: from here on every change to a chosen
+        // table is kept, which is what lets snapshot rows sort below all of them.
+        let (step_tx, mut steps) = mpsc::channel::<BackfillStep>(1);
+        let mut backfilling = false;
+        let _backfiller = self.backfill.as_ref().map(|(snapshots, config)| {
+            backfilling = true;
+            AbortOnDrop(tokio::spawn(
+                Backfiller {
+                    snapshots: Arc::clone(snapshots),
+                    writer: Arc::clone(&self.writer),
+                    config: *config,
+                    source: source.clone(),
+                    selection: selection.clone(),
+                }
+                .run(step_tx),
+            ))
+        });
+        // A step whose commit failed, retried on the next tick before any later one is taken.
+        let mut held: Option<BackfillStep> = None;
+
         let mut tables: HashMap<TargetTable, TableState> = HashMap::new();
         let mut progress = SessionProgress::default();
         let mut ticker = tokio::time::interval(self.batch.max_flush_interval);
@@ -196,6 +245,12 @@ impl CaptureOrchestrator {
 
         loop {
             tokio::select! {
+                step = steps.recv(), if backfilling && held.is_none() => {
+                    match step {
+                        Some(step) => held = self.commit_backfill_step(source, step).await,
+                        None => backfilling = false,
+                    }
+                }
                 item = stream.events.recv() => {
                     match item {
                         Some(Ok(StreamItem::Change(event))) => {
@@ -227,6 +282,9 @@ impl CaptureOrchestrator {
                     }
                 }
                 _ = ticker.tick() => {
+                    if let Some(step) = held.take() {
+                        held = self.commit_backfill_step(source, step).await;
+                    }
                     if !progress.in_transaction {
                         self.flush_due(source, &mut tables).await;
                     }
@@ -236,6 +294,44 @@ impl CaptureOrchestrator {
         }
 
         Ok(())
+    }
+
+    /// Commits one backfill step, handing it back if that failed so it is retried before any
+    /// later step. Doesn't touch any table's watermark or the confirm: snapshot rows aren't part
+    /// of the change stream.
+    async fn commit_backfill_step(
+        &self,
+        source: &DataSource,
+        step: BackfillStep,
+    ) -> Option<BackfillStep> {
+        let table = format!("{}.{}", step.table.schema, step.table.name);
+        match self
+            .writer
+            .commit_backfill(source, &step.target, &step.table, &step.rows, &step.next)
+            .await
+        {
+            Ok(()) => {
+                match &step.next {
+                    BackfillState::Running { .. } => tracing::info!(
+                        id = %source.id, %table, rows = step.rows.len(), "committed backfill rows",
+                    ),
+                    BackfillState::Done => tracing::info!(
+                        id = %source.id, %table, rows = step.rows.len(), "backfill finished",
+                    ),
+                    BackfillState::Skipped => tracing::warn!(
+                        id = %source.id, %table, "table has no row key, its existing rows are not backfilled",
+                    ),
+                }
+                None
+            }
+            Err(err) => {
+                tracing::error!(
+                    id = %source.id, %table, error = %err,
+                    "failed to commit backfill rows, retrying",
+                );
+                Some(step)
+            }
+        }
     }
 
     async fn seed_watermark(&self, target: &TargetTable) -> Option<Watermark> {
@@ -424,8 +520,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::capture::domain::Operation;
-    use crate::datasource::{ConnectionConfig, DataSourceId, DbEngine};
+    use crate::capture::backfill::SNAPSHOT_POSITION;
+    use crate::capture::domain::{ColumnValue, Operation, SnapshotRead};
+    use crate::datasource::{ConnectionConfig, DataSourceId, DbEngine, TableRef};
     use crate::write::domain::WriteError;
 
     fn test_source() -> DataSource {
@@ -561,14 +658,37 @@ mod tests {
     /// `(committed events, high-watermark position)` per call to `commit_batch`.
     type RecordedCommits = HashMap<TargetTable, Vec<(Vec<ChangeEvent>, String)>>;
 
+    /// `(snapshot rows, state after them)` per call to `commit_backfill`.
+    type RecordedBackfills = HashMap<TargetTable, Vec<(Vec<ChangeEvent>, BackfillState)>>;
+
     /// An [`IcebergWriter`] committing into memory, standing in for durable Iceberg state.
     #[derive(Default)]
     struct FakeIcebergWriter {
         commits: Mutex<RecordedCommits>,
         checkpoints: Mutex<HashMap<TargetTable, Checkpoint>>,
+        backfills: Mutex<RecordedBackfills>,
+        backfill_states: Mutex<HashMap<TargetTable, BackfillState>>,
+        /// How many of the next `commit_backfill` calls fail.
+        failing_backfills: Mutex<usize>,
     }
 
     impl FakeIcebergWriter {
+        fn backfills(&self, target: &TargetTable) -> Vec<(Vec<ChangeEvent>, BackfillState)> {
+            self.backfills
+                .lock()
+                .unwrap()
+                .get(target)
+                .cloned()
+                .unwrap_or_default()
+        }
+
+        fn backfill_finished(&self, target: &TargetTable) -> bool {
+            matches!(
+                self.backfill_states.lock().unwrap().get(target),
+                Some(BackfillState::Done | BackfillState::Skipped)
+            )
+        }
+
         fn commits(&self, target: &TargetTable) -> Vec<(Vec<ChangeEvent>, String)> {
             self.commits
                 .lock()
@@ -609,6 +729,41 @@ mod tests {
         }
 
         async fn record_key_columns(&self, _source: &DataSource) -> Result<(), WriteError> {
+            Ok(())
+        }
+
+        async fn backfill_state(
+            &self,
+            target: &TargetTable,
+        ) -> Result<Option<BackfillState>, WriteError> {
+            Ok(self.backfill_states.lock().unwrap().get(target).cloned())
+        }
+
+        async fn commit_backfill(
+            &self,
+            _source: &DataSource,
+            target: &TargetTable,
+            _table: &TableRef,
+            rows: &[ChangeEvent],
+            next: &BackfillState,
+        ) -> Result<(), WriteError> {
+            {
+                let mut failing = self.failing_backfills.lock().unwrap();
+                if *failing > 0 {
+                    *failing -= 1;
+                    return Err(WriteError::Commit("catalog unavailable".to_string()));
+                }
+            }
+            self.backfills
+                .lock()
+                .unwrap()
+                .entry(target.clone())
+                .or_default()
+                .push((rows.to_vec(), next.clone()));
+            self.backfill_states
+                .lock()
+                .unwrap()
+                .insert(target.clone(), next.clone());
             Ok(())
         }
 
@@ -998,5 +1153,329 @@ mod tests {
         assert_eq!(calls[1].0 - calls[0].0, RECONNECT_BACKOFF_MIN);
         assert_eq!(calls[2].0 - calls[1].0, RECONNECT_BACKOFF_MIN * 2);
         assert!(calls.iter().all(|(_, resume_from)| resume_from.is_none()));
+    }
+
+    /// A [`SnapshotSource`] over in-memory tables keyed by an integer `id` column; a table
+    /// without rows given is keyless.
+    #[derive(Default)]
+    struct FakeSnapshotSource {
+        tables: HashMap<(String, String), Option<Vec<u64>>>,
+        /// `(table, after)` per read.
+        reads: Mutex<Vec<(String, Option<Vec<String>>)>>,
+    }
+
+    impl FakeSnapshotSource {
+        fn with(mut self, table: &str, ids: Option<Vec<u64>>) -> Self {
+            self.tables
+                .insert(("public".to_string(), table.to_string()), ids);
+            self
+        }
+
+        fn reads(&self) -> Vec<(String, Option<Vec<String>>)> {
+            self.reads.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait]
+    impl SnapshotSource for FakeSnapshotSource {
+        async fn list_tables(&self, _source: &DataSource) -> Result<Vec<TableRef>, CaptureError> {
+            let mut tables: Vec<TableRef> = self
+                .tables
+                .keys()
+                .map(|(schema, name)| TableRef {
+                    schema: schema.clone(),
+                    name: name.clone(),
+                })
+                .collect();
+            tables.sort_by(|a, b| a.name.cmp(&b.name));
+            Ok(tables)
+        }
+
+        async fn read_chunk(
+            &self,
+            _source: &DataSource,
+            table: &TableRef,
+            after: Option<&[String]>,
+            limit: usize,
+        ) -> Result<SnapshotRead, CaptureError> {
+            self.reads
+                .lock()
+                .unwrap()
+                .push((table.name.clone(), after.map(<[String]>::to_vec)));
+            let Some(ids) = &self.tables[&(table.schema.clone(), table.name.clone())] else {
+                return Ok(SnapshotRead::Keyless);
+            };
+            let after: Option<u64> = after.map(|key| key[0].parse().unwrap());
+            let rows: Vec<Vec<ColumnValue>> = ids
+                .iter()
+                .filter(|&&id| after.is_none_or(|after| id > after))
+                .take(limit)
+                .map(|id| {
+                    vec![ColumnValue {
+                        name: "id".to_string(),
+                        value: Some(id.to_string()),
+                    }]
+                })
+                .collect();
+            let last_key = rows.last().map(|row| vec![row[0].value.clone().unwrap()]);
+            Ok(SnapshotRead::Chunk { rows, last_key })
+        }
+    }
+
+    /// The ids of a backfill commit's rows, and the state after it.
+    fn backfilled(
+        commits: Vec<(Vec<ChangeEvent>, BackfillState)>,
+    ) -> Vec<(Vec<u64>, BackfillState)> {
+        commits
+            .into_iter()
+            .map(|(rows, next)| {
+                let ids = rows
+                    .iter()
+                    .map(|row| {
+                        assert_eq!(row.position, SNAPSHOT_POSITION);
+                        let Operation::Read { after } = &row.operation else {
+                            panic!("a backfill row is not a snapshot row: {row:?}");
+                        };
+                        after[0].value.as_ref().unwrap().parse().unwrap()
+                    })
+                    .collect();
+                (ids, next)
+            })
+            .collect()
+    }
+
+    fn running(after: u64) -> BackfillState {
+        BackfillState::Running {
+            after: vec![after.to_string()],
+        }
+    }
+
+    fn target(source: &DataSource, table: &str) -> TargetTable {
+        TargetTable::for_source_table(source, "public", table)
+    }
+
+    /// A session with backfill whose stream stays open, so the test can feed it.
+    struct BackfillSession {
+        events: mpsc::Sender<Result<StreamItem, CaptureError>>,
+        confirms: mpsc::Receiver<String>,
+        selection: watch::Sender<TableSelection>,
+        task: tokio::task::JoinHandle<Result<(), CaptureError>>,
+    }
+
+    impl BackfillSession {
+        fn start(
+            source: &DataSource,
+            writer: &Arc<FakeIcebergWriter>,
+            snapshots: &Arc<FakeSnapshotSource>,
+            chunk_rows: usize,
+            selection: TableSelection,
+        ) -> Self {
+            let (events, rx) = mpsc::channel(8);
+            let (confirm_tx, confirms) = mpsc::channel(8);
+            let cdc = Arc::new(ManualCdcSource {
+                stream: Mutex::new(Some(ChangeStream {
+                    events: rx,
+                    confirm: confirm_tx,
+                })),
+            });
+            let orchestrator = CaptureOrchestrator::new(
+                cdc,
+                writer.clone(),
+                BatchConfig {
+                    max_events: 100,
+                    max_flush_interval: Duration::from_millis(10),
+                },
+            )
+            .with_backfill(snapshots.clone(), BackfillConfig { chunk_rows });
+            let (selection, selection_rx) = watch::channel(selection);
+            let session_source = source.clone();
+            let task =
+                tokio::spawn(
+                    async move { orchestrator.run_once(&session_source, &selection_rx).await },
+                );
+            Self {
+                events,
+                confirms,
+                selection,
+                task,
+            }
+        }
+
+        async fn until(&self, condition: impl Fn() -> bool) {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while !condition() {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            })
+            .await
+            .expect("timed out waiting for the backfill");
+        }
+
+        async fn end(self) {
+            drop(self.events);
+            self.task.await.unwrap().unwrap();
+        }
+    }
+
+    /// A chosen table's existing rows land page by page as snapshot rows at the lowest
+    /// position, each page with where the backfill got to, ending with `Done`.
+    #[tokio::test]
+    async fn existing_rows_are_backfilled_in_pages() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let snapshots =
+            Arc::new(FakeSnapshotSource::default().with("orders", Some(vec![1, 2, 3, 4, 5])));
+        let orders = target(&source, "orders");
+
+        let session = BackfillSession::start(&source, &writer, &snapshots, 2, test_tables());
+        session.until(|| writer.backfill_finished(&orders)).await;
+        session.end().await;
+
+        assert_eq!(
+            backfilled(writer.backfills(&orders)),
+            vec![
+                (vec![1, 2], running(2)),
+                (vec![3, 4], running(4)),
+                (vec![5], BackfillState::Done),
+            ]
+        );
+        // Not part of the change stream: no checkpoint is written for them.
+        assert!(writer.commits(&orders).is_empty());
+    }
+
+    /// A backfill that stopped part-way continues after the last page that landed.
+    #[tokio::test]
+    async fn a_backfill_resumes_after_the_last_page_that_landed() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let orders = target(&source, "orders");
+        writer
+            .backfill_states
+            .lock()
+            .unwrap()
+            .insert(orders.clone(), running(3));
+        let snapshots =
+            Arc::new(FakeSnapshotSource::default().with("orders", Some(vec![1, 2, 3, 4, 5])));
+
+        let session = BackfillSession::start(&source, &writer, &snapshots, 2, test_tables());
+        session.until(|| writer.backfill_finished(&orders)).await;
+        session.end().await;
+
+        assert_eq!(
+            backfilled(writer.backfills(&orders)),
+            vec![(vec![4, 5], running(5)), (vec![], BackfillState::Done)]
+        );
+        assert_eq!(
+            snapshots.reads()[0],
+            ("orders".to_string(), Some(vec!["3".to_string()]))
+        );
+    }
+
+    /// Finished tables aren't read again, a keyless one is marked skipped without rows, and
+    /// tables that aren't chosen aren't read at all.
+    #[tokio::test]
+    async fn only_chosen_tables_that_need_it_are_backfilled() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let (orders, customers) = (target(&source, "orders"), target(&source, "customers"));
+        writer
+            .backfill_states
+            .lock()
+            .unwrap()
+            .insert(orders.clone(), BackfillState::Done);
+        let snapshots = Arc::new(
+            FakeSnapshotSource::default()
+                .with("orders", Some(vec![1]))
+                .with("customers", None)
+                .with("secrets", Some(vec![1])),
+        );
+
+        let session = BackfillSession::start(&source, &writer, &snapshots, 10, test_tables());
+        session.until(|| writer.backfill_finished(&customers)).await;
+        session.end().await;
+
+        assert_eq!(
+            writer.backfills(&customers),
+            vec![(vec![], BackfillState::Skipped)]
+        );
+        assert!(writer.backfills(&orders).is_empty());
+        assert_eq!(snapshots.reads(), vec![("customers".to_string(), None)]);
+    }
+
+    /// A page whose commit failed is committed again before any later page, so none is lost.
+    #[tokio::test]
+    async fn a_failed_backfill_commit_is_retried_before_the_next_page() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        *writer.failing_backfills.lock().unwrap() = 2;
+        let orders = target(&source, "orders");
+        let snapshots = Arc::new(FakeSnapshotSource::default().with("orders", Some(vec![1, 2, 3])));
+
+        let session = BackfillSession::start(&source, &writer, &snapshots, 2, test_tables());
+        session.until(|| writer.backfill_finished(&orders)).await;
+        session.end().await;
+
+        assert_eq!(
+            backfilled(writer.backfills(&orders)),
+            vec![(vec![1, 2], running(2)), (vec![3], BackfillState::Done)]
+        );
+    }
+
+    /// A table chosen while the session runs is backfilled then.
+    #[tokio::test]
+    async fn a_table_chosen_mid_session_is_backfilled() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let (orders, customers) = (target(&source, "orders"), target(&source, "customers"));
+        let snapshots = Arc::new(
+            FakeSnapshotSource::default()
+                .with("orders", Some(vec![1]))
+                .with("customers", Some(vec![7])),
+        );
+
+        let session = BackfillSession::start(
+            &source,
+            &writer,
+            &snapshots,
+            10,
+            TableSelection::of([("public", "orders")]),
+        );
+        session.until(|| writer.backfill_finished(&orders)).await;
+        assert!(writer.backfills(&customers).is_empty());
+
+        session.selection.send_replace(test_tables());
+        session.until(|| writer.backfill_finished(&customers)).await;
+        session.end().await;
+
+        assert_eq!(
+            backfilled(writer.backfills(&customers)),
+            vec![(vec![7], BackfillState::Done)]
+        );
+    }
+
+    /// Backfilling neither holds back the confirm nor gets in the way of captured changes.
+    #[tokio::test]
+    async fn the_change_stream_keeps_flowing_during_a_backfill() {
+        let source = test_source();
+        let writer = Arc::new(FakeIcebergWriter::default());
+        let orders = target(&source, "orders");
+        let snapshots =
+            Arc::new(FakeSnapshotSource::default().with("orders", Some((1..=50).collect())));
+
+        let mut session = BackfillSession::start(&source, &writer, &snapshots, 5, test_tables());
+        let a = change("orders", 1, 10);
+        session.events.send(Ok(item(&a))).await.unwrap();
+        session.events.send(Ok(progress(11))).await.unwrap();
+        // Below the buffered transaction at first, past it once flushed.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while session.confirms.recv().await.unwrap() != lsn(11) {}
+        })
+        .await
+        .expect("the confirm never passed the flushed transaction");
+        session.until(|| writer.backfill_finished(&orders)).await;
+        session.end().await;
+
+        assert_eq!(writer.commits(&orders), vec![(vec![a], lsn(10))]);
+        assert_eq!(backfilled(writer.backfills(&orders)).len(), 11);
     }
 }

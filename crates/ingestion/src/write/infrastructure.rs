@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use iceberg::io::{
     S3_ACCESS_KEY_ID, S3_ENDPOINT, S3_PATH_STYLE_ACCESS, S3_REGION, S3_SECRET_ACCESS_KEY,
 };
-use iceberg::spec::{DataFileFormat, Schema as IcebergSchema, Snapshot};
+use iceberg::spec::{DataFile, DataFileFormat, Schema as IcebergSchema, Snapshot};
 use iceberg::table::Table;
 use iceberg::transaction::{ApplyTransactionAction, Transaction};
 pub(crate) use iceberg::writer::IcebergWriter as IcebergFileWriter;
@@ -37,14 +37,14 @@ use iceberg_catalog_rest::{
 use iceberg_storage_opendal::OpenDalStorageFactory;
 use parquet::file::properties::WriterProperties;
 use pipa_catalog_proxy::{CatalogProxy, DEFAULT_SERVICE, sigv4::Signer};
-use sqlx::{Connection, PgConnection, Row, postgres::PgConnectOptions};
+use sqlx::{PgConnection, Row};
 use tokio::sync::Mutex;
 
 use crate::capture::domain::ChangeEvent;
-use crate::datasource::DataSource;
+use crate::datasource::{DataSource, TableRef};
 use crate::storage::ObjectStoreConfig;
 use crate::write::domain::{
-    COMMIT_TIMESTAMP_COLUMN, Checkpoint, IcebergWriter, OP_COLUMN, POSITION_COLUMN,
+    BackfillState, COMMIT_TIMESTAMP_COLUMN, Checkpoint, IcebergWriter, OP_COLUMN, POSITION_COLUMN,
     SOURCE_ID_COLUMN, TargetTable, WriteError, events_to_record_batch, namespace_for_source,
     target_table_name,
 };
@@ -61,6 +61,12 @@ pub(crate) const LEGACY_POSITION_PROPERTY: &str = "pipa.cdc.position";
 const KEY_COLUMNS_PROPERTY: &str = "pipa.cdc.key_columns";
 /// Snapshot summary property carrying the source id a commit came from, for debuggability.
 pub(crate) const COMMIT_SOURCE_ID_PROPERTY: &str = "pipa.cdc.source_id";
+/// Table property recording how far the table's snapshot backfill has got, as a
+/// [`BackfillState`] in JSON. A table property rather than a snapshot summary one so that
+/// snapshot expiry can't lose it; it is set in the same commit as the rows it accounts for.
+const BACKFILL_PROPERTY: &str = "pipa.cdc.backfill";
+/// Snapshot summary property marking a commit of snapshot backfill rows (`chunk`).
+const BACKFILL_SNAPSHOT_PROPERTY: &str = "pipa.cdc.backfill";
 
 /// Connection settings for the Iceberg REST catalog CDC target tables commit to.
 ///
@@ -166,13 +172,14 @@ impl IcebergChangelogWriter {
     }
 
     /// Ensures `target` exists in the catalog — creating it, introspecting `source`'s Postgres
-    /// table for `events[0]`'s `(schema, table)` on first sight — and returns the loaded/created
-    /// [`Table`] plus its Arrow schema.
+    /// table `pg_schema.pg_table` on first sight — and returns the loaded/created [`Table`] plus
+    /// its Arrow schema.
     async fn ensure_table(
         &self,
         source: &DataSource,
         target: &TargetTable,
-        events: &[ChangeEvent],
+        pg_schema: &str,
+        pg_table: &str,
     ) -> Result<(Table, SchemaRef), WriteError> {
         let ident = Self::table_ident(target);
 
@@ -214,14 +221,10 @@ impl IcebergChangelogWriter {
                 .await
                 .map_err(|err| WriteError::Catalog(err.to_string()))?
         } else {
-            let first = events.first().ok_or_else(|| {
-                WriteError::Mapping("cannot create a target table from an empty batch".to_string())
-            })?;
-            let iceberg_schema =
-                introspect_iceberg_schema(source, &first.schema, &first.table).await?;
+            let iceberg_schema = introspect_iceberg_schema(source, pg_schema, pg_table).await?;
             let key_columns = source_key_columns(source)
                 .await?
-                .remove(&(first.schema.clone(), first.table.clone()))
+                .remove(&(pg_schema.to_string(), pg_table.to_string()))
                 .unwrap_or_default();
             let creation = TableCreation::builder()
                 .name(target.table.clone())
@@ -264,24 +267,15 @@ impl IcebergWriter for IcebergChangelogWriter {
         events: &[ChangeEvent],
         high_watermark_position: &str,
     ) -> Result<(), WriteError> {
-        if events.is_empty() {
+        let Some(first) = events.first() else {
             return Ok(());
-        }
+        };
 
-        let (table, arrow_schema) = self.ensure_table(source, target, events).await?;
-        let batch = events_to_record_batch(&arrow_schema, &source.id.to_string(), events)?;
-
-        let mut writer = new_data_file_writer(&table, "pipa-cdc")
-            .await
-            .map_err(|err| WriteError::Commit(err.to_string()))?;
-        writer
-            .write(batch)
-            .await
-            .map_err(|err| WriteError::Commit(err.to_string()))?;
-        let data_files = writer
-            .close()
-            .await
-            .map_err(|err| WriteError::Commit(err.to_string()))?;
+        let (table, arrow_schema) = self
+            .ensure_table(source, target, &first.schema, &first.table)
+            .await?;
+        let data_files =
+            write_data_files(&table, &arrow_schema, source, events, "pipa-cdc").await?;
 
         let properties = HashMap::from([
             (
@@ -328,6 +322,75 @@ impl IcebergWriter for IcebergChangelogWriter {
             .map_err(|err| WriteError::Catalog(err.to_string()))?;
 
         Ok(latest_checkpoint(&table))
+    }
+
+    async fn backfill_state(
+        &self,
+        target: &TargetTable,
+    ) -> Result<Option<BackfillState>, WriteError> {
+        let ident = Self::table_ident(target);
+        if !self
+            .catalog
+            .table_exists(&ident)
+            .await
+            .map_err(|err| WriteError::Catalog(err.to_string()))?
+        {
+            return Ok(None);
+        }
+        let table = self
+            .catalog
+            .load_table(&ident)
+            .await
+            .map_err(|err| WriteError::Catalog(err.to_string()))?;
+        Ok(backfill_state_of(&table))
+    }
+
+    async fn commit_backfill(
+        &self,
+        source: &DataSource,
+        target: &TargetTable,
+        table_ref: &TableRef,
+        rows: &[ChangeEvent],
+        next: &BackfillState,
+    ) -> Result<(), WriteError> {
+        let (table, arrow_schema) = self
+            .ensure_table(source, target, &table_ref.schema, &table_ref.name)
+            .await?;
+
+        let mut tx = Transaction::new(&table);
+        if !rows.is_empty() {
+            let data_files =
+                write_data_files(&table, &arrow_schema, source, rows, "pipa-backfill").await?;
+            let mut properties = HashMap::from([
+                (COMMIT_SOURCE_ID_PROPERTY.to_string(), source.id.to_string()),
+                (BACKFILL_SNAPSHOT_PROPERTY.to_string(), "chunk".to_string()),
+            ]);
+            match latest_checkpoint(&table) {
+                Some(Checkpoint::Commit(position)) => {
+                    properties.insert(COMMIT_POSITION_PROPERTY.to_string(), position);
+                }
+                Some(Checkpoint::LegacyChange(position)) => {
+                    properties.insert(LEGACY_POSITION_PROPERTY.to_string(), position);
+                }
+                None => {}
+            }
+            tx = tx
+                .fast_append()
+                .add_data_files(data_files)
+                .set_snapshot_properties(properties)
+                .apply(tx)
+                .map_err(|err| WriteError::Commit(err.to_string()))?;
+        }
+        let state = serde_json::to_string(next).expect("a backfill state always serializes");
+        tx = tx
+            .update_table_properties()
+            .set(BACKFILL_PROPERTY.to_string(), state)
+            .apply(tx)
+            .map_err(|err| WriteError::Commit(err.to_string()))?;
+        tx.commit(self.catalog.as_ref())
+            .await
+            .map_err(|err| WriteError::Commit(err.to_string()))?;
+        Ok(())
     }
 
     async fn existing_tables(&self, source: &DataSource) -> Result<HashSet<String>, WriteError> {
@@ -416,6 +479,41 @@ impl IcebergWriter for IcebergChangelogWriter {
     }
 }
 
+/// Writes `events` as Parquet data files of `table` (whose Arrow schema is `arrow_schema`), not
+/// yet committed.
+async fn write_data_files(
+    table: &Table,
+    arrow_schema: &SchemaRef,
+    source: &DataSource,
+    events: &[ChangeEvent],
+    prefix: &str,
+) -> Result<Vec<DataFile>, WriteError> {
+    let batch = events_to_record_batch(arrow_schema, &source.id.to_string(), events)?;
+    let mut writer = new_data_file_writer(table, prefix)
+        .await
+        .map_err(|err| WriteError::Commit(err.to_string()))?;
+    writer
+        .write(batch)
+        .await
+        .map_err(|err| WriteError::Commit(err.to_string()))?;
+    writer
+        .close()
+        .await
+        .map_err(|err| WriteError::Commit(err.to_string()))
+}
+
+/// The backfill state `table` records, if any. One that can't be read counts as never
+/// started: re-reading rows already backfilled only adds snapshot rows of the same keys, at the
+/// same lowest position, which the current-rows view collapses.
+fn backfill_state_of(table: &Table) -> Option<BackfillState> {
+    let value = table.metadata().properties().get(BACKFILL_PROPERTY)?;
+    serde_json::from_str(value)
+        .inspect_err(|err| {
+            tracing::warn!(table = %table.identifier(), %value, error = %err, "unreadable backfill state, starting over");
+        })
+        .ok()
+}
+
 /// A fresh writer of Parquet data files for `table` in its current schema, rolling over at the
 /// default target file size. File names are `{prefix}-{uuid}-NNNNN.parquet`: the generator's
 /// counter restarts at 0 for every writer, so without the per-writer uuid the second commit's
@@ -477,6 +575,27 @@ pub(crate) fn latest_checkpoint(table: &Table) -> Option<Checkpoint> {
     None
 }
 
+/// `source`'s tables' row keys ([`crate::postgres::key_columns`]).
+async fn source_key_columns(
+    source: &DataSource,
+) -> Result<HashMap<(String, String), Vec<String>>, WriteError> {
+    let mut conn = connect_source(source).await?;
+    crate::postgres::key_columns(&mut conn)
+        .await
+        .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))
+}
+
+/// [`KEY_COLUMNS_PROPERTY`]'s value for `columns`.
+fn key_columns_property(columns: &[String]) -> String {
+    serde_json::to_string(columns).expect("a list of strings always serializes")
+}
+
+async fn connect_source(source: &DataSource) -> Result<PgConnection, WriteError> {
+    crate::postgres::connect(source)
+        .await
+        .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))
+}
+
 /// Introspects `pg_schema.pg_table`'s columns via `information_schema` and builds the target
 /// Iceberg table's schema: the four fixed changelog columns
 /// ([`OP_COLUMN`]/[`SOURCE_ID_COLUMN`]/[`POSITION_COLUMN`]/[`COMMIT_TIMESTAMP_COLUMN`]) followed
@@ -486,61 +605,6 @@ pub(crate) fn latest_checkpoint(table: &Table) -> Option<Checkpoint> {
 /// `capture::infrastructure::postgres::PostgresWalSource::ensure_replication_objects`'s own
 /// pattern) rather than threading typed column info through the WAL decode path — this keeps
 /// `capture/domain.rs`'s `ColumnValue` deliberately text-only, per its own doc comment.
-/// Every table of `source`'s database with its row key: the replica identity's columns, in
-/// index order — the primary key by default, the chosen index for `REPLICA IDENTITY USING
-/// INDEX`. Tables without one (no primary key, or `REPLICA IDENTITY FULL`/`NOTHING`) map to
-/// nothing.
-async fn source_key_columns(
-    source: &DataSource,
-) -> Result<HashMap<(String, String), Vec<String>>, WriteError> {
-    let mut conn = connect_source(source).await?;
-    let rows = sqlx::query(
-        "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name \
-         FROM pg_class c \
-         JOIN pg_namespace n ON n.oid = c.relnamespace \
-         JOIN pg_index i ON i.indrelid = c.oid \
-           AND ((c.relreplident = 'd' AND i.indisprimary) \
-             OR (c.relreplident = 'i' AND i.indisreplident)) \
-         CROSS JOIN LATERAL unnest(i.indkey::int2[]) WITH ORDINALITY AS k(attnum, ord) \
-         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.attnum \
-         WHERE c.relkind IN ('r', 'p') \
-           AND n.nspname NOT IN ('pg_catalog', 'information_schema') \
-         ORDER BY n.nspname, c.relname, k.ord",
-    )
-    .fetch_all(&mut conn)
-    .await
-    .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))?;
-
-    let mut keys: HashMap<(String, String), Vec<String>> = HashMap::new();
-    for row in rows {
-        let get = |name: &str| -> Result<String, WriteError> {
-            row.try_get(name)
-                .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))
-        };
-        keys.entry((get("schema_name")?, get("table_name")?))
-            .or_default()
-            .push(get("column_name")?);
-    }
-    Ok(keys)
-}
-
-/// [`KEY_COLUMNS_PROPERTY`]'s value for `columns`.
-fn key_columns_property(columns: &[String]) -> String {
-    serde_json::to_string(columns).expect("a list of strings always serializes")
-}
-
-async fn connect_source(source: &DataSource) -> Result<PgConnection, WriteError> {
-    let options = PgConnectOptions::new()
-        .host(&source.connection.host)
-        .port(source.connection.port)
-        .username(&source.connection.username)
-        .password(&source.connection.password)
-        .database(&source.connection.database);
-    PgConnection::connect_with(&options)
-        .await
-        .map_err(|err| WriteError::SchemaIntrospection(err.to_string()))
-}
-
 async fn introspect_iceberg_schema(
     source: &DataSource,
     pg_schema: &str,

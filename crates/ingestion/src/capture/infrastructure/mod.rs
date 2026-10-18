@@ -2,4 +2,4 @@
 
 mod postgres;
 
-pub use postgres::PostgresWalSource;
+pub use postgres::{PostgresSnapshotSource, PostgresWalSource};

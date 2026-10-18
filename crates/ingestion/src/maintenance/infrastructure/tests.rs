@@ -31,13 +31,14 @@ use tokio::sync::Mutex;
 use super::commit::{CommitError, SnapshotCommitter};
 use super::files::referenced_files;
 use super::{IcebergTableMaintainer, OrphanSweeper};
+use crate::capture::backfill::SNAPSHOT_POSITION;
 use crate::capture::domain::{ChangeEvent, ColumnValue, Operation};
-use crate::datasource::{ConnectionConfig, DataSource, DataSourceId, DbEngine};
+use crate::datasource::{ConnectionConfig, DataSource, DataSourceId, DbEngine, TableRef};
 use crate::maintenance::domain::{
     CompactionPolicy, ExpiryPolicy, MaintenanceReport, TableMaintainer,
 };
 use crate::write::domain::{
-    COMMIT_TIMESTAMP_COLUMN, Checkpoint, IcebergWriter, OP_COLUMN, POSITION_COLUMN,
+    BackfillState, COMMIT_TIMESTAMP_COLUMN, Checkpoint, IcebergWriter, OP_COLUMN, POSITION_COLUMN,
     SOURCE_ID_COLUMN, TargetTable, namespace_for_source,
 };
 use crate::write::infrastructure::IcebergChangelogWriter;
@@ -642,4 +643,96 @@ async fn a_snapshot_without_a_checkpoint_falls_back_to_its_ancestors() {
         fixture.checkpoint().await,
         Some(Checkpoint::Commit(commit_position(2)))
     );
+}
+
+/// A backfill page lands in a single commit together with the state it got to, and carries
+/// the checkpoint forward; a last step without rows only records the state.
+#[tokio::test]
+async fn a_backfill_page_lands_with_its_state_and_keeps_the_checkpoint() {
+    let mut fixture = Fixture::new().await;
+    fixture.commit_batches(1).await;
+    let checkpoint = fixture.checkpoint().await;
+    let snapshots = |table: &iceberg::table::Table| table.metadata().snapshots().count();
+    let before = snapshots(&fixture.catalog.load_table(&fixture.ident).await.unwrap());
+    assert_eq!(
+        fixture
+            .writer
+            .backfill_state(&fixture.target)
+            .await
+            .unwrap(),
+        None
+    );
+
+    let table = TableRef {
+        schema: "public".to_string(),
+        name: "orders".to_string(),
+    };
+    let rows: Vec<ChangeEvent> = (100..103)
+        .map(|id| ChangeEvent {
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            operation: Operation::Read {
+                after: vec![
+                    ColumnValue {
+                        name: "id".to_string(),
+                        value: Some(id.to_string()),
+                    },
+                    ColumnValue {
+                        name: "name".to_string(),
+                        value: Some(format!("existing {id}")),
+                    },
+                ],
+            },
+            position: SNAPSHOT_POSITION.to_string(),
+            commit_position: SNAPSHOT_POSITION.to_string(),
+            commit_timestamp_unix_micros: 0,
+        })
+        .collect();
+    let running = BackfillState::Running {
+        after: vec!["102".to_string()],
+    };
+    fixture
+        .writer
+        .commit_backfill(&fixture.source, &fixture.target, &table, &rows, &running)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        fixture
+            .writer
+            .backfill_state(&fixture.target)
+            .await
+            .unwrap(),
+        Some(running)
+    );
+    assert_eq!(fixture.checkpoint().await, checkpoint);
+    let loaded = fixture.catalog.load_table(&fixture.ident).await.unwrap();
+    assert_eq!(snapshots(&loaded), before + 1);
+    let mut expected = Fixture::expected_positions(1);
+    expected.extend(std::iter::repeat_n(SNAPSHOT_POSITION.to_string(), 3));
+    expected.sort();
+    assert_eq!(fixture.positions().await, expected);
+
+    fixture
+        .writer
+        .commit_backfill(
+            &fixture.source,
+            &fixture.target,
+            &table,
+            &[],
+            &BackfillState::Done,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        fixture
+            .writer
+            .backfill_state(&fixture.target)
+            .await
+            .unwrap(),
+        Some(BackfillState::Done)
+    );
+    let loaded = fixture.catalog.load_table(&fixture.ident).await.unwrap();
+    assert_eq!(snapshots(&loaded), before + 1);
+    assert_eq!(fixture.checkpoint().await, checkpoint);
 }
