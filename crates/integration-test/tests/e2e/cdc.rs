@@ -415,7 +415,9 @@ async fn nothing_is_ingested_until_tables_are_chosen() {
 
 #[rstest]
 #[tokio::test]
-async fn a_table_chosen_later_is_ingested_from_then_on(#[future] pipeline: Pipeline) {
+async fn a_table_chosen_later_is_backfilled_and_captured_from_then_on(
+    #[future] pipeline: Pipeline,
+) {
     let p = pipeline.await;
     p.db.execute("INSERT INTO customers VALUES (1, 'before@example.com')")
         .await;
@@ -424,42 +426,31 @@ async fn a_table_chosen_later_is_ingested_from_then_on(#[future] pipeline: Pipel
     p.rows_when(ORDERS, "the order", |rows| rows.len() == 1)
         .await;
 
+    // The choice is picked up on ingestion's next refresh (1 s here), without a restart; the
+    // row that was there before is read in as it is.
     p.env
         .ingest(&p.source, &[("public", "orders"), ("public", "customers")])
         .await;
-    // The choice is picked up on ingestion's next refresh (1 s here), without a restart; keep
-    // inserting until the first row after that lands.
-    let mut next = 2;
-    let pipeline = &p;
-    let rows = wait::eventually("the customers table to be captured", || {
-        let sql = format!("INSERT INTO customers VALUES ({next}, 'after{next}@example.com')");
-        next += 1;
-        async move {
-            pipeline.db.execute(&sql).await;
-            let reply = pipeline
-                .env
-                .table_rows(
-                    &pipeline.env.admin,
-                    &pipeline.project,
-                    &pipeline.source,
-                    "public__customers",
-                    None,
-                    None,
-                )
-                .await;
-            if reply.status == 200 && !reply.rows().is_empty() {
-                Ok(reply.rows().clone())
-            } else {
-                Err(reply.body.to_string())
-            }
-        }
-    })
-    .await;
-    // What happened before the choice is not backfilled.
-    assert!(
-        rows.iter().all(|row| row["email"] != "before@example.com"),
-        "{rows:?}"
-    );
+    let rows = p
+        .rows_when("public__customers", "the existing customer", |rows| {
+            rows.len() == 1
+        })
+        .await;
+    assert_eq!(rows[0]["email"], "before@example.com");
+
+    // And what changes from then on is captured.
+    p.db.execute("UPDATE customers SET email = 'after@example.com' WHERE id = 1")
+        .await;
+    p.db.execute("INSERT INTO customers VALUES (2, 'new@example.com')")
+        .await;
+    let rows = p
+        .rows_when(
+            "public__customers",
+            "the changes after the choice",
+            |rows| rows.len() == 2 && rows[0]["email"] == "after@example.com",
+        )
+        .await;
+    assert_eq!(rows[1]["email"], "new@example.com");
 }
 
 #[rstest]
@@ -493,6 +484,84 @@ async fn a_table_that_is_unchosen_stops_being_ingested(#[future] pipeline: Pipel
         },
     )
     .await;
+}
+
+// ---- rows that were there before ----
+
+/// Existing rows land page by page as `read` rows below every change, so changes made after
+/// the backfill began win over them — and the changelog shows which rows were read in.
+#[rstest]
+#[tokio::test]
+async fn existing_rows_are_backfilled_and_later_changes_win(#[future] own_env: TestEnv) {
+    let p = Pipeline::start_configured(own_env.await, |config| {
+        config.extra_env.push((
+            "INGESTION_BACKFILL_CHUNK_ROWS".to_string(),
+            "10".to_string(),
+        ));
+    })
+    .await;
+    // Not chosen yet, so none of this is captured as a change.
+    p.db.execute("INSERT INTO customers SELECT g, 'old' || g || '@example.com' FROM generate_series(1, 25) AS g")
+        .await;
+    p.env
+        .ingest(&p.source, &[("public", "orders"), ("public", "customers")])
+        .await;
+    let rows = p
+        .rows_when("public__customers", "all 25 existing rows", |rows| {
+            rows.len() == 25
+        })
+        .await;
+    assert_eq!(rows[24]["email"], "old25@example.com");
+
+    p.db.execute("UPDATE customers SET email = 'changed@example.com' WHERE id = 3")
+        .await;
+    p.db.execute("DELETE FROM customers WHERE id = 4").await;
+    let rows = p
+        .rows_when("public__customers", "the update and the delete", |rows| {
+            rows.len() == 24
+                && rows
+                    .iter()
+                    .any(|row| row["id"] == 3 && row["email"] == "changed@example.com")
+        })
+        .await;
+    assert!(rows.iter().all(|row| row["id"] != 4), "{rows:?}");
+
+    let reply = p
+        .env
+        .query(
+            &p.project,
+            &(p.changelog_sql("_op, _position, count(*) AS n", "public__customers")
+                + " GROUP BY _op, _position ORDER BY _op, _position"),
+        )
+        .await;
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    let read = reply
+        .rows()
+        .iter()
+        .find(|row| row["_op"] == "read")
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(read["_position"], "0/0", "{}", reply.body);
+    assert_eq!(read["n"], 25, "{}", reply.body);
+}
+
+/// A table without a row key isn't backfilled: its existing rows couldn't be told apart from
+/// the changes captured over them. Its changes are still captured.
+#[rstest]
+#[tokio::test]
+async fn a_table_without_a_primary_key_is_not_backfilled() {
+    let p = Pipeline::shared_with(
+        "CREATE TABLE audit_log (kind text, detail text);
+         INSERT INTO audit_log VALUES ('old', 'x');",
+        &[("public", "audit_log")],
+    )
+    .await;
+    p.db.execute("INSERT INTO audit_log VALUES ('new', 'y')")
+        .await;
+    let rows = p
+        .rows_when("public__audit_log", "the new row", |rows| rows.len() == 1)
+        .await;
+    assert_eq!(rows[0]["kind"], "new");
 }
 
 // ---- ingestion coming and going ----

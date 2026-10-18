@@ -2,6 +2,7 @@
 //! decoded with [`decode`].
 
 mod decode;
+mod snapshot;
 
 use std::collections::HashMap;
 
@@ -10,13 +11,14 @@ use decode::{
     DecodedChange, RelationInfo, decode_delete, decode_insert, decode_relation, decode_update,
 };
 use pgwire_replication::{Lsn, ReplicationClient, ReplicationConfig, ReplicationEvent};
-use sqlx::{Connection, PgConnection, postgres::PgConnectOptions};
 use tokio::sync::mpsc;
 
 use crate::capture::domain::{
     CaptureError, CdcSource, ChangeEvent, ChangeStream, Operation, StreamItem,
 };
 use crate::datasource::DataSource;
+
+pub use snapshot::PostgresSnapshotSource;
 
 const CHANGE_CHANNEL_CAPACITY: usize = 256;
 const CONFIRM_CHANNEL_CAPACITY: usize = 16;
@@ -46,14 +48,7 @@ impl PostgresWalSource {
         publication: &str,
         slot: &str,
     ) -> Result<(), CaptureError> {
-        let options = PgConnectOptions::new()
-            .host(&source.connection.host)
-            .port(source.connection.port)
-            .username(&source.connection.username)
-            .password(&source.connection.password)
-            .database(&source.connection.database);
-
-        let mut conn = PgConnection::connect_with(&options)
+        let mut conn = crate::postgres::connect(source)
             .await
             .map_err(|err| CaptureError::Connect(err.to_string()))?;
 
@@ -353,6 +348,8 @@ mod live_tests {
     use std::time::Duration;
 
     use uuid::Uuid;
+
+    use sqlx::{Connection, PgConnection, postgres::PgConnectOptions};
 
     use super::*;
     use crate::capture::domain::Operation;

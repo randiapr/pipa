@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.0] - 2026-10-18
+
+### Added
+
+- `cdc`: existing rows are backfilled page by page as `read` rows that later changes win over.
+  A table without a primary key is not backfilled.
+- `pipeline::wait_for_backfill` and `pipeline::target_table`.
+
+### Changed
+
+- `Pipeline` setup also waits for the chosen tables' backfill, so the changes a test makes are
+  captured as changes rather than read in as existing rows.
+- `cdc::a_table_chosen_later_is_backfilled_and_captured_from_then_on` (was
+  `…_is_ingested_from_then_on`) expects the rows from before the choice. `cache`'s table-list
+  test expects the table its backfill creates.
+
 ## [0.2.1] - 2026-10-18
 
 ### Changed

@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::datasource::DataSource;
+use crate::datasource::{DataSource, TableRef};
 
 /// A single column's value as decoded off the wire, text-encoded.
 ///
@@ -32,6 +32,11 @@ pub enum Operation {
     },
     Delete {
         before: Vec<ColumnValue>,
+    },
+    /// A row that already existed, read by a snapshot backfill rather than captured from the
+    /// change log (see [`SnapshotSource`]).
+    Read {
+        after: Vec<ColumnValue>,
     },
 }
 
@@ -78,6 +83,8 @@ pub enum CaptureError {
     Stream(String),
     #[error("failed to read back or confirm a source's Iceberg checkpoint: {0}")]
     Checkpoint(String),
+    #[error("failed to read a table's existing rows: {0}")]
+    Snapshot(String),
 }
 
 /// A running change stream: the events themselves, plus a back-channel the caller uses to
@@ -114,4 +121,42 @@ pub trait CdcSource: Send + Sync {
         source: &DataSource,
         resume_from: Option<&str>,
     ) -> Result<ChangeStream, CaptureError>;
+}
+
+/// One step of reading a table's existing rows, in key order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotRead {
+    /// The table has no row key, so it can't be read in key order — nor its snapshot rows told
+    /// apart from the changes captured over them.
+    Keyless,
+    /// Up to the requested number of rows following the given key; fewer (possibly none) once
+    /// the end of the table is reached.
+    Chunk {
+        rows: Vec<Vec<ColumnValue>>,
+        /// The key of the last row in `rows`, as text, in key column order; `None` when `rows`
+        /// is empty. What the next read continues after.
+        last_key: Option<Vec<String>>,
+    },
+}
+
+/// Port: reads the rows a source's tables already hold, for backfilling the changes captured
+/// from its log with the state from before capture began.
+///
+/// Reads are plain, lock-free, key-ordered pages, each its own point in time. That is enough
+/// because a snapshot row is written below every captured change (see
+/// [`crate::capture::backfill`]), so whichever change to a row is captured after it began wins.
+#[async_trait]
+pub trait SnapshotSource: Send + Sync {
+    /// Every table of `source`'s database whose rows could be read.
+    async fn list_tables(&self, source: &DataSource) -> Result<Vec<TableRef>, CaptureError>;
+
+    /// Up to `limit` rows of `table` whose key follows `after` (from the first row with
+    /// `None`), in key order. Values are text-encoded, the same as the change log's.
+    async fn read_chunk(
+        &self,
+        source: &DataSource,
+        table: &TableRef,
+        after: Option<&[String]>,
+        limit: usize,
+    ) -> Result<SnapshotRead, CaptureError>;
 }

@@ -33,6 +33,7 @@ mod capture;
 mod coordination;
 mod datasource;
 mod maintenance;
+mod postgres;
 mod storage;
 mod write;
 
@@ -47,7 +48,10 @@ use tokio::task::JoinHandle;
 use datasource::{DataSource, DataSourceId, DbEngine, TableSelection};
 use storage::ObjectStoreConfig;
 
-use crate::capture::{BatchConfig, CaptureOrchestrator, CdcSource, PostgresWalSource};
+use crate::capture::{
+    BackfillConfig, BatchConfig, CaptureOrchestrator, CdcSource, PostgresSnapshotSource,
+    PostgresWalSource, SnapshotSource,
+};
 use crate::coordination::Coordinator;
 use crate::maintenance::{
     IcebergTableMaintainer, MaintenanceConfig, MaintenanceScheduler, OrphanSweeper,
@@ -79,11 +83,20 @@ async fn main() -> anyhow::Result<()> {
     let writer: Arc<dyn IcebergWriter> =
         Arc::new(IcebergChangelogWriter::new(Arc::clone(&catalog)));
     let postgres_source: Arc<dyn CdcSource> = Arc::new(PostgresWalSource::new());
-    let orchestrator = Arc::new(CaptureOrchestrator::new(
+    let mut orchestrator = CaptureOrchestrator::new(
         Arc::clone(&postgres_source),
         Arc::clone(&writer),
         BatchConfig::from_env(),
-    ));
+    );
+    match BackfillConfig::from_env() {
+        Some(config) => {
+            tracing::info!(chunk_rows = config.chunk_rows, "snapshot backfill enabled");
+            let snapshots: Arc<dyn SnapshotSource> = Arc::new(PostgresSnapshotSource::new());
+            orchestrator = orchestrator.with_backfill(snapshots, config);
+        }
+        None => tracing::info!("snapshot backfill disabled"),
+    }
+    let orchestrator = Arc::new(orchestrator);
 
     let (owned_tx, owned_rx) = watch::channel(Vec::new());
     let maintenance_config = MaintenanceConfig::from_env();

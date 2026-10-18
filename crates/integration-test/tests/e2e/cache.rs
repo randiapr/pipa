@@ -6,7 +6,7 @@ use std::time::Duration;
 use pipa_api::{QueryRequest, path};
 use pipa_integration_test::backend::{Backend, BackendConfig};
 use pipa_integration_test::env::TestEnv;
-use pipa_integration_test::pipeline::{ORDERS, Pipeline};
+use pipa_integration_test::pipeline::{ORDERS, Pipeline, wait_for_backfill};
 use pipa_integration_test::redis_db::RedisDb;
 use pipa_integration_test::reply::Reply;
 use rstest::rstest;
@@ -297,8 +297,8 @@ async fn the_table_list_is_cached_but_reading_a_table_is_not() {
         reply.body["tables"].as_array().unwrap().len()
     };
 
-    // Listed (and cached) before anything has been ingested: no table yet.
-    assert_eq!(list().await, 0);
+    // Listed (and cached) with just the orders table, which its backfill created.
+    assert_eq!(list().await, 1);
     p.db.execute("INSERT INTO orders VALUES (1, 'new', 1)")
         .await;
     // Reads always see the data as soon as it is there...
@@ -307,8 +307,13 @@ async fn the_table_list_is_cached_but_reading_a_table_is_not() {
         .await;
     p.rows_when(ORDERS, "the update", |rows| rows[0]["status"] == "paid")
         .await;
+    // ...and a table chosen now is there too...
+    p.env
+        .ingest(&p.source, &[("public", "orders"), ("public", "customers")])
+        .await;
+    wait_for_backfill(&p.env, &p.project, &p.source, &[("public", "customers")]).await;
 
     // ...while the list keeps the answer it had, until its ttl runs out.
-    assert_eq!(list().await, 0, "the list was not served from the cache");
+    assert_eq!(list().await, 1, "the list was not served from the cache");
     assert_eq!(redis.keys(TABLES_KEYS).await.len(), 1);
 }

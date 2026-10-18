@@ -16,9 +16,10 @@ use arrow_array::{
 };
 use arrow_schema::{DataType, SchemaRef, TimeUnit};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::capture::domain::{ChangeEvent, ColumnValue, Operation};
-use crate::datasource::DataSource;
+use crate::datasource::{DataSource, TableRef};
 
 /// Fixed metadata columns every changelog table carries, ahead of the source table's own
 /// business columns — in this order, matching what
@@ -43,9 +44,14 @@ impl TargetTable {
     /// namespace `cdc_{source_id}`, table `{schema}__{table}` (sanitized to `[a-z0-9_]`, to
     /// keep it a valid Iceberg identifier regardless of what Postgres allows).
     pub fn for_event(source: &DataSource, event: &ChangeEvent) -> Self {
+        Self::for_source_table(source, &event.schema, &event.table)
+    }
+
+    /// The target table source table `schema.table` of `source` lands in.
+    pub fn for_source_table(source: &DataSource, schema: &str, table: &str) -> Self {
         Self {
             namespace: namespace_for_source(source),
-            table: target_table_name(&event.schema, &event.table),
+            table: target_table_name(schema, table),
         }
     }
 }
@@ -129,6 +135,39 @@ pub trait IcebergWriter: Send + Sync {
 
     /// The names of `source`'s existing target tables; empty if it has none yet.
     async fn existing_tables(&self, source: &DataSource) -> Result<HashSet<String>, WriteError>;
+
+    /// How far `target`'s snapshot backfill has got; `None` if it never started (or the table
+    /// doesn't exist yet).
+    async fn backfill_state(
+        &self,
+        target: &TargetTable,
+    ) -> Result<Option<BackfillState>, WriteError>;
+
+    /// Commits a step of `target`'s snapshot backfill: `rows` (snapshot rows of source table
+    /// `table`, possibly none) together with `next`, the state the backfill is in once they are
+    /// landed — atomically, so a resumed backfill continues exactly after the last step that
+    /// landed. Creates `target` if it doesn't exist yet, and carries the table's checkpoint
+    /// forward unchanged: snapshot rows are not part of the change stream it tracks.
+    async fn commit_backfill(
+        &self,
+        source: &DataSource,
+        target: &TargetTable,
+        table: &TableRef,
+        rows: &[ChangeEvent],
+        next: &BackfillState,
+    ) -> Result<(), WriteError>;
+}
+
+/// Where a target table's snapshot backfill stands, kept with the table (as JSON).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum BackfillState {
+    /// Rows up to and including key `after` (text, in key column order) have landed.
+    Running { after: Vec<String> },
+    /// Every row the source table held has landed.
+    Done,
+    /// The source table has no row key, so it isn't backfilled.
+    Skipped,
 }
 
 /// The checkpoint a target table's latest snapshot carries.
@@ -151,6 +190,7 @@ fn operation_tag_and_values(operation: &Operation) -> (&'static str, &[ColumnVal
         Operation::Insert { after } => ("insert", after),
         Operation::Update { after, .. } => ("update", after),
         Operation::Delete { before } => ("delete", before),
+        Operation::Read { after } => ("read", after),
     }
 }
 
@@ -324,5 +364,41 @@ fn parse_timestamp_micros(text: &str, has_tz: bool) -> Result<i64, WriteError> {
                 WriteError::Mapping(format!("invalid timestamp text value {text:?}: {err}"))
             })?;
         Ok(naive.and_utc().timestamp_micros())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_snapshot_row_is_tagged_read() {
+        let after = vec![ColumnValue {
+            name: "id".to_string(),
+            value: Some("1".to_string()),
+        }];
+        let operation = Operation::Read {
+            after: after.clone(),
+        };
+        let (tag, values) = operation_tag_and_values(&operation);
+        assert_eq!((tag, values), ("read", after.as_slice()));
+    }
+
+    /// The JSON is the `pipa.cdc.backfill` table property's value: keep it stable.
+    #[test]
+    fn backfill_states_are_stored_as_tagged_json() {
+        for (state, json) in [
+            (
+                BackfillState::Running {
+                    after: vec!["7".to_string(), "a".to_string()],
+                },
+                r#"{"state":"running","after":["7","a"]}"#,
+            ),
+            (BackfillState::Done, r#"{"state":"done"}"#),
+            (BackfillState::Skipped, r#"{"state":"skipped"}"#),
+        ] {
+            assert_eq!(serde_json::to_string(&state).unwrap(), json);
+            assert_eq!(serde_json::from_str::<BackfillState>(json).unwrap(), state);
+        }
     }
 }
