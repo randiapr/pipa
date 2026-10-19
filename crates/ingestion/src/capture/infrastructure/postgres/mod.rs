@@ -127,7 +127,8 @@ impl CdcSource for PostgresWalSource {
             slot,
             publication,
         )
-        .with_port(source.connection.port);
+        .with_port(source.connection.port)
+        .with_application_name("pipa-ingestion");
 
         if let Some(resume_from) = resume_from {
             let start_lsn = resume_from.parse::<Lsn>().map_err(|err| {
@@ -137,6 +138,12 @@ impl CdcSource for PostgresWalSource {
         }
 
         let mut client = ReplicationClient::connect(config)
+            .await
+            .map_err(|err| CaptureError::Connect(err.to_string()))?;
+        // `connect` returns before the server has accepted `START_REPLICATION`; wait for it, so a
+        // refusal (slot in use, missing privilege) fails here and a stream that is "open" is.
+        client
+            .wait_started()
             .await
             .map_err(|err| CaptureError::Connect(err.to_string()))?;
 

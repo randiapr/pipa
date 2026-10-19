@@ -383,18 +383,18 @@ async fn accounts_survive_a_restart_and_the_bootstrap_admin_is_not_recreated(
 
 /// The backend refuses to start rather than run with no way in or with weak secrets.
 #[rstest]
-#[case::no_jwt_secret(None, Some("admin"), Some("admin-password"), "JWT_SECRET")]
-#[case::short_jwt_secret(Some("too-short"), Some("admin"), Some("admin-password"), "JWT_SECRET")]
-#[case::no_admin_on_an_empty_store(Some(JWT_SECRET), None, None, "no users exist")]
-#[case::no_admin_password(Some(JWT_SECRET), Some("admin"), None, "no users exist")]
-#[case::short_admin_password(Some(JWT_SECRET), Some("admin"), Some("short"), "password")]
-#[case::empty_admin_username(Some(JWT_SECRET), Some(" "), Some("admin-password"), "username")]
+#[case::no_jwt_secret("JWT_SECRET", _, "admin", "admin-password")]
+#[case::short_jwt_secret("JWT_SECRET", "too-short", "admin", "admin-password")]
+#[case::no_admin_on_an_empty_store("no users exist", JWT_SECRET)]
+#[case::no_admin_password("no users exist", JWT_SECRET, "admin")]
+#[case::short_admin_password("password", JWT_SECRET, "admin", "short")]
+#[case::empty_admin_username("username", JWT_SECRET, " ", "admin-password")]
 #[tokio::test]
 async fn the_backend_refuses_to_start_with_an_unsafe_configuration(
-    #[case] jwt_secret: Option<&str>,
-    #[case] admin_username: Option<&str>,
-    #[case] admin_password: Option<&str>,
     #[case] reason: &str,
+    #[case(opt)] jwt_secret: Option<&str>,
+    #[case(opt)] admin_username: Option<&str>,
+    #[case(opt)] admin_password: Option<&str>,
 ) {
     // `TestEnv` isn't used: it starts a healthy backend. A bucket of its own, so the store is
     // empty and there is no admin already.

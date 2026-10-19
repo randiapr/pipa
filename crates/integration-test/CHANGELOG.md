@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.1] - 2026-10-19
+
+### Changed
+
+- Updated `rstest` to 0.28.0. `auth::the_backend_refuses_to_start_with_an_unsafe_configuration`
+  now marks its optional settings `#[case(opt)]`, so a case names only the values it sets (`_`
+  skips one) instead of spelling out `Some(..)`/`None`.
+
 ## [0.3.0] - 2026-10-18
 
 ### Added
