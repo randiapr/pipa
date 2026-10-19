@@ -1,6 +1,6 @@
 [package]
 name = "pipa-ingestion"
-version = "0.9.1"
+version = "0.9.2"
 edition.workspace = true
 license.workspace = true
 publish = false
@@ -10,7 +10,6 @@ anyhow.workspace = true
 arrow-array.workspace = true
 arrow-schema.workspace = true
 async-trait.workspace = true
-bytes.workspace = true
 chrono.workspace = true
 futures.workspace = true
 iceberg.workspace = true

@@ -1,0 +1,6 @@
+# Read by `just crap` / `just crap-gate` (cargo-crap walks up to find it).
+
+# Test-only files: their `#[cfg(test)]` sits on the `mod` line in the parent file, which cargo-crap
+# can't see, so the helpers inside (e.g. maintenance/infrastructure/tests.rs's `CatalogCommitter`)
+# would otherwise be scored as production code.
+exclude = ["**/tests.rs"]

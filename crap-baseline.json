@@ -1,0 +1,5172 @@
+{
+  "$schema": "https://raw.githubusercontent.com/minikin/cargo-crap/main/schemas/report-v1.json",
+  "version": "0.9.0",
+  "entries": [
+    {
+      "file": "crates/api/src/datasource.rs",
+      "function": "DbEngine::as_str",
+      "line": 18,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/datasource.rs",
+      "function": "DbEngine::default_port",
+      "line": 25,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-api",
+      "uncovered": [
+        {
+          "start": 25,
+          "end": 30
+        }
+      ]
+    },
+    {
+      "file": "crates/api/src/envelope.rs",
+      "function": "BaseResponse::new",
+      "line": 67,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/envelope.rs",
+      "function": "ResponseCode::code",
+      "line": 24,
+      "cyclomatic": 11.0,
+      "coverage": 92.3076923076923,
+      "crap": 11.055075102412381,
+      "crate": "pipa-api",
+      "uncovered": [
+        {
+          "start": 32,
+          "end": 32
+        }
+      ]
+    },
+    {
+      "file": "crates/api/src/envelope.rs",
+      "function": "ResponseCode::message",
+      "line": 39,
+      "cyclomatic": 11.0,
+      "coverage": 92.3076923076923,
+      "crap": 11.055075102412381,
+      "crate": "pipa-api",
+      "uncovered": [
+        {
+          "start": 47,
+          "end": 47
+        }
+      ]
+    },
+    {
+      "file": "crates/api/src/path.rs",
+      "function": "datasource",
+      "line": 22,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/path.rs",
+      "function": "datasource_tables",
+      "line": 30,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/path.rs",
+      "function": "datasource_test",
+      "line": 26,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/path.rs",
+      "function": "project",
+      "line": 34,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/path.rs",
+      "function": "user",
+      "line": 38,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/api/src/path.rs",
+      "function": "with_id",
+      "line": 18,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-api"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CacheConfig::default",
+      "line": 38,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CacheConfig::from_env",
+      "line": 50,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 50,
+          "end": 66
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CachedQueries::list_tables",
+      "line": 104,
+      "cyclomatic": 5.0,
+      "coverage": 64.70588235294117,
+      "crap": 6.099124771015673,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 112,
+          "end": 114
+        },
+        {
+          "start": 117,
+          "end": 120
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CachedQueries::new",
+      "line": 76,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CachedQueries::query",
+      "line": 89,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CachedQueries::read_table",
+      "line": 125,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "CachedQueries::uncached",
+      "line": 84,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 84,
+          "end": 86
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "ResultCache::key",
+      "line": 147,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "ResultCache::remember",
+      "line": 163,
+      "cyclomatic": 6.0,
+      "coverage": 100.0,
+      "crap": 6.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/application.rs",
+      "function": "scope",
+      "line": 187,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/memory.rs",
+      "function": "InMemoryCache::get",
+      "line": 29,
+      "cyclomatic": 4.0,
+      "coverage": 66.66666666666666,
+      "crap": 4.5925925925925934,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 33,
+          "end": 33
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/memory.rs",
+      "function": "InMemoryCache::new",
+      "line": 19,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/memory.rs",
+      "function": "InMemoryCache::set",
+      "line": 44,
+      "cyclomatic": 7.0,
+      "coverage": 80.0,
+      "crap": 7.3919999999999995,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 52,
+          "end": 52
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/mod.rs",
+      "function": "from_env",
+      "line": 19,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 19,
+          "end": 37
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::call",
+      "line": 73,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 73,
+          "end": 90
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::connection",
+      "line": 61,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 61,
+          "end": 71
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::get",
+      "line": 95,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 95,
+          "end": 104
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::is_down",
+      "line": 37,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 37,
+          "end": 43
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::mark",
+      "line": 45,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 45,
+          "end": 59
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::new",
+      "line": 29,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 29,
+          "end": 35
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/cache/infrastructure/redis_cache.rs",
+      "function": "RedisCache::set",
+      "line": 106,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 106,
+          "end": 118
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::choose_ingested_tables",
+      "line": 74,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::get",
+      "line": 46,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::list",
+      "line": 42,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::list_tables",
+      "line": 66,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::new",
+      "line": 24,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::register",
+      "line": 36,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::remove",
+      "line": 53,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/application.rs",
+      "function": "DataSourceService::test_connection",
+      "line": 57,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 57,
+          "end": 63
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/domain.rs",
+      "function": "DataSource::choose_ingested_tables",
+      "line": 166,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/domain.rs",
+      "function": "DataSource::ingests",
+      "line": 160,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/domain.rs",
+      "function": "DataSource::register",
+      "line": 117,
+      "cyclomatic": 6.0,
+      "coverage": 59.45945945945946,
+      "crap": 8.398673326357766,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 119,
+          "end": 121
+        },
+        {
+          "start": 124,
+          "end": 126
+        },
+        {
+          "start": 129,
+          "end": 131
+        },
+        {
+          "start": 134,
+          "end": 136
+        },
+        {
+          "start": 139,
+          "end": 141
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/domain.rs",
+      "function": "DataSourceId::default",
+      "line": 24,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 24,
+          "end": 26
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/domain.rs",
+      "function": "DataSourceId::fmt",
+      "line": 30,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/domain.rs",
+      "function": "DataSourceId::new",
+      "line": 18,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/connection_tester.rs",
+      "function": "SqlxConnectionTester::test",
+      "line": 18,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 18,
+          "end": 28
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/connection_tester.rs",
+      "function": "SqlxConnectionTester::test_mysql",
+      "line": 46,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 46,
+          "end": 60
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/connection_tester.rs",
+      "function": "SqlxConnectionTester::test_postgres",
+      "line": 32,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 32,
+          "end": 44
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/connection_tester.rs",
+      "function": "mysql_options",
+      "line": 72,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 72,
+          "end": 79
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/connection_tester.rs",
+      "function": "postgres_options",
+      "line": 63,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/repository.rs",
+      "function": "ObjectStoreDataSourceRepository::delete",
+      "line": 84,
+      "cyclomatic": 2.0,
+      "coverage": 66.66666666666666,
+      "crap": 2.1481481481481484,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 88,
+          "end": 88
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/repository.rs",
+      "function": "ObjectStoreDataSourceRepository::find_by_id",
+      "line": 44,
+      "cyclomatic": 6.0,
+      "coverage": 50.0,
+      "crap": 10.5,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 50,
+          "end": 52
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/repository.rs",
+      "function": "ObjectStoreDataSourceRepository::list",
+      "line": 60,
+      "cyclomatic": 8.0,
+      "coverage": 40.0,
+      "crap": 21.823999999999998,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 65,
+          "end": 77
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/repository.rs",
+      "function": "ObjectStoreDataSourceRepository::new",
+      "line": 23,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/repository.rs",
+      "function": "ObjectStoreDataSourceRepository::path_for",
+      "line": 27,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/repository.rs",
+      "function": "ObjectStoreDataSourceRepository::save",
+      "line": 34,
+      "cyclomatic": 3.0,
+      "coverage": 50.0,
+      "crap": 4.125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 36,
+          "end": 40
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/schema_explorer.rs",
+      "function": "SqlxSchemaExplorer::list_tables",
+      "line": 69,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/schema_explorer.rs",
+      "function": "SqlxSchemaExplorer::mysql_columns",
+      "line": 117,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 117,
+          "end": 153
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/schema_explorer.rs",
+      "function": "SqlxSchemaExplorer::postgres_columns",
+      "line": 80,
+      "cyclomatic": 4.0,
+      "coverage": 32.142857142857146,
+      "crap": 8.99927113702624,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 89,
+          "end": 114
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/schema_explorer.rs",
+      "function": "foreign_key",
+      "line": 158,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/datasource/infrastructure/schema_explorer.rs",
+      "function": "group_into_tables",
+      "line": 180,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AdminOnly::from_request_parts",
+      "line": 141,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthError::into_response",
+      "line": 107,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::can_access",
+      "line": 60,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::can_develop",
+      "line": 84,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::from",
+      "line": 45,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::from_request_parts",
+      "line": 126,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::is_admin",
+      "line": 55,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::require_admin",
+      "line": 74,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::require_developer",
+      "line": 88,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "AuthUser::require_project",
+      "line": 66,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "LoginError::from",
+      "line": 210,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "LoginError::into_response",
+      "line": 216,
+      "cyclomatic": 3.0,
+      "coverage": 57.14285714285714,
+      "crap": 3.7084548104956268,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 221,
+          "end": 224
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "bearer_token",
+      "line": 172,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "login",
+      "line": 181,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "login_routes",
+      "line": 27,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "me",
+      "line": 197,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "me_routes",
+      "line": 32,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/auth.rs",
+      "function": "require_auth",
+      "line": 150,
+      "cyclomatic": 4.0,
+      "coverage": 81.25,
+      "crap": 4.10546875,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 164,
+          "end": 167
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "ConnectionConfig::from",
+      "line": 34,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "ConnectionConfig::from",
+      "line": 46,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "ConnectionTestOutcome::from",
+      "line": 58,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 58,
+          "end": 63
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "DataSourceView::from",
+      "line": 67,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "DbEngine::from",
+      "line": 16,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "DbEngine::from",
+      "line": 25,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "NewDataSource::try_from",
+      "line": 131,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "NewProject::from",
+      "line": 161,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "NewUserAccount::try_from",
+      "line": 224,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "ProjectUpdate::from",
+      "line": 170,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 170,
+          "end": 175
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "ProjectView::from",
+      "line": 150,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "Role::from",
+      "line": 179,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "Role::from",
+      "line": 189,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "SourceColumnView::from",
+      "line": 99,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 99,
+          "end": 113
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "SourceTableRef::from",
+      "line": 81,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "TableRef::from",
+      "line": 90,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "UserAccountUpdate::try_from",
+      "line": 237,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "UserView::from",
+      "line": 199,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "parse_project_ids",
+      "line": 211,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/convert.rs",
+      "function": "source_table_view",
+      "line": 117,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 117,
+          "end": 125
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "ApiError::from",
+      "line": 190,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "ApiError::from",
+      "line": 196,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "ApiError::into_response",
+      "line": 202,
+      "cyclomatic": 7.0,
+      "coverage": 64.28571428571429,
+      "crap": 9.232142857142856,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 208,
+          "end": 208
+        },
+        {
+          "start": 213,
+          "end": 216
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "choose_ingested_tables",
+      "line": 164,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "delete_datasource",
+      "line": 113,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "get_datasource",
+      "line": 98,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "list_datasources",
+      "line": 56,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "list_source_tables",
+      "line": 142,
+      "cyclomatic": 5.0,
+      "coverage": 63.1578947368421,
+      "crap": 6.250182242309375,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 153,
+          "end": 159
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "register_datasource",
+      "line": 80,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "routes",
+      "line": 32,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/datasource.rs",
+      "function": "test_datasource",
+      "line": 125,
+      "cyclomatic": 5.0,
+      "coverage": 50.0,
+      "crap": 8.125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 131,
+          "end": 137
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/error.rs",
+      "function": "error_response",
+      "line": 16,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "ApiError::from",
+      "line": 106,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 106,
+          "end": 108
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "ApiError::from",
+      "line": 112,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "ApiError::into_response",
+      "line": 118,
+      "cyclomatic": 7.0,
+      "coverage": 28.57142857142857,
+      "crap": 24.857142857142858,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 120,
+          "end": 120
+        },
+        {
+          "start": 123,
+          "end": 132
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "delete_project",
+      "line": 91,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 91,
+          "end": 98
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "get_project",
+      "line": 65,
+      "cyclomatic": 3.0,
+      "coverage": 58.333333333333336,
+      "crap": 3.6510416666666665,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 71,
+          "end": 75
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "list_projects",
+      "line": 33,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "register_project",
+      "line": 50,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "routes",
+      "line": 24,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/project.rs",
+      "function": "update_project",
+      "line": 78,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 78,
+          "end": 89
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "ApiError::from",
+      "line": 111,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "ApiError::from",
+      "line": 117,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 117,
+          "end": 119
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "ApiError::from",
+      "line": 123,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "ApiError::into_response",
+      "line": 129,
+      "cyclomatic": 5.0,
+      "coverage": 50.0,
+      "crap": 8.125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 132,
+          "end": 140
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "project_namespaces",
+      "line": 92,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "project_sources",
+      "line": 79,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "query_error_response",
+      "line": 149,
+      "cyclomatic": 4.0,
+      "coverage": 50.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 152,
+          "end": 156
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "routes",
+      "line": 36,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/query.rs",
+      "function": "run_query",
+      "line": 47,
+      "cyclomatic": 10.0,
+      "coverage": 80.76923076923077,
+      "crap": 10.711197086936732,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 65,
+          "end": 65
+        },
+        {
+          "start": 69,
+          "end": 69
+        },
+        {
+          "start": 73,
+          "end": 75
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "ApiError::from",
+      "line": 128,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "ApiError::from",
+      "line": 134,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 134,
+          "end": 136
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "ApiError::from",
+      "line": 140,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "ApiError::into_response",
+      "line": 146,
+      "cyclomatic": 7.0,
+      "coverage": 80.0,
+      "crap": 7.3919999999999995,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 165,
+          "end": 168
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "list_tables",
+      "line": 46,
+      "cyclomatic": 4.0,
+      "coverage": 48.275862068965516,
+      "crap": 6.214112919758908,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 61,
+          "end": 75
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "parse_id",
+      "line": 112,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "read_table",
+      "line": 78,
+      "cyclomatic": 8.0,
+      "coverage": 90.0,
+      "crap": 8.064,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 107,
+          "end": 109
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/table.rs",
+      "function": "routes",
+      "line": 34,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "ApiError::from",
+      "line": 82,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "ApiError::into_response",
+      "line": 88,
+      "cyclomatic": 6.0,
+      "coverage": 41.66666666666667,
+      "crap": 13.14583333333333,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 90,
+          "end": 91
+        },
+        {
+          "start": 96,
+          "end": 101
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "create_user",
+      "line": 39,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "delete_user",
+      "line": 70,
+      "cyclomatic": 2.0,
+      "coverage": 87.5,
+      "crap": 2.0078125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 76,
+          "end": 76
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "get_user",
+      "line": 51,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 51,
+          "end": 58
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "list_users",
+      "line": 31,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "routes",
+      "line": 22,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/http/user.rs",
+      "function": "update_user",
+      "line": 60,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/catalog.rs",
+      "function": "IcebergCatalogConfig::build_catalog",
+      "line": 51,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/catalog.rs",
+      "function": "IcebergCatalogConfig::from_env",
+      "line": 35,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 35,
+          "end": 46
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/catalog.rs",
+      "function": "embedded_catalog_uri",
+      "line": 86,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 86,
+          "end": 96
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "QueryService::list_tables",
+      "line": 126,
+      "cyclomatic": 2.0,
+      "coverage": 60.0,
+      "crap": 2.2560000000000002,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 131,
+          "end": 134
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "QueryService::new",
+      "line": 100,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "QueryService::query",
+      "line": 116,
+      "cyclomatic": 2.0,
+      "coverage": 87.5,
+      "crap": 2.0078125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 122,
+          "end": 122
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "QueryService::read_table",
+      "line": 146,
+      "cyclomatic": 5.0,
+      "coverage": 80.95238095238095,
+      "crap": 5.172767519706295,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 162,
+          "end": 165
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "QueryService::session",
+      "line": 171,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "QueryService::session_with",
+      "line": 184,
+      "cyclomatic": 4.0,
+      "coverage": 50.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 193,
+          "end": 203
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "ScopedCatalog::as_any",
+      "line": 71,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 71,
+          "end": 73
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "ScopedCatalog::schema",
+      "line": 83,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "ScopedCatalog::schema_names",
+      "line": 75,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "encode",
+      "line": 341,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "is_metadata_table",
+      "line": 218,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "key_columns",
+      "line": 243,
+      "cyclomatic": 3.0,
+      "coverage": 75.0,
+      "crap": 3.140625,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 249,
+          "end": 250
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "namespace_for_source",
+      "line": 40,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "read_current_rows",
+      "line": 270,
+      "cyclomatic": 12.0,
+      "coverage": 100.0,
+      "crap": 12.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "read_rows",
+      "line": 324,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "run_read_only",
+      "line": 349,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "sortable_position",
+      "line": 255,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "table_for_source_table",
+      "line": 49,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/iceberg/query.rs",
+      "function": "tables_of",
+      "line": 307,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "bootstrap_admin",
+      "line": 296,
+      "cyclomatic": 6.0,
+      "coverage": 0.0,
+      "crap": 42.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 296,
+          "end": 311
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "cors_layer",
+      "line": 315,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 315,
+          "end": 331
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "health",
+      "line": 333,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "init_tracing",
+      "line": 101,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 101,
+          "end": 111
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "lacks_ingested_tables",
+      "line": 279,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "main",
+      "line": 41,
+      "cyclomatic": 11.0,
+      "coverage": 0.0,
+      "crap": 132.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 41,
+          "end": 96
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "migrate_legacy_user_roles",
+      "line": 146,
+      "cyclomatic": 7.0,
+      "coverage": 90.47619047619048,
+      "crap": 7.042328042328042,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 156,
+          "end": 156
+        },
+        {
+          "start": 164,
+          "end": 164
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "record_existing_ingested_tables",
+      "line": 180,
+      "cyclomatic": 7.0,
+      "coverage": 0.0,
+      "crap": 56.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 180,
+          "end": 210
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "record_existing_tables_of",
+      "line": 215,
+      "cyclomatic": 8.0,
+      "coverage": 0.0,
+      "crap": 72.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 215,
+          "end": 252
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "router",
+      "line": 115,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "sources_without_ingested_tables",
+      "line": 256,
+      "cyclomatic": 8.0,
+      "coverage": 100.0,
+      "crap": 8.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::ensure_name_available",
+      "line": 60,
+      "cyclomatic": 3.0,
+      "coverage": 92.85714285714286,
+      "crap": 3.003279883381924,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 70,
+          "end": 70
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::get",
+      "line": 33,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::list",
+      "line": 29,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::new",
+      "line": 18,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::register",
+      "line": 22,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::remove",
+      "line": 52,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/application.rs",
+      "function": "ProjectService::update",
+      "line": 40,
+      "cyclomatic": 5.0,
+      "coverage": 63.63636363636363,
+      "crap": 6.202103681442525,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 46,
+          "end": 49
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/domain.rs",
+      "function": "Project::apply_update",
+      "line": 76,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 76,
+          "end": 85
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/domain.rs",
+      "function": "Project::register",
+      "line": 57,
+      "cyclomatic": 2.0,
+      "coverage": 78.57142857142857,
+      "crap": 2.0393586005830904,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 59,
+          "end": 61
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/domain.rs",
+      "function": "ProjectId::default",
+      "line": 21,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 21,
+          "end": 23
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/domain.rs",
+      "function": "ProjectId::fmt",
+      "line": 27,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/domain.rs",
+      "function": "ProjectId::new",
+      "line": 15,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/infrastructure/repository.rs",
+      "function": "ObjectStoreProjectRepository::delete",
+      "line": 83,
+      "cyclomatic": 2.0,
+      "coverage": 66.66666666666666,
+      "crap": 2.1481481481481484,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 87,
+          "end": 87
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/infrastructure/repository.rs",
+      "function": "ObjectStoreProjectRepository::find_by_id",
+      "line": 43,
+      "cyclomatic": 6.0,
+      "coverage": 50.0,
+      "crap": 10.5,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 49,
+          "end": 51
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/infrastructure/repository.rs",
+      "function": "ObjectStoreProjectRepository::list",
+      "line": 59,
+      "cyclomatic": 8.0,
+      "coverage": 40.0,
+      "crap": 21.823999999999998,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 64,
+          "end": 76
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/project/infrastructure/repository.rs",
+      "function": "ObjectStoreProjectRepository::new",
+      "line": 22,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/infrastructure/repository.rs",
+      "function": "ObjectStoreProjectRepository::path_for",
+      "line": 26,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/project/infrastructure/repository.rs",
+      "function": "ObjectStoreProjectRepository::save",
+      "line": 33,
+      "cyclomatic": 3.0,
+      "coverage": 50.0,
+      "crap": 4.125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 35,
+          "end": 39
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/storage.rs",
+      "function": "ObjectStoreConfig::build_store",
+      "line": 42,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 42,
+          "end": 52
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/storage.rs",
+      "function": "ObjectStoreConfig::from_env",
+      "line": 23,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::authenticate",
+      "line": 128,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::bootstrap_admin",
+      "line": 49,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::create",
+      "line": 39,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::ensure_another_admin",
+      "line": 187,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::ensure_username_available",
+      "line": 170,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::get",
+      "line": 72,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::has_users",
+      "line": 64,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 64,
+          "end": 66
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::list",
+      "line": 68,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::new",
+      "line": 26,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::reassign_role",
+      "line": 103,
+      "cyclomatic": 6.0,
+      "coverage": 100.0,
+      "crap": 6.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::remove",
+      "line": 118,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::update",
+      "line": 79,
+      "cyclomatic": 11.0,
+      "coverage": 72.22222222222221,
+      "crap": 13.593449931412898,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 85,
+          "end": 85
+        },
+        {
+          "start": 87,
+          "end": 87
+        },
+        {
+          "start": 89,
+          "end": 90
+        },
+        {
+          "start": 93,
+          "end": 93
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/application.rs",
+      "function": "UserService::verify_token",
+      "line": 160,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/domain.rs",
+      "function": "NewUser::validate",
+      "line": 91,
+      "cyclomatic": 2.0,
+      "coverage": 62.5,
+      "crap": 2.2109375,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 93,
+          "end": 95
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/domain.rs",
+      "function": "User::register",
+      "line": 104,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/domain.rs",
+      "function": "UserId::default",
+      "line": 27,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 27,
+          "end": 29
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/domain.rs",
+      "function": "UserId::fmt",
+      "line": 33,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/domain.rs",
+      "function": "UserId::new",
+      "line": 21,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/domain.rs",
+      "function": "validate_password",
+      "line": 80,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/password.rs",
+      "function": "Argon2PasswordHasher::hash",
+      "line": 17,
+      "cyclomatic": 2.0,
+      "coverage": 88.88888888888889,
+      "crap": 2.0054869684499312,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 26,
+          "end": 26
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/password.rs",
+      "function": "Argon2PasswordHasher::verify",
+      "line": 29,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/repository.rs",
+      "function": "ObjectStoreUserRepository::delete",
+      "line": 82,
+      "cyclomatic": 2.0,
+      "coverage": 66.66666666666666,
+      "crap": 2.1481481481481484,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 86,
+          "end": 86
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/repository.rs",
+      "function": "ObjectStoreUserRepository::find_by_id",
+      "line": 42,
+      "cyclomatic": 6.0,
+      "coverage": 50.0,
+      "crap": 10.5,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 48,
+          "end": 50
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/repository.rs",
+      "function": "ObjectStoreUserRepository::list",
+      "line": 58,
+      "cyclomatic": 8.0,
+      "coverage": 40.0,
+      "crap": 21.823999999999998,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 63,
+          "end": 75
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/repository.rs",
+      "function": "ObjectStoreUserRepository::new",
+      "line": 22,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/repository.rs",
+      "function": "ObjectStoreUserRepository::path_for",
+      "line": 26,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/repository.rs",
+      "function": "ObjectStoreUserRepository::save",
+      "line": 33,
+      "cyclomatic": 3.0,
+      "coverage": 50.0,
+      "crap": 4.125,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 34,
+          "end": 38
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/token.rs",
+      "function": "JwtTokenService::issue",
+      "line": 48,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/token.rs",
+      "function": "JwtTokenService::new",
+      "line": 34,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/user/infrastructure/token.rs",
+      "function": "JwtTokenService::verify",
+      "line": 61,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::enable_tables",
+      "line": 153,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::enable_tables_with_retry",
+      "line": 172,
+      "cyclomatic": 5.0,
+      "coverage": 54.54545454545454,
+      "crap": 7.347858752817431,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 180,
+          "end": 187
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::new",
+      "line": 78,
+      "cyclomatic": 5.0,
+      "coverage": 94.44444444444444,
+      "crap": 5.004286694101509,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 88,
+          "end": 88
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::router",
+      "line": 191,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::send_signed",
+      "line": 106,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::serve_embedded",
+      "line": 199,
+      "cyclomatic": 5.0,
+      "coverage": 81.25,
+      "crap": 5.164794921875,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 210,
+          "end": 212
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "CatalogProxy::upstream",
+      "line": 100,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 100,
+          "end": 102
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "forward",
+      "line": 218,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/lib.rs",
+      "function": "try_forward",
+      "line": 228,
+      "cyclomatic": 9.0,
+      "coverage": 87.8048780487805,
+      "crap": 9.146907328680664,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 265,
+          "end": 269
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/main.rs",
+      "function": "env_or",
+      "line": 19,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 19,
+          "end": 21
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/main.rs",
+      "function": "init_tracing",
+      "line": 51,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 51,
+          "end": 61
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/main.rs",
+      "function": "main",
+      "line": 24,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-catalog-proxy",
+      "uncovered": [
+        {
+          "start": 24,
+          "end": 46
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "Signer::authorization",
+      "line": 39,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "Signer::new",
+      "line": 22,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "amz_date",
+      "line": 94,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "canonical_path",
+      "line": 118,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "canonical_query",
+      "line": 126,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "decode",
+      "line": 143,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "encode",
+      "line": 166,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "hex",
+      "line": 109,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "hmac",
+      "line": 103,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "function": "sha256_hex",
+      "line": 99,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-proxy"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "AbortOnDrop::drop",
+      "line": 141,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "BatchConfig::from_env",
+      "line": 64,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 64,
+          "end": 77
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::commit_backfill_step",
+      "line": 308,
+      "cyclomatic": 6.0,
+      "coverage": 90.47619047619048,
+      "crap": 6.031098153547133,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 322,
+          "end": 322
+        },
+        {
+          "start": 325,
+          "end": 325
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::confirm",
+      "line": 479,
+      "cyclomatic": 7.0,
+      "coverage": 100.0,
+      "crap": 7.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::flush_due",
+      "line": 418,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::flush_full",
+      "line": 408,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::flush_table",
+      "line": 429,
+      "cyclomatic": 3.0,
+      "coverage": 84.0,
+      "crap": 3.036864,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 431,
+          "end": 431
+        },
+        {
+          "start": 454,
+          "end": 454
+        },
+        {
+          "start": 460,
+          "end": 461
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::handle_event",
+      "line": 364,
+      "cyclomatic": 5.0,
+      "coverage": 90.32258064516128,
+      "crap": 5.022657849686147,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 374,
+          "end": 376
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::new",
+      "line": 147,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::run",
+      "line": 183,
+      "cyclomatic": 5.0,
+      "coverage": 91.66666666666666,
+      "crap": 5.014467592592593,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 192,
+          "end": 192
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::run_once",
+      "line": 209,
+      "cyclomatic": 4.0,
+      "coverage": 91.04477611940298,
+      "crap": 4.01149077512859,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 217,
+          "end": 217
+        },
+        {
+          "start": 257,
+          "end": 257
+        },
+        {
+          "start": 277,
+          "end": 278
+        },
+        {
+          "start": 284,
+          "end": 285
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::seed_watermark",
+      "line": 343,
+      "cyclomatic": 5.0,
+      "coverage": 68.75,
+      "crap": 5.762939453125,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 352,
+          "end": 354
+        },
+        {
+          "start": 359,
+          "end": 360
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "CaptureOrchestrator::with_backfill",
+      "line": 161,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "Watermark::covers",
+      "line": 94,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/application.rs",
+      "function": "parse_position",
+      "line": 514,
+      "cyclomatic": 1.0,
+      "coverage": 60.0,
+      "crap": 1.064,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 516,
+          "end": 517
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/backfill.rs",
+      "function": "BackfillConfig::from_env",
+      "line": 56,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 56,
+          "end": 73
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/backfill.rs",
+      "function": "Backfiller::chosen",
+      "line": 229,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/backfill.rs",
+      "function": "Backfiller::pass",
+      "line": 143,
+      "cyclomatic": 22.0,
+      "coverage": 92.42424242424242,
+      "crap": 22.21043771043771,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 159,
+          "end": 159
+        },
+        {
+          "start": 171,
+          "end": 172
+        },
+        {
+          "start": 179,
+          "end": 179
+        },
+        {
+          "start": 217,
+          "end": 217
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/backfill.rs",
+      "function": "Backfiller::run",
+      "line": 107,
+      "cyclomatic": 8.0,
+      "coverage": 58.333333333333336,
+      "crap": 12.629629629629628,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 117,
+          "end": 119
+        },
+        {
+          "start": 123,
+          "end": 123
+        },
+        {
+          "start": 127,
+          "end": 130
+        },
+        {
+          "start": 137,
+          "end": 137
+        },
+        {
+          "start": 140,
+          "end": 140
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/backfill.rs",
+      "function": "snapshot_events",
+      "line": 236,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::cstr",
+      "line": 104,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::i32",
+      "line": 98,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::new",
+      "line": 66,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::remaining",
+      "line": 70,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::take",
+      "line": 74,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::u16",
+      "line": 90,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::u32",
+      "line": 94,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "Reader::u8",
+      "line": 86,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "decode_delete",
+      "line": 198,
+      "cyclomatic": 7.0,
+      "coverage": 94.73684210526315,
+      "crap": 7.007143898527482,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 210,
+          "end": 210
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "decode_insert",
+      "line": 146,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "decode_relation",
+      "line": 118,
+      "cyclomatic": 11.0,
+      "coverage": 100.0,
+      "crap": 11.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "decode_tuple_data",
+      "line": 228,
+      "cyclomatic": 11.0,
+      "coverage": 90.47619047619048,
+      "crap": 11.10452434942231,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 240,
+          "end": 240
+        },
+        {
+          "start": 250,
+          "end": 250
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "decode_update",
+      "line": 166,
+      "cyclomatic": 10.0,
+      "coverage": 96.0,
+      "crap": 10.0064,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 186,
+          "end": 186
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/decode.rs",
+      "function": "expect_marker",
+      "line": 220,
+      "cyclomatic": 3.0,
+      "coverage": 85.71428571428571,
+      "crap": 3.0262390670553936,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 223,
+          "end": 223
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "PostgresWalSource::default",
+      "line": 87,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 87,
+          "end": 89
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "PostgresWalSource::ensure_replication_objects",
+      "line": 45,
+      "cyclomatic": 8.0,
+      "coverage": 0.0,
+      "crap": 72.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 45,
+          "end": 83
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "PostgresWalSource::new",
+      "line": 41,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 41,
+          "end": 43
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "PostgresWalSource::stream_changes",
+      "line": 111,
+      "cyclomatic": 32.0,
+      "coverage": 0.0,
+      "crap": 1056.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 115,
+          "end": 293
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "is_duplicate_object",
+      "line": 92,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 92,
+          "end": 99
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "postgres_to_unix_micros",
+      "line": 298,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "replication_publication_name",
+      "line": 105,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 105,
+          "end": 107
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "replication_slot_name",
+      "line": 101,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 101,
+          "end": 103
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "to_change_event",
+      "line": 302,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 302,
+          "end": 335
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "PostgresSnapshotSource::default",
+      "line": 23,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 23,
+          "end": 25
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "PostgresSnapshotSource::list_tables",
+      "line": 111,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 111,
+          "end": 136
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "PostgresSnapshotSource::new",
+      "line": 17,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 17,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "PostgresSnapshotSource::read_chunk",
+      "line": 138,
+      "cyclomatic": 11.0,
+      "coverage": 0.0,
+      "crap": 132.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 144,
+          "end": 217
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "chunk_query",
+      "line": 74,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "columns",
+      "line": 43,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 43,
+          "end": 66
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "snapshot_error",
+      "line": 37,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 37,
+          "end": 39
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/domain.rs",
+      "function": "owner_of",
+      "line": 51,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/coordination/domain.rs",
+      "function": "score",
+      "line": 59,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/mod.rs",
+      "function": "from_env",
+      "line": 34,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 34,
+          "end": 71
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/mod.rs",
+      "function": "generated_instance_id",
+      "line": 73,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 73,
+          "end": 79
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::assign",
+      "line": 192,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 195,
+          "end": 199
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::connection",
+      "line": 73,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 73,
+          "end": 83
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::heartbeat",
+      "line": 94,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 94,
+          "end": 129
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::lease_key",
+      "line": 89,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 89,
+          "end": 91
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::leave",
+      "line": 211,
+      "cyclomatic": 6.0,
+      "coverage": 0.0,
+      "crap": 42.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 211,
+          "end": 228
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::member_key",
+      "line": 85,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 85,
+          "end": 87
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::new",
+      "line": 63,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 63,
+          "end": 71
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::release",
+      "line": 201,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 201,
+          "end": 209
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::release_leases",
+      "line": 169,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 169,
+          "end": 187
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::round",
+      "line": 131,
+      "cyclomatic": 6.0,
+      "coverage": 0.0,
+      "crap": 42.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 131,
+          "end": 167
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "eval",
+      "line": 234,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 234,
+          "end": 241
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "unavailable",
+      "line": 243,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 243,
+          "end": 245
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/static_shards.rs",
+      "function": "StaticCoordinator::assign",
+      "line": 62,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/static_shards.rs",
+      "function": "StaticCoordinator::from_env",
+      "line": 36,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 36,
+          "end": 51
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/static_shards.rs",
+      "function": "StaticCoordinator::leave",
+      "line": 75,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 75,
+          "end": 75
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/static_shards.rs",
+      "function": "StaticCoordinator::new",
+      "line": 26,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/static_shards.rs",
+      "function": "StaticCoordinator::release",
+      "line": 73,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 73,
+          "end": 73
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/static_shards.rs",
+      "function": "StaticCoordinator::shard_of",
+      "line": 55,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "DataSource::chosen_tables",
+      "line": 73,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "DataSourceId::fmt",
+      "line": 24,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "TableSelection::default",
+      "line": 96,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 96,
+          "end": 98
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "TableSelection::describe",
+      "line": 119,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 119,
+          "end": 134
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "TableSelection::includes",
+      "line": 111,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "TableSelection::of",
+      "line": 102,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/datasource.rs",
+      "function": "list_registered",
+      "line": 138,
+      "cyclomatic": 6.0,
+      "coverage": 0.0,
+      "crap": 42.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 138,
+          "end": 149
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::coordinate",
+      "line": 221,
+      "cyclomatic": 7.0,
+      "coverage": 0.0,
+      "crap": 56.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 221,
+          "end": 257
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::leave",
+      "line": 260,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 260,
+          "end": 265
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::new",
+      "line": 202,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 202,
+          "end": 212
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::new",
+      "line": 285,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 285,
+          "end": 292
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::reconcile",
+      "line": 297,
+      "cyclomatic": 7.0,
+      "coverage": 0.0,
+      "crap": 56.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 297,
+          "end": 360
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::selection_of",
+      "line": 364,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 364,
+          "end": 375
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "init_tracing",
+      "line": 179,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 179,
+          "end": 189
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "main",
+      "line": 63,
+      "cyclomatic": 12.0,
+      "coverage": 0.0,
+      "crap": 156.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 63,
+          "end": 174
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "shutdown_signal",
+      "line": 382,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 382,
+          "end": 389
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/application.rs",
+      "function": "MaintenanceScheduler::new",
+      "line": 23,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/application.rs",
+      "function": "MaintenanceScheduler::run",
+      "line": 32,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 32,
+          "end": 38
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/application.rs",
+      "function": "MaintenanceScheduler::run_once",
+      "line": 45,
+      "cyclomatic": 9.0,
+      "coverage": 89.65517241379311,
+      "crap": 9.089671573250236,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 51,
+          "end": 53
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "MaintenanceConfig::default",
+      "line": 52,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "MaintenanceConfig::from_env",
+      "line": 72,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 72,
+          "end": 74
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "MaintenanceConfig::from_lookup",
+      "line": 78,
+      "cyclomatic": 1.0,
+      "coverage": 92.85714285714286,
+      "crap": 1.0003644314868805,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 87,
+          "end": 88
+        },
+        {
+          "start": 94,
+          "end": 94
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "MaintenanceError::from",
+      "line": 253,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 253,
+          "end": 255
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "MaintenanceReport::fmt",
+      "line": 226,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 226,
+          "end": 238
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "MaintenanceReport::is_empty",
+      "line": 220,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/domain.rs",
+      "function": "plan_compaction",
+      "line": 149,
+      "cyclomatic": 10.0,
+      "coverage": 100.0,
+      "crap": 10.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
+      "function": "CatalogConfig::base",
+      "line": 109,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
+      "function": "RestSnapshotCommitter::base",
+      "line": 66,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 66,
+          "end": 96
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
+      "function": "RestSnapshotCommitter::commit",
+      "line": 128,
+      "cyclomatic": 7.0,
+      "coverage": 0.0,
+      "crap": 56.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 133,
+          "end": 167
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
+      "function": "RestSnapshotCommitter::new",
+      "line": 55,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 55,
+          "end": 62
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "commit_replace",
+      "line": 195,
+      "cyclomatic": 8.0,
+      "coverage": 70.96774193548387,
+      "crap": 9.566110570306467,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 206,
+          "end": 206
+        },
+        {
+          "start": 211,
+          "end": 211
+        },
+        {
+          "start": 224,
+          "end": 234
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "compact",
+      "line": 56,
+      "cyclomatic": 6.0,
+      "coverage": 82.75862068965517,
+      "crap": 6.184509409979909,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 65,
+          "end": 66
+        },
+        {
+          "start": 69,
+          "end": 69
+        },
+        {
+          "start": 72,
+          "end": 73
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "compact_bin",
+      "line": 91,
+      "cyclomatic": 9.0,
+      "coverage": 76.19047619047619,
+      "crap": 10.093294460641399,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 101,
+          "end": 101
+        },
+        {
+          "start": 105,
+          "end": 105
+        },
+        {
+          "start": 108,
+          "end": 108
+        },
+        {
+          "start": 115,
+          "end": 118
+        },
+        {
+          "start": 139,
+          "end": 144
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "delete_files",
+      "line": 504,
+      "cyclomatic": 4.0,
+      "coverage": 77.77777777777779,
+      "crap": 4.175582990397805,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 509,
+          "end": 510
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "load",
+      "line": 496,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "new_snapshot_id",
+      "line": 486,
+      "cyclomatic": 4.0,
+      "coverage": 85.71428571428571,
+      "crap": 4.0466472303206995,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 492,
+          "end": 492
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "replace_summary",
+      "line": 408,
+      "cyclomatic": 11.0,
+      "coverage": 93.75,
+      "crap": 11.029541015625,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 463,
+          "end": 466
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "rewrite",
+      "line": 150,
+      "cyclomatic": 10.0,
+      "coverage": 100.0,
+      "crap": 10.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "sequence_number_of",
+      "line": 479,
+      "cyclomatic": 1.0,
+      "coverage": 60.0,
+      "crap": 1.064,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 481,
+          "end": 482
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "stage_replace",
+      "line": 247,
+      "cyclomatic": 30.0,
+      "coverage": 85.38461538461539,
+      "crap": 32.80978607191624,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 282,
+          "end": 283
+        },
+        {
+          "start": 307,
+          "end": 308
+        },
+        {
+          "start": 312,
+          "end": 324
+        },
+        {
+          "start": 327,
+          "end": 328
+        },
+        {
+          "start": 340,
+          "end": 340
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "supports",
+      "line": 42,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/expiry.rs",
+      "function": "expire",
+      "line": 29,
+      "cyclomatic": 9.0,
+      "coverage": 92.5925925925926,
+      "crap": 9.03292181069959,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 68,
+          "end": 68
+        },
+        {
+          "start": 76,
+          "end": 78
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/expiry.rs",
+      "function": "has_expirable",
+      "line": 93,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/files.rs",
+      "function": "live_data_files",
+      "line": 12,
+      "cyclomatic": 7.0,
+      "coverage": 93.75,
+      "crap": 7.011962890625,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 24,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/files.rs",
+      "function": "referenced_files",
+      "line": 35,
+      "cyclomatic": 7.0,
+      "coverage": 100.0,
+      "crap": 7.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/mod.rs",
+      "function": "IcebergTableMaintainer::ident",
+      "line": 63,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/mod.rs",
+      "function": "IcebergTableMaintainer::maintain",
+      "line": 110,
+      "cyclomatic": 6.0,
+      "coverage": 75.0,
+      "crap": 6.5625,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 127,
+          "end": 127
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/mod.rs",
+      "function": "IcebergTableMaintainer::new",
+      "line": 46,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/mod.rs",
+      "function": "IcebergTableMaintainer::sweep_due",
+      "line": 71,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/mod.rs",
+      "function": "IcebergTableMaintainer::tables",
+      "line": 86,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 86,
+          "end": 108
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/orphans.rs",
+      "function": "OrphanSweeper::new",
+      "line": 32,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/orphans.rs",
+      "function": "OrphanSweeper::store_path",
+      "line": 45,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/orphans.rs",
+      "function": "OrphanSweeper::sweep",
+      "line": 52,
+      "cyclomatic": 10.0,
+      "coverage": 86.36363636363636,
+      "crap": 10.253568745304282,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 58,
+          "end": 63
+        },
+        {
+          "start": 103,
+          "end": 104
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/postgres.rs",
+      "function": "connect",
+      "line": 12,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 12,
+          "end": 20
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/postgres.rs",
+      "function": "key_columns",
+      "line": 26,
+      "cyclomatic": 6.0,
+      "coverage": 0.0,
+      "crap": 42.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 26,
+          "end": 52
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/postgres.rs",
+      "function": "quote_ident",
+      "line": 55,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/storage.rs",
+      "function": "ObjectStoreConfig::build_store",
+      "line": 46,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 46,
+          "end": 56
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/storage.rs",
+      "function": "ObjectStoreConfig::from_env",
+      "line": 27,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 27,
+          "end": 43
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "TargetTable::for_event",
+      "line": 46,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "TargetTable::for_source_table",
+      "line": 51,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "build_column",
+      "line": 217,
+      "cyclomatic": 6.0,
+      "coverage": 100.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "build_typed_column",
+      "line": 261,
+      "cyclomatic": 21.0,
+      "coverage": 17.5,
+      "crap": 268.62839062499995,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 265,
+          "end": 265
+        },
+        {
+          "start": 268,
+          "end": 274
+        },
+        {
+          "start": 276,
+          "end": 305
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "events_to_record_batch",
+      "line": 202,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "namespace_for_source",
+      "line": 72,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "operation_tag_and_values",
+      "line": 188,
+      "cyclomatic": 5.0,
+      "coverage": 71.42857142857143,
+      "crap": 5.5830903790087465,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 191,
+          "end": 192
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "parse_bool",
+      "line": 329,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 329,
+          "end": 337
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "parse_date32",
+      "line": 341,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 341,
+          "end": 346
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "parse_numbers",
+      "line": 310,
+      "cyclomatic": 1.0,
+      "coverage": 88.23529411764706,
+      "crap": 1.0016283329940974,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 321,
+          "end": 322
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "parse_timestamp_micros",
+      "line": 350,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 350,
+          "end": 368
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "sanitize_ident",
+      "line": 76,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/domain.rs",
+      "function": "target_table_name",
+      "line": 64,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergCatalogConfig::build_catalog",
+      "line": 104,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 104,
+          "end": 133
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergCatalogConfig::from_env",
+      "line": 89,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 89,
+          "end": 100
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::backfill_state",
+      "line": 327,
+      "cyclomatic": 4.0,
+      "coverage": 50.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 336,
+          "end": 344
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::commit_backfill",
+      "line": 348,
+      "cyclomatic": 10.0,
+      "coverage": 40.0,
+      "crap": 31.6,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 382,
+          "end": 392
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::commit_batch",
+      "line": 263,
+      "cyclomatic": 5.0,
+      "coverage": 50.0,
+      "crap": 8.125,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 295,
+          "end": 298
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::ensure_table",
+      "line": 177,
+      "cyclomatic": 18.0,
+      "coverage": 59.42028985507246,
+      "crap": 39.65069450152051,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 201,
+          "end": 208
+        },
+        {
+          "start": 224,
+          "end": 245
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::existing_tables",
+      "line": 396,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 396,
+          "end": 414
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::last_committed_position",
+      "line": 303,
+      "cyclomatic": 4.0,
+      "coverage": 50.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 313,
+          "end": 322
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::new",
+      "line": 160,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::record_key_columns",
+      "line": 416,
+      "cyclomatic": 12.0,
+      "coverage": 0.0,
+      "crap": 156.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 416,
+          "end": 479
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::table_ident",
+      "line": 167,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "backfill_state_of",
+      "line": 508,
+      "cyclomatic": 2.0,
+      "coverage": 75.0,
+      "crap": 2.0625,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 512,
+          "end": 513
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "checkpoint_of",
+      "line": 548,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "connect_source",
+      "line": 593,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 593,
+          "end": 597
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "embedded_catalog_uri",
+      "line": 138,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 138,
+          "end": 148
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "introspect_iceberg_schema",
+      "line": 608,
+      "cyclomatic": 7.0,
+      "coverage": 0.0,
+      "crap": 56.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 608,
+          "end": 651
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "key_columns_property",
+      "line": 589,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 589,
+          "end": 591
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "latest_checkpoint",
+      "line": 564,
+      "cyclomatic": 3.0,
+      "coverage": 91.66666666666666,
+      "crap": 3.0052083333333335,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 575,
+          "end": 575
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "new_data_file_writer",
+      "line": 521,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "pg_type_to_arrow",
+      "line": 660,
+      "cyclomatic": 11.0,
+      "coverage": 0.0,
+      "crap": 132.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 660,
+          "end": 675
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "source_key_columns",
+      "line": 579,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 579,
+          "end": 586
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "write_data_files",
+      "line": 484,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
+    }
+  ],
+  "diagnostics": {
+    "analyzed_files": 58,
+    "lcov_files": 60,
+    "matched_files": 58,
+    "source_only": {
+      "count": 0,
+      "examples": []
+    },
+    "lcov_only": {
+      "count": 2,
+      "examples": [
+        "/Users/randiapriansyah/github/pipa/crates/api/src/table.rs",
+        "/Users/randiapriansyah/github/pipa/crates/api/src/user.rs"
+      ]
+    }
+  }
+}
