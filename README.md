@@ -175,33 +175,56 @@ just ui           # run the dashboard dev server (trunk serve, :3000)
 just build-ui     # production build of the dashboard
 ```
 
-Run `just --list` for the full list (`docker-up`/`docker-down`, `outdated`, `upgrade`, ...).
+Run `just --list` for the full list (`docker-up`/`docker-down`, `outdated`, `upgrade`, `crap`, `mutants`, `machete`, ...).
 
-### Static analysis (SonarQube)
+### Code quality
 
-A local [SonarQube Community Build](https://docs.sonarsource.com/sonarqube-community-build/) (the
-`sonarqube:community` image) analyzes the workspace, Rust included. It runs from its own
-`docker-compose.sonar.yml`, apart from the pipa stack, and needs only Docker (about 2 GiB of memory
-for it):
+Three optional tools, installed once with `cargo install --locked` (each recipe checks for what it needs and says so if it is missing). None of them runs in CI.
+
+| Recipe | Tool | What it tells you |
+|---|---|---|
+| `just crap` | [`cargo-crap`](https://github.com/minikin/cargo-crap) + [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) | Functions ranked by CRAP score: cyclomatic complexity weighted by how little of the function the tests cover. |
+| `just mutants` | [`cargo-mutants`](https://github.com/sourcefrog/cargo-mutants) | Whether the tests notice injected bugs; a surviving mutant is behaviour no test pins down. |
+| `just machete` | [`cargo-machete`](https://github.com/bnjbvr/cargo-machete) | Dependencies a crate's `Cargo.toml` lists but its code never uses. |
 
 ```sh
-just sonar::scan        # start SonarQube if needed, run Clippy (+ coverage) on the host, then the scanner
-just sonar::up          # only start SonarQube: http://localhost:9100 (9000 is RustFS)
-just sonar::logs        # follow its logs
-just sonar::down        # stop it, keeping its history (sonar::down-clean also deletes it)
+cargo install cargo-llvm-cov cargo-crap cargo-mutants cargo-machete --locked
+
+just crap                      # coverage of the native crates' unit tests, then the ranked table
+just crap --fail-above         # exit non-zero when any function scores above the threshold (30; `--threshold N` changes it)
+just crap-gate                 # exit non-zero only when a score got worse than in crap-baseline.json
+just crap-baseline             # re-save crap-baseline.json (after paying scores down)
+just mutants --list            # list the mutants (about a thousand) without running them
+just mutants -p pipa-ingestion # run them for one crate; slow, so scope it (-f <file> works too)
+just machete                   # no build needed; exit code 1 when something is unused
 ```
 
-The first scan replaces SonarQube's default `admin`/`admin` login with a generated password and
-creates an analysis token; both go into the gitignored `.env` (`SONAR_ADMIN_PASSWORD`, `SONAR_TOKEN`),
-and the password is the one to sign in to the UI with. Results are at
-`http://localhost:9100/dashboard?id=pipa`.
+Extra arguments go straight to the tool. For `crap` and `mutants` only unit tests count, not the
+`#[ignore]`d live tests or `pipa-integration-test`. The LCOV file is written to
+`target/crap/lcov.info` and the mutation report to `mutants.out/` (gitignored). `machete` can report
+a dependency that is only used through a macro or a rename; list those under
+`[package.metadata.cargo-machete] ignored` in that crate's `Cargo.toml`.
 
-SonarQube's own Clippy run needs cargo, which the scanner image lacks, so `sonar-project.properties`
-turns it off and the scan imports a Clippy JSON report built on the host instead (the native crates,
-plus `pipa-ui` when the wasm32 target is installed). Coverage is included when
-[`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) is installed
-(`cargo install cargo-llvm-cov --locked`); it covers the unit tests of the native crates, not the
-`#[ignore]`d live tests or `pipa-integration-test`. Reports are written under `target/sonar/`.
+#### Gating on CRAP
+
+`--fail-above` is a plain flag, not `--fail-above 30`: the cutoff is a separate `--threshold N`
+(default 30), so `just crap --threshold 30 --fail-above` is the long spelling of
+`just crap --fail-above`. Either exits 1 while any function scores over the threshold, and some
+already do: the I/O adapters and `main`s that only the end-to-end tests exercise have no unit-test
+coverage, and a function whose complexity alone is over the threshold can't pass however well it is
+tested. So a plain `--fail-above` can't be a day-to-day check yet.
+
+`just crap-gate` is the one to run. It compares against the committed `crap-baseline.json` with
+`--fail-regression`, so it fails only when a function's score rose, and what was already over the
+threshold when the baseline was saved doesn't block anything.
+After you lower scores, run `just crap-baseline` and commit the new file, so the gate ratchets
+tighter instead of leaving the slack.
+
+`.cargo-crap.toml` skips `**/tests.rs`. A test helper there, such as `CatalogCommitter` in
+`maintenance/infrastructure/tests.rs`, has its `#[cfg(test)]` on the `mod` line in the parent file,
+which `cargo-crap` can't see, so it would be scored as production code.
+
+### Runtime settings
 
 Environment variables: the compose secrets are in the root `.env.example`, and `pipa-backend`,
 `pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. The standalone

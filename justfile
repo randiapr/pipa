@@ -5,9 +5,6 @@ set dotenv-load
 # local dev stack orchestration (`just local::up` brings up everything at once)
 mod local
 
-# SonarQube static analysis in Docker (`just sonar::scan`; see sonar.just)
-mod sonar
-
 # native crates only (pipa-ui targets wasm32 and is excluded; pipa-api also builds for wasm32 via pipa-ui)
 native := "-p pipa-api -p pipa-backend -p pipa-catalog-proxy -p pipa-ingestion"
 
@@ -132,6 +129,45 @@ fmt:
 # lint native crates
 clippy: _target-guard
     cargo clippy {{ native }} -p pipa-integration-test --all-targets -- -D warnings
+
+# Only unit tests count towards coverage: the #[ignore]d live tests and pipa-integration-test need
+# running services. Settings (excluded test-helper files) are in .cargo-crap.toml. Extra args go to cargo-crap,
+# e.g. `just crap --threshold 20 --fail-above` (exit 1 when a function scores over the threshold, default 30).
+
+# rank the native crates' functions by CRAP score, complexity x missing test coverage (requires cargo-llvm-cov and cargo-crap: cargo install cargo-llvm-cov cargo-crap --locked)
+crap *args: _crap-lcov
+    cargo crap {{ native }} --lcov target/crap/lcov.info {{ args }}
+
+# fail if a function's CRAP score rose since crap-baseline.json; scores already over the threshold when it was saved don't fail, only getting worse does
+crap-gate: _crap-lcov
+    cargo crap {{ native }} --lcov target/crap/lcov.info --baseline crap-baseline.json --fail-regression
+
+# save today's CRAP scores as crap-baseline.json (commit it); do this after paying scores down, so the gate ratchets
+crap-baseline: _crap-lcov
+    cargo crap {{ native }} --lcov target/crap/lcov.info --sort file --format json --output crap-baseline.json
+
+# unit-test coverage of the native crates as LCOV, for the crap recipes
+_crap-lcov: _target-guard
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # check before the (slow) coverage run, not after it
+    for tool in llvm-cov crap; do
+        cargo "$tool" --version >/dev/null 2>&1 || { echo "cargo-$tool is not installed (cargo install cargo-$tool --locked)" >&2; exit 1; }
+    done
+    mkdir -p target/crap
+    cargo llvm-cov {{ native }} --lcov --output-path target/crap/lcov.info
+
+# Slow: every mutant rebuilds and reruns the tests, so scope it, e.g. `just mutants -f crates/ingestion/src/capture/application.rs`,
+# `just mutants -p pipa-ingestion`, or `just mutants --list` to only list the mutants. Extra args go to cargo-mutants; the
+# report is in mutants.out/ (gitignored). Only unit tests run: the #[ignore]d live tests need running services.
+
+# check that the tests catch injected bugs in the native crates; surviving mutants are untested behaviour (requires cargo-mutants: cargo install cargo-mutants --locked)
+mutants *args: _target-guard
+    cargo mutants {{ native }} {{ args }}
+
+# find unused dependencies in every crate's Cargo.toml, no build needed; can false-positive on renamed or macro-only deps (requires cargo-machete: cargo install cargo-machete --locked)
+machete *args:
+    cargo machete {{ args }}
 
 # check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
 outdated:
