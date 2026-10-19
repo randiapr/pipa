@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.9.1] - 2026-10-19
+
+### Changed
+
+- Updated `pgwire-replication` to 0.5.0. An acknowledged position now reaches the server within
+  the status interval even on an idle stream, so the replication slot advances (and WAL is
+  released) sooner when nothing is changing.
+- A capture session now waits for the server to accept `START_REPLICATION` before it counts as
+  open. A refusal fails the session start (and is retried with backoff) rather than surfacing
+  later on the stream, and the snapshot backfill no longer starts ahead of it.
+- The replication connection is named `pipa-ingestion` in `pg_stat_activity` and
+  `pg_stat_replication`.
+
+### Fixed
+
+- The capture loop's timer no longer ticks the moment a session starts. That tick could win a race
+  against the stream and confirm just below a transaction that was already buffered, which made
+  some orchestrator unit tests fail now and then. Nothing is lost by dropping it: there is nothing
+  to flush, retry or confirm at that point.
+
 ## [0.9.0] - 2026-10-18
 
 ### Added

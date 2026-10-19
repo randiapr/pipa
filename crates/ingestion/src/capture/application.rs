@@ -240,7 +240,13 @@ impl CaptureOrchestrator {
 
         let mut tables: HashMap<TargetTable, TableState> = HashMap::new();
         let mut progress = SessionProgress::default();
-        let mut ticker = tokio::time::interval(self.batch.max_flush_interval);
+        // First tick one interval from now, not immediately: there is nothing to flush, retry or
+        // confirm yet, and an immediate tick racing the stream in `select!` could confirm below a
+        // transaction whose `Progress` was already waiting.
+        let mut ticker = tokio::time::interval_at(
+            Instant::now() + self.batch.max_flush_interval,
+            self.batch.max_flush_interval,
+        );
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
