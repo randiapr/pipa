@@ -4847,7 +4847,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-backend"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "argon2",
@@ -4879,7 +4879,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-catalog-proxy"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -4896,7 +4896,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-ingestion"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -4925,7 +4925,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-integration-test"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4944,7 +4944,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-ui"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "console_error_panic_hook",
  "console_log",
@@ -6919,9 +6919,9 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tokio"
-version = "1.53.3"
+version = "1.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce3335fa71841cda333a58d7615b03901380ecf09d59b3296d21f8bbac0dde4e"
+checksum = "a0c168a474b95bfecfe908a65d4bdffc523144b649a74c09c286afb35d53e0bc"
 dependencies = [
  "bytes",
  "libc",
