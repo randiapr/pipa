@@ -48,7 +48,7 @@ A Cargo workspace of six crates, each versioned independently (see each crate's 
 
 - Rust (stable) with the `wasm32-unknown-unknown` target: `rustup target add wasm32-unknown-unknown`
 - [`just`](https://github.com/casey/just)
-- [`trunk`](https://trunkrs.dev): `cargo install trunk`
+- [`trunk`](https://trunkrs.dev): `cargo install trunk --locked` (0.22 or newer)
 - [`rustfs`](https://rustfs.com) and its `rc` CLI, for local S3-compatible object storage
 - [`PostgreSQL 18`](https://www.postgresql.org/download) — `just local::up` runs it as the example source database
 - [`Redis`](https://redis.io/docs/latest/operate/oss_and_stack/install/) (`redis-server`/`redis-cli` on `PATH`) — `just local::up` starts it for ingestion's coordination and the backend's query cache

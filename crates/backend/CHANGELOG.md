@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.12.2] - 2026-10-20
+
+### Changed
+
+- `tokio` 1.53.3 → 1.54.0 (`Cargo.toml`, `Cargo.lock`). No code change.
+
 ## [0.12.1] - 2026-10-16
 
 ### Changed

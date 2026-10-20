@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.9.3] - 2026-10-20
+
+### Fixed
+
+- `index.html` declares a `viewport` meta tag. Without it mobile browsers laid the page out at
+  about 980px wide, so Tailwind's `lg` breakpoint (and `LayoutViewModel`'s `matchMedia` switch to
+  the card layout) never applied on phones.
+
+### Changed
+
+- The `pipa-ui` image's dashboard is built with Trunk 0.22.0 (pinned in `publish-images.yaml`),
+  which locks `dist/` during builds, hashes each wasm-bindgen artifact by its own content (SRI
+  fix) and retries tool downloads. README asks for Trunk 0.22 or newer.
+
 ## [0.9.2] - 2026-10-16
 
 ### Changed

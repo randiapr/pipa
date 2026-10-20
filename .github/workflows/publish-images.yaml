@@ -39,7 +39,7 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: trunk
+          tool: trunk@0.22.0
 
       # Trunk's Tailwind pipeline resolves `@plugin "daisyui"` from node_modules (see CLAUDE.md).
       - run: npm ci
