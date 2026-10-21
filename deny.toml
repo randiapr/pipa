@@ -2,6 +2,29 @@
 # (`just audit`, .cargo/audit.toml, .github/workflows/audit.yaml), so the ignore list lives in one place.
 # Run: `just deny` (requires cargo-deny: cargo install cargo-deny --locked).
 
+[licenses]
+# pipa is MIT, so only permissive licenses are allowed. A dependency under a copyleft or
+# unrecognized license fails the check; adding one here must be a deliberate change. An SPDX `OR`
+# expression passes if any alternative is allowed (r-efi is `MIT OR Apache-2.0 OR LGPL-2.1-or-later`).
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "bzip2-1.0.6",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
 [bans]
 # A `*` version requirement accepts any release, including a malicious one.
 wildcards = "deny"

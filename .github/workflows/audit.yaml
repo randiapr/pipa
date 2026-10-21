@@ -42,7 +42,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  # Rules advisories don't cover (deny.toml): no wildcard version requirements, crates.io only.
+  # Rules advisories don't cover (deny.toml): permissive licenses only, no wildcard version
+  # requirements, crates.io only.
   # Advisories are left to the job above so their ignore list lives in one place.
   deny:
     name: cargo deny
@@ -52,4 +53,4 @@ jobs:
 
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check bans sources
+          command: check licenses bans sources

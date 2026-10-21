@@ -1,0 +1,22 @@
+# License headers, checked in CI by .github/workflows/license.yaml (apache/skywalking-eyes, the same
+# tool iceberg-rust uses). Run locally: `just license` (check) / `just license-fix` (add headers).
+# MIT doesn't require a per-file notice, so the header is the short copyright + SPDX form rather
+# than the full license text; keep the year in step with LICENSE.
+
+header:
+  license:
+    spdx-id: MIT
+    copyright-owner: Randi Apriansyah
+    copyright-year: "2026"
+    content: |
+      Copyright (c) 2026 Randi Apriansyah
+      SPDX-License-Identifier: MIT
+    pattern: |
+      Copyright \(c\) \d{4} Randi Apriansyah
+      SPDX-License-Identifier: MIT
+
+  # Rust sources only for now. Widening this (scripts, workflows, TOML) is a matter of adding globs.
+  paths:
+    - "crates/**/*.rs"
+
+  comment: on-failure

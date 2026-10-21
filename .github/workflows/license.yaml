@@ -1,0 +1,28 @@
+name: License
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: license-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  header:
+    name: License header
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # What counts as a valid header, and which files are checked, is .licenserc.yaml. Pinned to a
+      # commit like iceberg-rust does; the tag is v0.9.0.
+      - name: Check license header
+        uses: apache/skywalking-eyes/header@a196742f472feaffafea537ce5a2a4c3c53a8de4 # v0.9.0
