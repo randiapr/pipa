@@ -19,8 +19,9 @@ use gloo_net::http::{Request, RequestBuilder, Response};
 use pipa_api::{
     ConnectionTestOutcome, ConnectionTestResponse, DataSourceResponse, DataSourceView,
     DataSourcesResponse, ErrorResponse, IngestedTablesUpdate, LoginData, LoginRequest,
-    LoginResponse, MeResponse, NewDataSource, NewProject, NewUser, ProjectResponse, ProjectUpdate,
-    ProjectView, ProjectsResponse, QueryRequest, ReadTableRequest, RowsResponse, SourceTableRef,
+    LoginResponse, MeResponse, NewDataSource, NewProject, NewSavedQuery, NewUser, ProjectResponse,
+    ProjectUpdate, ProjectView, ProjectsResponse, QueryRequest, ReadTableRequest, RowsResponse,
+    SavedQueriesResponse, SavedQueryResponse, SavedQueryUpdate, SavedQueryView, SourceTableRef,
     SourceTableView, SourceTablesResponse, TableView, TablesResponse, UserResponse, UserUpdate,
     UserView, UsersResponse, path,
 };
@@ -205,6 +206,42 @@ pub async fn query(sql: &str, project_id: Option<&str>) -> Result<serde_json::Va
     let request = authed(Request::post(&url(path::QUERY))).json(&body);
     let response: RowsResponse = send(request).await?;
     Ok(response.body.rows)
+}
+
+/// Lists the saved queries of `project_id`, by name.
+pub async fn list_saved_queries(project_id: &str) -> Result<Vec<SavedQueryView>, String> {
+    let target = format!("{}?project_id={project_id}", url(path::SAVED_QUERIES));
+    let response: SavedQueriesResponse = send(authed(Request::get(&target)).build()).await?;
+    Ok(response.body.saved_queries)
+}
+
+pub async fn create_saved_query(
+    project_id: &str,
+    name: &str,
+    sql: &str,
+) -> Result<SavedQueryView, String> {
+    let body = NewSavedQuery {
+        project_id: project_id.to_string(),
+        name: name.to_string(),
+        sql: sql.to_string(),
+    };
+    let request = authed(Request::post(&url(path::SAVED_QUERIES))).json(&body);
+    let response: SavedQueryResponse = send(request).await?;
+    Ok(response.body.saved_query)
+}
+
+pub async fn update_saved_query(id: &str, name: &str, sql: &str) -> Result<SavedQueryView, String> {
+    let body = SavedQueryUpdate {
+        name: name.to_string(),
+        sql: sql.to_string(),
+    };
+    let request = authed(Request::put(&url(&path::saved_query(id)))).json(&body);
+    let response: SavedQueryResponse = send(request).await?;
+    Ok(response.body.saved_query)
+}
+
+pub async fn delete_saved_query(id: &str) -> Result<(), String> {
+    send_discard(authed(Request::delete(&url(&path::saved_query(id)))).build()).await
 }
 
 /// Lists the pipa tables of `project_id`'s data sources.

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.5.0] - 2026-10-21
+
+### Added
+
+- Saved queries: `NewSavedQuery`, `SavedQueryUpdate`, `SavedQueryView`, `SavedQueries`/`SavedQueryData` and their `SavedQueriesResponse`/`SavedQueryResponse`, plus the `SAVED_QUERIES`/`SAVED_QUERY` paths and `path::saved_query`.
+
 ## [0.4.3] - 2026-10-21
 
 ### Added

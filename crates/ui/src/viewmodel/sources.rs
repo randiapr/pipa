@@ -119,6 +119,13 @@ impl SourcesViewModel {
         )
     }
 
+    /// The Iceberg namespace a source's tables live in, as the Query page names it:
+    /// `cdc_{id without dashes}`. Mirrors `namespace_for_source` in `pipa-backend` (and
+    /// `pipa-ingestion`); the UI can't depend on either, so keep the three identical.
+    pub fn namespace_label(source: &DataSourceView) -> String {
+        format!("cdc_{}", source.id.replace('-', ""))
+    }
+
     /// How many tables a source ingests.
     pub fn ingested_label(source: &DataSourceView) -> String {
         match source.ingested_tables.len() {
@@ -219,5 +226,33 @@ impl SourcesViewModel {
                 )))),
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn namespace_is_cdc_and_the_id_without_dashes() {
+        let source = DataSourceView {
+            id: "01a15d5a-e4fd-7174-8fcb-7e3fd2f0fdfa".to_string(),
+            name: "Core Wallet DB Local".to_string(),
+            engine: DbEngine::Postgres,
+            connection: ConnectionConfig {
+                host: "localhost".to_string(),
+                port: 5432,
+                username: "pipa".to_string(),
+                password: String::new(),
+                database: "wallet".to_string(),
+            },
+            project_id: None,
+            registered_at_unix: 0,
+            ingested_tables: Vec::new(),
+        };
+        assert_eq!(
+            SourcesViewModel::namespace_label(&source),
+            "cdc_01a15d5ae4fd71748fcb7e3fd2f0fdfa"
+        );
     }
 }

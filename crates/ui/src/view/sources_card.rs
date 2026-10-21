@@ -13,8 +13,8 @@ use leptos::prelude::*;
 use pipa_api::{ConnectionTestOutcome, DataSourceView, DbEngine};
 
 use crate::components::{
-    Badge, Card, CardActions, CardTitle, ConfirmDialog, Field, Modal, ModalActions, Select,
-    TextInput, Tone, TrashIcon, close_dialog, open_dialog,
+    Badge, Card, CardActions, CardTitle, ConfirmDialog, CopyButton, Field, Modal, ModalActions,
+    Select, TextInput, Tone, TrashIcon, close_dialog, open_dialog,
 };
 use crate::view::{Pagination, ResponsiveList};
 use crate::viewmodel::SourcesViewModel;
@@ -84,6 +84,7 @@ pub fn SourcesCard(vm: SourcesViewModel) -> impl IntoView {
                                     <thead>
                                         <tr>
                                             <th>"Name"</th>
+                                            <th>"ID"</th>
                                             <th>"Engine"</th>
                                             <th>"Connection"</th>
                                             <th>"Project"</th>
@@ -221,6 +222,15 @@ fn SourceRow(
             <td>
                 <strong>{source.name.clone()}</strong>
             </td>
+            <td>
+                <span class="flex items-center gap-1">
+                    <span class="font-mono text-xs">{source.id.clone()}</span>
+                    <CopyButton
+                        text=SourcesViewModel::namespace_label(&source)
+                        label="Copy namespace for queries"
+                    />
+                </span>
+            </td>
             <td>{SourcesViewModel::engine_label(source.engine)}</td>
             <td>{SourcesViewModel::connection_label(&source)}</td>
             <td>{move || vm.project_label(&project_id).unwrap_or_else(|| "\u{2014}".to_string())}</td>
@@ -254,6 +264,7 @@ fn SourceItemCard(
     let engine = SourcesViewModel::engine_label(source.engine);
     let connection = SourcesViewModel::connection_label(&source);
     let ingesting = format!("Ingesting {}", SourcesViewModel::ingested_label(&source));
+    let namespace = SourcesViewModel::namespace_label(&source);
     let id = source.id;
 
     view! {
@@ -266,6 +277,10 @@ fn SourceItemCard(
                     {engine}
                 </Badge>
             </div>
+            <p class="flex items-center gap-1 text-base-content/70">
+                <span class="font-mono text-xs break-all">{id.clone()}</span>
+                <CopyButton text=namespace label="Copy namespace for queries" />
+            </p>
             <p class="font-mono text-sm break-all">{connection}</p>
             <p class="text-sm text-base-content/70">
                 {move || {

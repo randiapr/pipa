@@ -11,6 +11,7 @@ mod datasource;
 mod http;
 mod iceberg;
 mod project;
+mod saved_query;
 mod storage;
 mod user;
 
@@ -33,6 +34,7 @@ use iceberg::{
     table_for_source_table,
 };
 use project::{ProjectService, infrastructure::ObjectStoreProjectRepository};
+use saved_query::{SavedQueryService, infrastructure::ObjectStoreSavedQueryRepository};
 use storage::ObjectStoreConfig;
 use tower_http::cors::CorsLayer;
 use user::{
@@ -56,6 +58,10 @@ async fn main() -> anyhow::Result<()> {
 
     let project_repository = Arc::new(ObjectStoreProjectRepository::new(store.clone()));
     let project_service = Arc::new(ProjectService::new(project_repository));
+
+    let saved_query_service = Arc::new(SavedQueryService::new(Arc::new(
+        ObjectStoreSavedQueryRepository::new(store.clone()),
+    )));
 
     let migration_store = store.clone();
     let jwt_secret = std::env::var("JWT_SECRET")
@@ -85,8 +91,14 @@ async fn main() -> anyhow::Result<()> {
         query_api.clone(),
     ));
 
-    let app =
-        router(datasource_service, project_service, user_service, query_api).layer(cors_layer()?);
+    let app = router(
+        datasource_service,
+        project_service,
+        saved_query_service,
+        user_service,
+        query_api,
+    )
+    .layer(cors_layer()?);
 
     let listen = std::env::var("BACKEND_LISTEN").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let listener = tokio::net::TcpListener::bind(&listen)
@@ -118,12 +130,14 @@ fn init_tracing() {
 fn router(
     datasources: Arc<DataSourceService>,
     projects: Arc<ProjectService>,
+    saved_queries: Arc<SavedQueryService>,
     users: Arc<UserService>,
     query_api: Arc<http::QueryApi>,
 ) -> Router {
     let protected = Router::new()
         .merge(http::datasource_routes().with_state(datasources))
         .merge(http::project_routes().with_state(projects))
+        .merge(http::saved_query_routes().with_state(saved_queries))
         .merge(http::query_routes().with_state(query_api.clone()))
         .merge(http::table_routes().with_state(query_api))
         .merge(http::user_routes().with_state(users.clone()))
@@ -365,6 +379,9 @@ mod tests {
         let projects = Arc::new(ProjectService::new(Arc::new(
             ObjectStoreProjectRepository::new(store.clone()),
         )));
+        let saved_queries = Arc::new(SavedQueryService::new(Arc::new(
+            ObjectStoreSavedQueryRepository::new(store.clone()),
+        )));
         let users = Arc::new(UserService::new(
             Arc::new(ObjectStoreUserRepository::new(store)),
             Arc::new(Argon2PasswordHasher),
@@ -389,7 +406,7 @@ mod tests {
             ),
             datasources: datasources.clone(),
         });
-        router(datasources, projects, users, query_api)
+        router(datasources, projects, saved_queries, users, query_api)
     }
 
     async fn call(
@@ -1049,6 +1066,110 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let (status, _) = call(&app, "GET", "/users", Some(&bob), None).await;
         assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn saved_queries_are_shared_inside_a_project_and_closed_to_everyone_else() {
+        let app = app().await;
+        let admin = login(&app, "root", "root-password").await;
+        let alpha = create_project(&app, &admin, "alpha").await;
+        let beta = create_project(&app, &admin, "beta").await;
+        create_account(&app, &admin, "ann", "developer", &alpha).await;
+        create_account(&app, &admin, "ben", "developer", &alpha).await;
+        create_account(&app, &admin, "cat", "developer", &beta).await;
+        create_account(&app, &admin, "viewer", "user", &alpha).await;
+        let ann = login(&app, "ann", "ann-password").await;
+        let ben = login(&app, "ben", "ben-password").await;
+        let cat = login(&app, "cat", "cat-password").await;
+        let viewer = login(&app, "viewer", "viewer-password").await;
+
+        let (status, body) = call(
+            &app,
+            "POST",
+            "/saved-queries",
+            Some(&ann),
+            Some(json!({ "project_id": alpha, "name": "Daily volume", "sql": "SELECT 1" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        let id = body["saved_query"]["id"].as_str().unwrap().to_string();
+
+        // A teammate sees it, can change it, and can't reuse its name.
+        let list = format!("/saved-queries?project_id={alpha}");
+        let (status, body) = call(&app, "GET", &list, Some(&ben), None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["saved_queries"][0]["name"], "Daily volume");
+        let (status, _) = call(
+            &app,
+            "POST",
+            "/saved-queries",
+            Some(&ben),
+            Some(json!({ "project_id": alpha, "name": "daily VOLUME", "sql": "SELECT 2" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        let (status, body) = call(
+            &app,
+            "PUT",
+            &format!("/saved-queries/{id}"),
+            Some(&ben),
+            Some(json!({ "name": "Daily volume", "sql": "SELECT 3" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["saved_query"]["sql"], "SELECT 3");
+
+        // Bad input is a 400.
+        for body in [
+            json!({ "project_id": alpha, "name": " ", "sql": "SELECT 1" }),
+            json!({ "project_id": alpha, "name": "x", "sql": "" }),
+            json!({ "project_id": "nope", "name": "x", "sql": "SELECT 1" }),
+        ] {
+            let (status, _) = call(&app, "POST", "/saved-queries", Some(&ann), Some(body)).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST);
+        }
+
+        // Another project's developer and a view-only user are shut out, whatever they ask.
+        let item = format!("/saved-queries/{id}");
+        let update = Some(json!({ "name": "x", "sql": "SELECT 1" }));
+        for (who, name) in [(&cat, "other project"), (&viewer, "view-only user")] {
+            for (method, uri, body) in [
+                ("GET", list.as_str(), None),
+                ("PUT", item.as_str(), update.clone()),
+                ("DELETE", item.as_str(), None),
+            ] {
+                let (status, _) = call(&app, method, uri, Some(who), body).await;
+                assert_eq!(status, StatusCode::FORBIDDEN, "{name}: {method} {uri}");
+            }
+            let (status, _) = call(
+                &app,
+                "POST",
+                "/saved-queries",
+                Some(who),
+                Some(json!({ "project_id": alpha, "name": "x", "sql": "SELECT 1" })),
+            )
+            .await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{name}: POST");
+        }
+        let (_, body) = call(
+            &app,
+            "GET",
+            &format!("/saved-queries?project_id={beta}"),
+            Some(&cat),
+            None,
+        )
+        .await;
+        assert_eq!(body["saved_queries"].as_array().unwrap().len(), 0);
+
+        // Signed out, it is a 401; deleting removes it for everyone.
+        let (status, _) = call(&app, "GET", &list, None, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, _) = call(&app, "DELETE", &item, Some(&ben), None).await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _) = call(&app, "DELETE", &item, Some(&ben), None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (_, body) = call(&app, "GET", &list, Some(&ann), None).await;
+        assert_eq!(body["saved_queries"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]

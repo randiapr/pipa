@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.13.0] - 2026-10-21
+
+### Added
+
+- Saved queries, a new bounded context (`src/saved_query/`, same domain/application/infrastructure split as `project`): named SQL texts a project keeps, stored as JSON under `saved_queries/` in the object store. `GET /saved-queries?project_id=`, `POST /saved-queries`, `PUT`/`DELETE /saved-queries/{id}`. Developers and admins only, limited to the projects they may access (a view-only `user` gets 403, as on `/query`); a name is unique within its project, case-insensitively, and the SQL is capped at 64 KiB. Running one is an ordinary `POST /query`, so project scoping, read-only enforcement and the result cache apply unchanged.
+
 ## [0.12.4] - 2026-10-21
 
 ### Fixed
