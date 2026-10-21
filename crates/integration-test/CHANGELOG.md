@@ -11,6 +11,7 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Changed
 
 - Added the MIT license header (`// Copyright (c) 2026 Randi Apriansyah` and `// SPDX-License-Identifier: MIT`) to every `.rs` file, checked in CI by `.licenserc.yaml`. No code change.
+- `rustls-webpki` 0.103.15 → 0.103.16 and `webpki-root-certs` 1.0.9 → 1.0.10 (`Cargo.lock`), fixing RUSTSEC-2026-0382 and RUSTSEC-2026-0383.
 
 ## [0.3.2] - 2026-10-20
 
