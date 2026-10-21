@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `sqlx`-backed adapter listing the tables and columns of a data source's OLTP database.
 
 use async_trait::async_trait;

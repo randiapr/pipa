@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/tables` routes: browse the Iceberg tables of a project's data sources, read-only and
 //! without SQL. Open to every role with access to the project, which is how the view-only
 //! `user` role sees data (it gets 403 on `/query` and `/datasources`).

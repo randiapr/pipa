@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Postgres adapter for [`CdcSource`]: streams row changes via logical replication (WAL),
 //! decoded with [`decode`].
 

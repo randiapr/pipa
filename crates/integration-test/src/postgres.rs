@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! A Postgres database of a test's own, on the shared server: the OLTP source whose changes
 //! `pipa-ingestion` captures.
 

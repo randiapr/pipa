@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/query` route: ad-hoc SQL over Iceberg tables via `crate::iceberg`'s `QueryService`, limited
 //! to the tables of one project. Free SQL is for developers and admins; view-only users
 //! browse tables instead (see `table.rs`).

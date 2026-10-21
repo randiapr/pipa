@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! [`CachedQueries`]: `QueryService` with a result cache in front of its two expensive reads.
 //!
 //! What is cached, and what a hit can and can't be:

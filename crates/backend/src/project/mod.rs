@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Bounded context: grouping data sources into projects.
 //!
 //! Organized with the same clean-architecture split as [`crate::datasource`]:

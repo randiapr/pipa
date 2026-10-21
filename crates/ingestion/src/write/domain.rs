@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Domain layer: the [`IcebergWriter`] port and the `ChangeEvent` → typed `RecordBatch`
 //! mapping.
 //!

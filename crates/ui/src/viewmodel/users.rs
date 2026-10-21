@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: reactive state and commands for the Users list and its create/edit forms.
 //! Admin only — the backend rejects everyone else, and the route is guarded in the view layer.
 

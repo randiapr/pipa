@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/tables`: browsing the ingested tables of a project without SQL, open to every role with
 //! access to the project.
 

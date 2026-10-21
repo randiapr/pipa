@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! [`IcebergTableMaintainer`] against a real Iceberg table: a `MemoryCatalog` over the local
 //! filesystem, written to through the real [`IcebergChangelogWriter`].
 //!

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Concrete [`TableMaintainer`]: compaction, snapshot expiry and the orphan sweep over the
 //! Iceberg REST catalog and the object store the tables live in.
 

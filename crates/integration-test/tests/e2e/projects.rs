@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/projects`: admins manage them, everyone sees the ones they are assigned.
 
 use pipa_api::{NewProject, ProjectData, ProjectUpdate, Projects, Role, path};

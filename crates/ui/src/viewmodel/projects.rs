@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: reactive state and commands for the Projects list and its create/edit forms.
 
 use leptos::ev::SubmitEvent;

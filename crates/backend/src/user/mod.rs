@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Bounded context: accounts, roles and authentication.
 //!
 //! Organized with the same clean-architecture split as [`crate::datasource`]:

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! [`RedisCache`]: results shared through Redis.
 
 use std::sync::Mutex;

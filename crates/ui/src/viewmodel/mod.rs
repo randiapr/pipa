@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel layer: reactive state plus the commands that mutate it via [`crate::api`].
 //!
 //! Each `*ViewModel` struct bundles `RwSignal` handles (cheap to `Copy`, since an `RwSignal`

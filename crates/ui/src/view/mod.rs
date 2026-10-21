@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View layer: the pages, rendered from a ViewModel.
 //!
 //! Components here read `RwSignal`s straight off a `crate::viewmodel` struct and call its

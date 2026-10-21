@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! daisyUI `collapse` ([`Collapse`]) and the expand/collapse-all button for a set of them
 //! ([`ExpandToggle`]). A collapse has an arrow at the start and is opened and closed from the
 //! outside: `open` says whether it is expanded (forced with `collapse-open`/`collapse-close`,

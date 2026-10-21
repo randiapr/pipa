@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! [`StaticCoordinator`]: sources are partitioned across a fixed number of instances by id.
 
 use std::collections::HashSet;

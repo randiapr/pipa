@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! [`RedisCoordinator`]: live instances and per-source claims kept in Redis.
 //!
 //! Keys (all with a TTL, so a dead instance just disappears):

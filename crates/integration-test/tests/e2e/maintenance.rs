@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Table maintenance in `pipa-ingestion`: small data files compacted and old snapshots expired,
 //! while every row — and ingestion itself — carries on unchanged.
 

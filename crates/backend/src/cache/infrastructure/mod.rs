@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Infrastructure layer: concrete [`super::domain::Cache`] adapters, and the environment config
 //! that picks between them.
 

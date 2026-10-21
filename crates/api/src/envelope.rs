@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The envelope every response body is shaped as: `response_code`/`response_message` from one
 //! global registry ([`ResponseCode`]), flattened alongside either the resource payload `T`
 //! (success) or an `error` string ([`ErrorBody`], failure). `response_code` is an

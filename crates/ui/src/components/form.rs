@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! daisyUI form components: [`Field`] (a labelled `fieldset`), [`TextInput`], [`TextArea`],
 //! [`Select`] and [`Checkbox`]. Inputs are bound two-way to an `RwSignal<String>`.
 

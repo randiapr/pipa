@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Plain (non-replication) Postgres access shared by the capture and write adapters: opening a
 //! connection to a data source and looking up its tables' row keys. Errors are left as
 //! `sqlx::Error` for each caller to map into its own layer's error type.

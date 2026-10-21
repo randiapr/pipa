@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Dashboard for setting up and connecting OLTP databases to pipa CDC pipelines.
 //!
 //! Organized as MVVM:

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! A change in Postgres, all the way to being read through `pipa-backend`.
 
 use std::time::Duration;

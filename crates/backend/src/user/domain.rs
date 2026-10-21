@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Domain layer: the `User` aggregate, its `Role`, and the ports the application layer depends
 //! on (`UserRepository`, `PasswordHasher`, `TokenService`). A user is an account that signs in to
 //! the dashboard; non-admin accounts only see the projects an admin assigned to them.

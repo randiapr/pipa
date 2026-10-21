@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The HTTP API contract between `pipa-ui` and `pipa-backend`: request/response bodies, the
 //! shared response envelope, and route paths.
 //!

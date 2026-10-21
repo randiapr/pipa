@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/datasources` request and response bodies.
 
 use serde::{Deserialize, Serialize};

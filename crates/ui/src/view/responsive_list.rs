@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: renders a list as a `table` on desktop or a stack of `card`s on mobile.
 //!
 //! Two layers decide which one shows, on the same breakpoint (Tailwind's `lg`, the

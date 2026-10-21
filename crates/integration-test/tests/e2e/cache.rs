@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The query/table-list cache: in memory by default, shared through Redis with `REDIS_URL`.
 //! `now()` is the probe: a cached result keeps the value it was computed with.
 

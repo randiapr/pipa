@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! A Redis database of a test's own on the shared server, and a way to look into it.
 //!
 //! Redis has 16 numbered databases; each test that uses Redis takes the next one (flushed first),

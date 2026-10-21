@@ -180,9 +180,32 @@ outdated:
 audit *args:
     cargo audit fix {{ args }}
 
-# check dependency bans and sources (no wildcard versions, crates.io only; see deny.toml; requires cargo-deny: cargo install cargo-deny --locked)
+# check dependency licenses, bans and sources (permissive licenses only, no wildcard versions, crates.io only; see deny.toml; requires cargo-deny: cargo install cargo-deny --locked)
 deny:
-    cargo deny check bans sources
+    cargo deny check licenses bans sources
+
+# check that every Rust source file has the license header from .licenserc.yaml (installs license-eye with `go install` if missing, needs Go)
+license: (_license-eye "header" "check")
+
+# add the license header to files missing it (same tool as `just license`)
+license-fix: (_license-eye "header" "fix")
+
+# run license-eye (apache/skywalking-eyes), installing the latest with `go install` first if it isn't on PATH.
+# CI pins v0.9.0 (.github/workflows/license.yaml); `@latest` here can be newer, so a disagreement
+# between the two may just be a version difference.
+_license-eye *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v license-eye >/dev/null 2>&1; then
+        command -v go >/dev/null 2>&1 || { echo "license-eye is not installed and Go is needed to install it (https://go.dev/dl/)" >&2; exit 1; }
+        echo "license-eye not found, installing it with go install"
+        go install github.com/apache/skywalking-eyes/cmd/license-eye@latest
+        # go install drops the binary in GOBIN, else GOPATH/bin, which may not be on PATH
+        bin=$(go env GOBIN)
+        [ -n "$bin" ] || bin=$(go env GOPATH)/bin
+        export PATH="$bin:$PATH"
+    fi
+    license-eye {{ args }}
 
 # upgrade Rust dependencies to the latest semver-compatible versions (requires cargo-edit: cargo install cargo-edit)
 upgrade:

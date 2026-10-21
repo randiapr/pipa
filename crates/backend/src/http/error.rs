@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Shared HTTP error mapping for the facade's route modules. The response envelope itself
 //! (`BaseResponse`, `ResponseCode`, ...) is part of the `pipa-api` contract; this module only
 //! adapts it to Axum.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Generic daisyUI components: the building blocks every page is made of.
 //!
 //! Nothing here knows about pipa — no `crate::viewmodel`, `crate::api` or `pipa_api` imports.

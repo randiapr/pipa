@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Route paths. The `const`s are the patterns the backend registers (axum's `{id}` syntax); the
 //! functions build the concrete path a client requests, so the two can't be spelled differently.
 

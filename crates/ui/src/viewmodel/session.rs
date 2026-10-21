@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: who is signed in, and which project the dashboard is currently scoped to.
 //!
 //! One instance is created in `App` and shared through Leptos context (`expect_context`), since

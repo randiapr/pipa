@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! AWS Signature Version 4 request signing, implemented directly on `hmac`/`sha2` so the proxy
 //! depends on no AWS SDK or crate. Only the `Authorization` header flavour is supported (what
 //! RustFS's S3 Tables catalog expects), with the payload hash computed by the caller.

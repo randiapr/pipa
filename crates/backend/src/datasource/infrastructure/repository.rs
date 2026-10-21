@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Object-store-backed repository for the `DataSource` aggregate.
 //!
 //! Persists each data source as a JSON object under the `datasources/` prefix of the

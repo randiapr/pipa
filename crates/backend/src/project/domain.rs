@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Domain layer: the `Project` aggregate and the `ProjectRepository` port the application
 //! layer depends on. A project groups related data sources.
 

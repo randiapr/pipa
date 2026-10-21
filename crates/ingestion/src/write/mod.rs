@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Iceberg write path: lands captured changes as append-only changelog rows.
 //!
 //! Same clean-architecture split [`crate::capture`] uses:

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `sqlx`-backed adapter for verifying OLTP data source connectivity.
 
 use std::time::Duration;

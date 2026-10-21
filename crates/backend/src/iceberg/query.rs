@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Ad-hoc SQL query execution against Iceberg tables, via DataFusion, through the REST catalog.
 
 use std::any::Any;

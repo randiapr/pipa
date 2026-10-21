@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! What most tests start from: a backend of their own on a fresh bucket with the first admin
 //! signed in, plus fixtures to set up projects, accounts and data sources through its API.
 

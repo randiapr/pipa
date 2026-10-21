@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the Tables page. Lists the selected project's pipa tables as collapses, one per
 //! table, and shows the open one's rows inside it, a page at a time. Read-only, so it is open to every
 //! role. For everyone, rows are each table's current rows without the changelog columns

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! A response from `pipa-backend`, with assertions on the shared envelope
 //! (`response_code`/`response_message`) and on the HTTP status.
 

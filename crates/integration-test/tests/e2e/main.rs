@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! End-to-end tests of the real `pipa-backend` and `pipa-ingestion` binaries, against RustFS,
 //! Postgres and Redis in containers. See the docs of `pipa_integration_test` for how they run,
 //! and `just test-integration`.

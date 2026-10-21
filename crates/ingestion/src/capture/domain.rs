@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Domain layer: the engine-agnostic change event shape and the `CdcSource` port that
 //! infrastructure adapters (WAL/binlog readers) implement.
 

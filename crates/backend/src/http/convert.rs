@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Mapping between the domain types (`crate::datasource`/`crate::project`) and the wire types of
 //! the `pipa-api` contract crate. This is the only place the two shapes meet, so the domain stays
 //! free of wire concerns and the wire format stays free of domain ones.

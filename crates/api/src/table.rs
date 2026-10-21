@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/tables` request and response bodies: browsing the Iceberg tables of a project's data
 //! sources without writing SQL. Open to every role with access to the project, including the
 //! view-only `user` role. Rows come back in the same [`Rows`](crate::query::Rows) shape as

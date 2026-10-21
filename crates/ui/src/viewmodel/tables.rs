@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: the Tables page — the pipa tables of the selected project and a paged,
 //! read-only view of one table's rows. Open to every role with access to the project; this is
 //! how the view-only `user` role sees data.

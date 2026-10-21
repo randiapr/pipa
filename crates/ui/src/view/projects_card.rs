@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the Projects card — a paginated list of existing projects (a table on desktop, cards
 //! on mobile), with create and edit each presented as a [`Modal`], not inline forms. Both
 //! layouts share the same dialogs. Saving an edit and deleting each ask for confirmation first

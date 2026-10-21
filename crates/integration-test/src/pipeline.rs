@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The whole path a change takes, set up: a project with a Postgres data source, its tables
 //! chosen, and an ingestion instance capturing them into Iceberg.
 

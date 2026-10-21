@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Decoder for `pgoutput` logical-replication messages (protocol version 1, text mode).
 //!
 //! `pgwire-replication` deliberately stops at transaction boundaries (`Begin`/`Commit`) and

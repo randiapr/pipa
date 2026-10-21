@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: page sizes and client-side pagination, shared by every paginated list (Projects,
 //! Sources, Users, Query results) and, for its page size only, the server-paged Tables browser.
 //!

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Table maintenance: keeps the target tables the write path appends to fast to read and
 //! bounded in size — compaction of small data files, snapshot expiry, and deleting the files
 //! nothing references any more.

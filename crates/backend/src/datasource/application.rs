@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Application layer: use cases orchestrating the data source domain via its ports.
 
 use std::sync::Arc;

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Result caching for the read paths that are expensive to recompute: `POST /query` and the
 //! table list of `GET /tables`. Every call builds a fresh DataFusion session over the Iceberg
 //! catalog, so an identical dashboard refresh is otherwise paid in full each time.

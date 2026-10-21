@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Several ingestion instances: who captures which source, and what happens when one goes away.
 //! Two instances must never both read the same source (a replication slot admits one consumer),
 //! and a source must not stay unowned when its instance dies.

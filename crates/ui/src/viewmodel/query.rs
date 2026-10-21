@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: the SQL query page. Queries run against the selected project's tables only.
 
 use leptos::ev::SubmitEvent;

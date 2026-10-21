@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Snapshot backfill: lands the rows a chosen table already held before its changes were
 //! captured, so its current rows in Iceberg are the whole table rather than only the rows that
 //! changed since.

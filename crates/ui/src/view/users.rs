@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the Users page (admin only) — a paginated list of accounts (a table on desktop, cards
 //! on mobile), with create and edit each presented as a [`Modal`], like the Projects card.
 //! Saving an edit and deleting each ask for confirmation first ([`ConfirmDialog`]).
