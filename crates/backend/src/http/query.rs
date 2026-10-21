@@ -15,7 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use pipa_api::{QueryRequest, Rows, RowsResponse, path};
+use pipa_api::{QueryRequest, RawRows, RawRowsResponse, path};
 use uuid::Uuid;
 
 use crate::cache::CachedQueries;
@@ -40,10 +40,20 @@ pub fn routes() -> Router<SharedQueryApi> {
     Router::new().route(path::QUERY, post(run_query))
 }
 
+/// Nests `body`, a result `QueryService` has already JSON-encoded (from the Arrow result
+/// batches), under `rows` as it is. It is never parsed into a `serde_json::Value`: that would
+/// cost a copy of every row and sort each row's columns alphabetically instead of keeping the
+/// table's order.
+pub(super) fn raw_rows(body: Vec<u8>) -> RawRows {
+    let text = String::from_utf8(body).expect("QueryService always encodes UTF-8 JSON");
+    RawRows {
+        rows: serde_json::value::RawValue::from_string(text)
+            .expect("QueryService always encodes a valid JSON array"),
+    }
+}
+
 /// Runs `sql` via DataFusion against the Iceberg tables of `project_id`, returning the result
-/// rows under the `rows` field of the shared envelope. `QueryService` hands back its result
-/// already JSON-encoded as bytes (from the Arrow result batches), so those are parsed back into
-/// a `serde_json::Value` here to nest under `rows`.
+/// rows under the `rows` field of the shared envelope.
 ///
 /// Needs a developer or admin. A developer must name a project they may access. An admin may
 /// omit `project_id` to query every table.
@@ -51,7 +61,7 @@ async fn run_query(
     auth: AuthUser,
     State(api): State<SharedQueryApi>,
     Json(request): Json<QueryRequest>,
-) -> Result<Json<RowsResponse>, ApiError> {
+) -> Result<Json<RawRowsResponse>, ApiError> {
     auth.require_developer()?;
     let project = request
         .project_id
@@ -73,9 +83,7 @@ async fn run_query(
     };
 
     let body = api.queries.query(&request.sql, namespaces).await?;
-    let rows: serde_json::Value =
-        serde_json::from_slice(&body).expect("QueryService always encodes a valid JSON array");
-    Ok(Json(BaseResponse::new(ResponseCode::Ok, Rows { rows })))
+    Ok(Json(BaseResponse::new(ResponseCode::Ok, raw_rows(body))))
 }
 
 /// The data sources registered in `project`.

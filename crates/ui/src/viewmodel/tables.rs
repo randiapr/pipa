@@ -170,7 +170,8 @@ impl TablesViewModel {
 fn without_changelog_columns(mut row: serde_json::Value) -> serde_json::Value {
     if let Some(columns) = row.as_object_mut() {
         for column in CHANGELOG_COLUMNS {
-            columns.remove(column);
+            // Not `remove`: with `preserve_order` that swaps the last column into the gap.
+            columns.shift_remove(column);
         }
     }
     row
@@ -200,9 +201,13 @@ mod tests {
             "tier": "silver",
             "_note": "kept: not a changelog column",
         });
+        let stripped = without_changelog_columns(row);
         assert_eq!(
-            without_changelog_columns(row),
+            stripped,
             serde_json::json!({ "id": 1, "tier": "silver", "_note": "kept: not a changelog column" })
         );
+        // `Value` equality ignores key order; the columns must also stay in the table's order.
+        let columns: Vec<&String> = stripped.as_object().unwrap().keys().collect();
+        assert_eq!(columns, ["id", "tier", "_note"]);
     }
 }

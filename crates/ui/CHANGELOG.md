@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.9.5] - 2026-10-21
+
+### Fixed
+
+- The Tables page shows columns in the table's order instead of alphabetical (`serde_json`'s `preserve_order`), and a row's null columns no longer shift the rest.
+
 ## [0.9.4] - 2026-10-21
 
 ### Changed

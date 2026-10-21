@@ -33,7 +33,7 @@ pub use project::{
     NewProject, ProjectData, ProjectResponse, ProjectUpdate, ProjectView, Projects,
     ProjectsResponse,
 };
-pub use query::{QueryRequest, Rows, RowsResponse};
+pub use query::{QueryRequest, RawRows, RawRowsResponse, Rows, RowsResponse};
 pub use table::{ReadTableRequest, TableView, Tables, TablesResponse};
 pub use user::{
     LoginData, LoginRequest, LoginResponse, MeData, MeResponse, NewUser, Role, UserData,

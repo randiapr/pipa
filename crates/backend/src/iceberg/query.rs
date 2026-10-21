@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::datasource::DataSourceId;
 use crate::storage::ObjectStoreConfig;
-use datafusion::arrow::json::writer::ArrayWriter;
+use datafusion::arrow::json::writer::{JsonArray, WriterBuilder};
 use datafusion::catalog::{CatalogProvider, SchemaProvider};
 use datafusion::execution::context::SQLOptions;
 use datafusion::functions::string::expr_fn::{concat, split_part};
@@ -342,7 +342,11 @@ async fn read_rows(
 
 /// JSON-encodes result batches as an array of objects, one per row.
 fn encode(batches: &[datafusion::arrow::array::RecordBatch]) -> Result<Vec<u8>, QueryError> {
-    let mut writer = ArrayWriter::new(Vec::new());
+    // Explicit nulls: the writer otherwise leaves a null column out of its row, so a client that
+    // takes its columns from the rows (the dashboard does) would lose some and misplace others.
+    let mut writer = WriterBuilder::new()
+        .with_explicit_nulls(true)
+        .build::<_, JsonArray>(Vec::new());
     writer.write_batches(&batches.iter().collect::<Vec<_>>())?;
     writer.finish()?;
     Ok(writer.into_inner())
@@ -449,6 +453,34 @@ mod tests {
                 { "id": 1, "tier": "a" },
                 { "id": 2, "tier": "b" },
             ])
+        );
+    }
+
+    #[test]
+    fn rows_keep_the_column_order_and_their_nulls() {
+        use datafusion::arrow::array::{Int32Array, RecordBatch, StringArray};
+        use datafusion::arrow::datatypes::{DataType, Field, Schema};
+
+        // Not alphabetical, and `mid` is null in the first row.
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("zeta", DataType::Int32, false),
+            Field::new("mid", DataType::Utf8, true),
+            Field::new("alpha", DataType::Utf8, false),
+        ]));
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![
+                Arc::new(Int32Array::from(vec![1, 2])),
+                Arc::new(StringArray::from(vec![None, Some("m")])),
+                Arc::new(StringArray::from(vec!["a", "b"])),
+            ],
+        )
+        .unwrap();
+
+        // Compared as text: a parsed `Value` would not show the order.
+        assert_eq!(
+            String::from_utf8(encode(&[batch]).unwrap()).unwrap(),
+            r#"[{"zeta":1,"mid":null,"alpha":"a"},{"zeta":2,"mid":"m","alpha":"b"}]"#
         );
     }
 
