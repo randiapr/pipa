@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Object-store-backed repository for the `User` aggregate.
 //!
 //! Persists each user as a JSON object under the `users/` prefix of the shared

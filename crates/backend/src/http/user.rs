@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/users` routes: create/list/get/update/delete accounts. Admin only.
 
 use std::sync::Arc;

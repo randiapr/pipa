@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Argon2id password hashing.
 
 use argon2::{Argon2, PasswordHash, PasswordHasher as _, PasswordVerifier as _};

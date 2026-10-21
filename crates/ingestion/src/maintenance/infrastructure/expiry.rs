@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Snapshot expiry, and deleting the files only expired snapshots referenced.
 //!
 //! iceberg's `expire_snapshots` action only rewrites metadata; the files are left to "a

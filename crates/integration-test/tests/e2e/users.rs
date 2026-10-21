@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/users`: admin-only account management.
 
 use pipa_api::{NewUser, Role, UserData, UserResponse, UserUpdate, Users, path};

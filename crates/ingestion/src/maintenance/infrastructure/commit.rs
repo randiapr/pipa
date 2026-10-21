@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Committing a snapshot built by hand to the catalog.
 //!
 //! iceberg 0.10 has no rewrite (replace) action, and the pieces that would let one be added from

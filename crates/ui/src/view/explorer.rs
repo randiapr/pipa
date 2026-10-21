@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the data source explorer (`/sources/:id`). Lists the tables of one source's database,
 //! read live from it, as [`Collapse`]s (one per table, its columns inside — like the Tables
 //! page, collapses work at every width; only the columns inside go through `ResponsiveList`),

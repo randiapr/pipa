@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Thin wrapper over the browser's `localStorage`, for the few things that must survive a page
 //! reload: the login token and the selected project. Every call quietly does nothing (or returns
 //! `None`) when storage is unavailable, e.g. in a private window that blocks it.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The [`Coordinator`] port, and the rule that picks an owner for a source among live instances.
 
 use std::collections::{BTreeSet, HashSet};

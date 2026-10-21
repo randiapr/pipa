@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! RustFS / S3-compatible object storage access — reads the same shared store `pipa-backend`
 //! writes registered data sources into.
 //!

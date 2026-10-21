@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Orchestration layer driving a [`CdcSource`] and an [`IcebergWriter`] together: batches
 //! captured events per target table, commits them, and only advances the source's own WAL
 //! checkpoint (via [`ChangeStream::confirm`]) over data that has durably landed in Iceberg.

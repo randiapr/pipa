@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `POST /query`: free SQL over the Iceberg tables, for developers and admins, scoped to a
 //! project.
 

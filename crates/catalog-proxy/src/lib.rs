@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `pipa-catalog-proxy`: SigV4 signing in front of RustFS's embedded Iceberg REST catalog
 //! ("S3 Tables"). That catalog rejects unsigned requests, and `iceberg-catalog-rest` can't sign
 //! them, so its clients talk to a [`CatalogProxy`] instead. Each request is buffered, signed with

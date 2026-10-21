@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! [`MaintenanceScheduler`]: maintains the target tables of the sources this instance captures,
 //! one table at a time, on an interval.
 //!

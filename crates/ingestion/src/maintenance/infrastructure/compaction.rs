@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Compaction: rewrites runs of small data files into files of the target size, committed as an
 //! Iceberg `replace` snapshot built by hand (see [`super::commit`] for why).
 //!

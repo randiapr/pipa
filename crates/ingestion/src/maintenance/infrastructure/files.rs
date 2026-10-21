@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Walking a table's snapshots down to the files they reference.
 
 use std::collections::{HashMap, HashSet};

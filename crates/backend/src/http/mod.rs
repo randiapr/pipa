@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Interface adapter: translates between Axum HTTP requests/responses and the
 //! `crate::datasource`/`crate::project`/`crate::iceberg`/`crate::user` application
 //! services. Keeps those layers free of any HTTP

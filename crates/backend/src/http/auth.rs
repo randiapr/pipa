@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Authentication and authorization: the `POST /auth/login` and `GET /auth/me` routes, the
 //! `require_auth` middleware every protected route sits behind, and the `AuthUser`/`AdminOnly`
 //! extractors handlers use to see who is calling. Roles: admins manage everything; developers

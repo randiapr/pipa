@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the SQL query page. Queries only see the selected project's tables.
 
 use leptos::prelude::*;

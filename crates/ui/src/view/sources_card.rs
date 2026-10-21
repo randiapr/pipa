@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the Sources card — a paginated list of registered data sources (a table on desktop,
 //! cards on mobile) with per-source explore (the tables explorer, where the tables to ingest are
 //! chosen), connection-test and remove actions, plus a "register a data source" form presented

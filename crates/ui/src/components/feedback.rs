@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! daisyUI feedback components: [`Alert`], [`Toast`], [`Badge`] and [`Loading`].
 
 use leptos::prelude::*;

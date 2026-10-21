@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Domain layer: what maintenance does to a target table and when — the configuration, the
 //! compaction planner, the [`TableMaintainer`] port and its report. No catalog or object-store
 //! specifics; those are [`crate::maintenance::infrastructure`]'s.

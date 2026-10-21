@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The `pipa-backend` and `pipa-ingestion` executables under test.
 //!
 //! Cargo only provides a test with the binaries of its own package, so they are built on first

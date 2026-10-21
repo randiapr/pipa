@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Coordination: which running `pipa-ingestion` instance captures which registered data source.
 //!
 //! A Postgres replication slot tolerates one consumer, so instances must never race to attach

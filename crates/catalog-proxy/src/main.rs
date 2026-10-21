@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `pipa-catalog-proxy` as a standalone service: the [`CatalogProxy`] that `pipa-backend` and
 //! `pipa-ingestion` embed in-process, served on its own port for catalog clients outside this
 //! workspace. On startup it enables S3 Tables on the bucket, retrying until RustFS is reachable,

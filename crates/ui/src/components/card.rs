@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! daisyUI `card`: [`Card`] (a bordered card with its body), [`CardTitle`] and
 //! [`CardActions`].
 

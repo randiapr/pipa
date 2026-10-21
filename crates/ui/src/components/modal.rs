@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! daisyUI `modal`, on the native `<dialog>` element (`showModal()`/`close()`): [`Modal`], its
 //! [`ModalActions`] row, and [`ConfirmDialog`], which every update and delete goes through.
 //! A modal opened from inside another one (a confirmation over an edit form) stacks on top of

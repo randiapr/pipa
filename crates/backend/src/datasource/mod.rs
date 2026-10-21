@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Bounded context: registering, testing and exploring OLTP data sources for CDC capture, and
 //! choosing which of their tables are ingested.
 //!

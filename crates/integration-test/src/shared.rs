@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! One backend and one ingestion instance for the many tests that don't need a backend of their
 //! own.
 //!

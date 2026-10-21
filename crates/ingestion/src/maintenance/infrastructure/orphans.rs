@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Orphan sweep: deletes files under a table's location that no snapshot references — what a
 //! commit that never landed leaves behind (a crash between writing a batch and committing it,
 //! a compaction whose commit state was unknown).

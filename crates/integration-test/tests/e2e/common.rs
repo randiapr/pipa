@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `rstest` fixtures shared by the test modules.
 
 use pipa_integration_test::env::TestEnv;

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/datasources`: registering OLTP sources, testing the connection, exploring their tables and
 //! choosing what to ingest, and who may do any of it.
 

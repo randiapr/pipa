@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Object-store-backed repository for the `Project` aggregate.
 //!
 //! Persists each project as a JSON object under the `projects/` prefix of the shared

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: the data source explorer — one source's tables, read live from its database, and
 //! the draft choice of which of them `pipa-ingestion` captures, saved as a whole.
 

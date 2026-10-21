@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Harness for the end-to-end tests in `tests/e2e`.
 //!
 //! The tests drive the real `pipa-backend` and `pipa-ingestion` binaries (built from this

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! A child process under test (the backend or an ingestion instance): its output goes to a log
 //! file that failures can show, and it is killed when dropped (or, if it is part of the shared stack and never dropped, when the
 //! test process exits).

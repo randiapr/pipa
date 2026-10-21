@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Inline SVG icons for icon-only buttons, drawn with the current text color.
 
 use leptos::prelude::*;

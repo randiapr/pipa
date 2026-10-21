@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Axum REST API exposing DataFusion/Iceberg query access, plus OLTP data source and project
 //! management consumed by the `pipa-ui` dashboard. `pipa-ingestion` reads the same registered
 //! data sources back out of the shared object store (via its own standalone duplicate of this

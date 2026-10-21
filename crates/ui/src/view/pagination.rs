@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: a daisyUI `join`-based prev/next pager plus the desktop rows-per-page picker, shared
 //! by the paginated lists in both their desktop (table) and mobile (cards) layouts.
 

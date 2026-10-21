@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Removing what the tests started when the test process exits.
 //!
 //! The built-in test harness runs nothing after the last test, and statics are never dropped, so

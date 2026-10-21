@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Postgres adapter for [`SnapshotSource`]: reads a table's existing rows in key order, a page at
 //! a time, with plain `SELECT`s.
 

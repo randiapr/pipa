@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! A `pipa-backend` process and an HTTP client for it.
 
 use std::net::TcpListener;

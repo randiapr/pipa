@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/datasources` routes: register/list/get/delete OLTP data sources, test connectivity, explore
 //! a source's tables and choose the ones to ingest (`/datasources/{id}/tables`). Every
 //! route needs a developer or admin (a data source carries its connection password, so view-only

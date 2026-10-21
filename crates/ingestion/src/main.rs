@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Ingestion engine: connects to OLTP databases and streams captured changes into Iceberg.
 //!
 //! Standalone service: the only workspace crate it depends on is `pipa-catalog-proxy`, which it

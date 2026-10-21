@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Signing in, tokens, who is let through, and the backend's startup checks.
 
 use pipa_api::{LoginData, MeData, NewUser, Role, UserUpdate, path};

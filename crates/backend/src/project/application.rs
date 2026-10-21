@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Application layer: use cases orchestrating the project domain via its repository port.
 
 use std::sync::Arc;

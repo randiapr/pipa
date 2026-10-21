@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: the landing page — a card gallery giving a quick overview of each project and how
 //! many data sources are grouped under it, with a way into the projects and sources pages.
 

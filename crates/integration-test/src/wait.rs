@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Polling, for things that happen on their own schedule (ingestion capturing a change, a lease
 //! expiring).
 

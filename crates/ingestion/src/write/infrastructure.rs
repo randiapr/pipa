@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Concrete [`IcebergWriter`] adapter: Iceberg REST catalog access, target-table
 //! auto-provisioning (introspecting the source Postgres table's schema via
 //! `information_schema` on first sight), and the actual `fast_append` commit.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Change capture: streams row-level changes out of a registered OLTP data source.
 //!
 //! Same clean-architecture split `pipa-backend`'s bounded contexts use:

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! `/projects` routes: register/list/get/update/delete. Registering, updating and deleting are
 //! admin-only; listing and reading are limited to the projects the caller may access.
 

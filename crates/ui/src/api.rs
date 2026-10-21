@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! HTTP client for the `pipa-backend` API.
 //!
 //! This is the Model's I/O: it moves [`pipa_api`] contract types to and from `pipa-backend` over

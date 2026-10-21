@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! View: one page of a query or table result — a table with one column per key on desktop, or
 //! one card per row listing `column: value` pairs on mobile. Callers render the row count and
 //! the pager around it, since they know the whole result's size and how it is paged.

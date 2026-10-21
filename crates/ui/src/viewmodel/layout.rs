@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! ViewModel: which layout the lists render in — a paginated `table` on desktop, a stack of
 //! `card`s on mobile.
 //!

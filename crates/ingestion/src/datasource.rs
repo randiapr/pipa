@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Reads registered OLTP data sources back out of the shared RustFS/S3 object store.
 //!
 //! Deliberately duplicated (not imported) from `pipa-backend::datasource`: `pipa-ingestion` only

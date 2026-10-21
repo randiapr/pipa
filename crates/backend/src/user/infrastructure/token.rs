@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! HS256 JSON Web Tokens as the bearer credential handed out at login.
 
 use std::time::{SystemTime, UNIX_EPOCH};

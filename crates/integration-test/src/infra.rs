@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! The containers every test shares: RustFS, Postgres and Redis.
 //!
 //! Started once, by whichever test needs them first, and removed when the test process exits;

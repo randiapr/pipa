@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Randi Apriansyah
+// SPDX-License-Identifier: MIT
+
 //! Domain layer: the `DataSource` aggregate, its value objects, and the ports
 //! (repository, connection tester, schema explorer) that the application layer depends on.
 
