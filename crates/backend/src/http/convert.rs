@@ -10,6 +10,9 @@ use crate::datasource::domain::{
     SourceColumn, SourceTable, TableRef,
 };
 use crate::project::{NewProject, Project, ProjectId, ProjectUpdate};
+use crate::saved_query::{
+    NewSavedQuery, SavedQuery, SavedQueryError, SavedQueryUpdate as SavedQueryChange,
+};
 use crate::user::{
     NewUser as NewUserAccount, Role, User, UserError, UserUpdate as UserAccountUpdate,
 };
@@ -174,6 +177,46 @@ impl From<pipa_api::ProjectUpdate> for ProjectUpdate {
         Self {
             name: update.name,
             description: update.description,
+        }
+    }
+}
+
+impl From<SavedQuery> for pipa_api::SavedQueryView {
+    fn from(query: SavedQuery) -> Self {
+        Self {
+            id: query.id.to_string(),
+            project_id: query.project_id.to_string(),
+            name: query.name,
+            sql: query.sql,
+            created_at_unix: query.created_at_unix,
+            updated_at_unix: query.updated_at_unix,
+        }
+    }
+}
+
+/// Fails with `InvalidField` if `project_id` isn't a UUID — the wire carries it as a string.
+impl TryFrom<pipa_api::NewSavedQuery> for NewSavedQuery {
+    type Error = SavedQueryError;
+
+    fn try_from(new: pipa_api::NewSavedQuery) -> Result<Self, Self::Error> {
+        let project_id = Uuid::parse_str(&new.project_id)
+            .map(ProjectId)
+            .map_err(|_| {
+                SavedQueryError::InvalidField("project_id must be a valid UUID".to_string())
+            })?;
+        Ok(Self {
+            project_id,
+            name: new.name,
+            sql: new.sql,
+        })
+    }
+}
+
+impl From<pipa_api::SavedQueryUpdate> for SavedQueryChange {
+    fn from(update: pipa_api::SavedQueryUpdate) -> Self {
+        Self {
+            name: update.name,
+            sql: update.sql,
         }
     }
 }

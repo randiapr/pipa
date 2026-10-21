@@ -13,6 +13,8 @@ pub const PROJECT: &str = "/projects/{id}";
 pub const TABLES: &str = "/tables";
 pub const TABLE_ROWS: &str = "/tables/rows";
 pub const QUERY: &str = "/query";
+pub const SAVED_QUERIES: &str = "/saved-queries";
+pub const SAVED_QUERY: &str = "/saved-queries/{id}";
 pub const LOGIN: &str = "/auth/login";
 pub const ME: &str = "/auth/me";
 pub const USERS: &str = "/users";
@@ -38,6 +40,10 @@ pub fn project(id: &str) -> String {
     with_id(PROJECT, id)
 }
 
+pub fn saved_query(id: &str) -> String {
+    with_id(SAVED_QUERY, id)
+}
+
 pub fn user(id: &str) -> String {
     with_id(USER, id)
 }
@@ -53,5 +59,6 @@ mod tests {
         assert_eq!(datasource_test("abc"), "/datasources/abc/test");
         assert_eq!(datasource_tables("abc"), "/datasources/abc/tables");
         assert_eq!(project("abc"), "/projects/abc");
+        assert_eq!(saved_query("abc"), "/saved-queries/abc");
     }
 }

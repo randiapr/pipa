@@ -19,6 +19,7 @@ pub mod envelope;
 pub mod path;
 pub mod project;
 pub mod query;
+pub mod saved_query;
 pub mod table;
 pub mod user;
 
@@ -34,6 +35,10 @@ pub use project::{
     ProjectsResponse,
 };
 pub use query::{QueryRequest, RawRows, RawRowsResponse, Rows, RowsResponse};
+pub use saved_query::{
+    NewSavedQuery, SavedQueries, SavedQueriesResponse, SavedQueryData, SavedQueryResponse,
+    SavedQueryUpdate, SavedQueryView,
+};
 pub use table::{ReadTableRequest, TableView, Tables, TablesResponse};
 pub use user::{
     LoginData, LoginRequest, LoginResponse, MeData, MeResponse, NewUser, Role, UserData,

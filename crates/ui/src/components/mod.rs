@@ -19,6 +19,7 @@
 
 mod card;
 mod collapse;
+mod copy;
 mod feedback;
 mod form;
 mod icons;
@@ -26,6 +27,7 @@ mod modal;
 
 pub use card::{Card, CardActions, CardTitle};
 pub use collapse::{Collapse, ExpandToggle};
+pub use copy::CopyButton;
 pub use feedback::{Alert, Badge, BadgeStyle, Loading, Toast, Tone};
 pub use form::{Checkbox, Field, Select, TextArea, TextInput};
 pub use icons::{CollapseAllIcon, EditIcon, ExpandAllIcon, TrashIcon};

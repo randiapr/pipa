@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.10.0] - 2026-10-21
+
+### Added
+
+- Saved queries on the Query page: save the editor's SQL under a name ("Save as new…"), load or run a saved query, overwrite the loaded one ("Update"), or remove it. They belong to the selected project and are shared with its developers. Updates and removals ask for confirmation.
+- The Sources list shows each source's ID, with a copy button (`CopyButton`) that puts its Iceberg namespace (`cdc_` + the ID without dashes) on the clipboard, ready to use in a query.
+
 ## [0.9.5] - 2026-10-21
 
 ### Fixed
