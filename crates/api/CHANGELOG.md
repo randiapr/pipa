@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.4.3] - 2026-10-21
+
+### Added
+
+- `RawRows` and `RawRowsResponse`: `Rows` as the backend serializes it, with the result nested under `rows` as already-encoded JSON (`serde_json`'s `raw_value`). Same wire shape as `Rows`, so clients keep reading `Rows`/`RowsResponse`.
+
 ## [0.4.2] - 2026-10-21
 
 ### Changed

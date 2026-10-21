@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.12.4] - 2026-10-21
+
+### Fixed
+
+- `POST /query` and `POST /tables/rows` return each row's columns in the table's order instead of alphabetically, and keep columns that are null instead of leaving them out of the row. The result is nested under `rows` as encoded, no longer parsed into a `serde_json::Value` first, which also saves a copy of every row. The wire shape is unchanged.
+
 ## [0.12.3] - 2026-10-21
 
 ### Changed

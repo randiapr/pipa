@@ -20,7 +20,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use pipa_api::{ReadTableRequest, Rows, RowsResponse, TableView, Tables, TablesResponse, path};
+use pipa_api::{RawRowsResponse, ReadTableRequest, TableView, Tables, TablesResponse, path};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -30,7 +30,7 @@ use crate::project::ProjectId;
 
 use super::auth::{AuthError, AuthUser};
 use super::error::{BaseResponse, ResponseCode, error_response};
-use super::query::{QueryApi, project_sources, query_error_response};
+use super::query::{QueryApi, project_sources, query_error_response, raw_rows};
 
 type SharedQueryApi = Arc<QueryApi>;
 
@@ -82,7 +82,7 @@ async fn read_table(
     auth: AuthUser,
     State(api): State<SharedQueryApi>,
     Json(request): Json<ReadTableRequest>,
-) -> Result<Json<RowsResponse>, ApiError> {
+) -> Result<Json<RawRowsResponse>, ApiError> {
     let project = parse_id(&request.project_id, "project_id").map(ProjectId)?;
     let source = parse_id(&request.source_id, "source_id").map(DataSourceId)?;
     auth.require_project(Some(project))?;
@@ -107,9 +107,7 @@ async fn read_table(
             request.offset,
         )
         .await?;
-    let rows: serde_json::Value =
-        serde_json::from_slice(&body).expect("QueryService always encodes a valid JSON array");
-    Ok(Json(BaseResponse::new(ResponseCode::Ok, Rows { rows })))
+    Ok(Json(BaseResponse::new(ResponseCode::Ok, raw_rows(body))))
 }
 
 fn parse_id(id: &str, field: &'static str) -> Result<Uuid, ApiError> {
