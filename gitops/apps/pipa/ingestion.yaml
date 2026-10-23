@@ -1,0 +1,46 @@
+# A StatefulSet because INGESTION_INSTANCE_ID must be unique among the instances and stable across
+# restarts (a restarted pod keeps its sources); the pod name is exactly that. Instances share the
+# registered sources through Redis, so scaling is just `replicas`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestion
+spec:
+  clusterIP: None
+  selector:
+    app: ingestion
+  ports:
+    - name: none
+      port: 80
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ingestion
+spec:
+  serviceName: ingestion
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: ingestion
+  template:
+    metadata:
+      labels:
+        app: ingestion
+    spec:
+      containers:
+        - name: ingestion
+          image: ghcr.io/randiapr/pipa-ingestion
+          envFrom:
+            - configMapRef: {name: pipa-config}
+          env:
+            - name: INGESTION_INSTANCE_ID
+              valueFrom:
+                fieldRef: {fieldPath: metadata.name}
+            - name: RUSTFS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: pipa-secrets, key: rustfs-access-key}
+            - name: RUSTFS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: pipa-secrets, key: rustfs-secret-key}

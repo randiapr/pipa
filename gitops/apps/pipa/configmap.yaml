@@ -1,0 +1,19 @@
+# Non-secret settings shared by pipa-backend and pipa-ingestion (see docker-compose.yml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipa-config
+data:
+  RUSTFS_ENDPOINT: http://rustfs:9000
+  RUSTFS_BUCKET: pipa
+  RUSTFS_REGION: ap-southeast-3
+  RUSTFS_ALLOW_HTTP: "true"
+  # Shared query cache (backend) and instance coordination (ingestion).
+  REDIS_URL: redis://redis:6379
+  RUST_LOG: info
+  PIPA_ADMIN_USERNAME: admin
+  # The dashboard bakes in its API at http://localhost:8080, so it is reached through
+  # `just gitops::app` (port-forwards 3000 and 8080); this is that page's origin.
+  CORS_ALLOWED_ORIGINS: http://localhost:3000
+  INGESTION_SOURCE_REFRESH_INTERVAL_SECS: "30"
+  INGESTION_MAINTENANCE_INTERVAL_SECS: "300"

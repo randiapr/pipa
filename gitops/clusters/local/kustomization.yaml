@@ -1,0 +1,6 @@
+# What Flux applies: the FluxInstance's sync points at this directory. flux-instance.yaml is
+# deliberately not listed — `just gitops::up` applies it (it is what creates this sync).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../apps/pipa

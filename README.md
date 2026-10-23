@@ -145,6 +145,243 @@ both embed the `pipa-catalog-proxy` signer (`crates/catalog-proxy`) in their own
 S3 Tables on the `pipa` bucket at startup — all automatic, locally and in compose, as long as
 `ICEBERG_CATALOG_URI` is left unset (see the note at the top of `docker-compose.yml`).
 
+## GitOps (Flux)
+
+`gitops/` holds the Kubernetes manifests for the whole stack (the Kubernetes equivalent of
+`docker-compose.yml`), and `just gitops::*` runs [Flux](https://fluxcd.io) on a local Kubernetes cluster
+to keep the `pipa` namespace in step with this repo's GitHub branch. Flux and its web UI come from
+the [Flux Operator](https://fluxoperator.dev). Nothing is applied by hand after the first `up`:
+you change files under `gitops/`, push, and Flux reconciles.
+
+```
+gitops/
+  clusters/local/   flux-instance.yaml (Flux itself, applied by `up`) + kustomization.yaml (what Flux syncs)
+  apps/pipa/        rustfs, redis, create-bucket Job, backend, ingestion (StatefulSet, 2), ui
+gitops.just         the `just gitops::*` recipes
+```
+
+How it fits together: `up` installs the Flux Operator with Helm, creates the secrets, and applies a
+`FluxInstance`. The operator starts Flux, which watches `gitops/clusters/local` on the branch of
+`https://github.com/randiapr/pipa.git` and applies it about once a minute (undoing manual drift).
+`clusters/local/kustomization.yaml` pulls in `apps/pipa`, whose `kustomization.yaml` lists the
+manifests and pins the image tags.
+
+### GitOps prerequisites
+
+- a local Kubernetes cluster (Docker Desktop, kind, minikube, …) as
+  the current `kubectl` context, plus `kubectl` and [`helm`](https://helm.sh). `up` refuses a context whose API
+  server isn't on loopback or a `192.168.*` address, unless `GITOPS_KUBE_CONTEXT` names it
+- `openssl` (random secrets), and optionally [`gh`](https://cli.github.com) (the Git token, see below)
+- optionally [`kubeconform`](https://github.com/yannh/kubeconform) for `just gitops::validate`
+
+### Bring it up
+
+```sh
+# start a local Kubernetes cluster first, then:
+just gitops::up         # Flux Operator + secrets + FluxInstance; waits until Flux is Ready
+just gitops::status     # what Flux reconciled, and the pipa pods
+```
+
+`up` is safe to re-run: it upgrades the Helm release, re-applies the `FluxInstance` and keeps
+secrets that already exist. On the first run it prints the generated admin login
+(`admin / <password>`). The pods take a few minutes to become ready (image pulls, then rustfs →
+bucket Job → backend/ingestion); until the bucket exists backend and ingestion restart, which is
+expected.
+
+**Flux reads from GitHub, not your working tree.** Commit and push `gitops/` to the branch Flux
+follows before expecting the cluster to change.
+
+### Follow a different branch
+
+The branch defaults to `main`. To test a branch, push it and re-run `up` with the variable (or put
+`GITOPS_BRANCH=feat/gitops` in `.env`, which `just` loads):
+
+```sh
+GITOPS_BRANCH=feat/gitops just gitops::up
+```
+
+Re-running rewrites the `FluxInstance`'s `ref`, and Flux switches over on its next reconcile.
+
+### Git access (private repo, token)
+
+`up` creates a `flux-system` basic-auth Secret from `GITHUB_TOKEN`, or from `gh auth token` when
+that is unset. The token needs read access to the repo (a fine-grained token with "Contents:
+read-only" is enough). With neither, `up` prints a warning and Flux reads the repo anonymously,
+which only works for a public repo. To rotate the token, export a new `GITHUB_TOKEN` and re-run
+`just gitops::up`.
+
+### Open the Flux web UI
+
+```sh
+just gitops::ui         # http://localhost:9080, until Ctrl+C
+```
+
+The Flux Operator serves the UI itself (the `flux-operator` Service, port 9080), so there is nothing
+extra to install. It shows the `FluxInstance`, the `GitRepository`, the `Kustomization` and every
+resource they apply, with their reconcile state and events. It is reached through a port-forward
+and has no Ingress; don't expose it without configuring authentication (see the Flux Operator docs).
+
+### Use pipa on the cluster
+
+```sh
+just gitops::app        # dashboard http://localhost:3000, API http://localhost:8080, until Ctrl+C
+```
+
+Sign in with the admin login `up` printed. The dashboard has `http://localhost:8080` compiled in as
+its API address and the backend allows the origin `http://localhost:3000` (`CORS_ALLOWED_ORIGINS` in
+`gitops/apps/pipa/configmap.yaml`), so both ports must be forwarded; there is no Ingress.
+
+To read the admin password again:
+
+```sh
+kubectl -n pipa get secret pipa-secrets -o jsonpath='{.data.admin-password}' | base64 -d; echo
+```
+
+The RustFS console (9001) is not forwarded by a recipe: `kubectl -n pipa port-forward svc/rustfs 9001:9001`
+(the access key is `rustfsadmin`, the secret key is `rustfs-secret-key` in `pipa-secrets`).
+
+### Register a Postgres source from the cluster
+
+Sources are registered in the dashboard exactly as in the other setups (see
+[Registering your own Postgres source](#registering-your-own-postgres-source)); the difference is
+that `pipa-ingestion` runs in pods, so the database must be reachable from them and run with
+`wal_level=logical`. A Postgres on your Mac is not `localhost` to a pod: use an address the cluster's
+nodes can reach (the name for the host differs per tool, e.g. `host.docker.internal`; check from a pod, e.g.
+`kubectl -n pipa run -it --rm probe --image=busybox -- nslookup host.docker.internal`), and allow it in
+the database's `pg_hba.conf`. The two ingestion pods share the sources through Redis and
+each captures its own through its own replication slot.
+
+### Change the stack (the normal workflow)
+
+1. Edit files under `gitops/apps/pipa/`.
+2. Render them: `just gitops::validate` (offline; schema-checked when `kubeconform` is installed).
+3. Commit and push to the followed branch.
+4. Wait for the next reconcile (about a minute), or ask for one now:
+
+   ```sh
+   kubectl -n flux-system annotate gitrepository/flux-system \
+     reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+   kubectl -n flux-system annotate kustomization/flux-system \
+     reconcile.fluxcd.io/requestedAt="$(date +%s)" --overwrite
+   ```
+
+5. Check `just gitops::status` or the Flux UI.
+
+Anything you change by hand in the `pipa` namespace (`kubectl edit`, `kubectl scale`) is reverted at
+the next reconcile; to experiment, suspend the sync first (see below).
+
+### Roll out a new pipa version
+
+The images are pinned, not `latest`. In `gitops/apps/pipa/kustomization.yaml`, change the `newTag`
+of the three `images:` entries to a release published by `publish-images.yaml` (for example
+`0.17.0`), then push. The pods are replaced by a normal rolling update. To roll back, push the old
+tag. Use the same tag for all three: backend, ingestion and the `pipa-ui` image are released
+together.
+
+### Scale ingestion
+
+Ingestion is a StatefulSet; `INGESTION_INSTANCE_ID` is the pod name (`ingestion-0`, `ingestion-1`, …),
+unique and stable. Change `spec.replicas` in `gitops/apps/pipa/ingestion.yaml` and push. Instances
+find each other through Redis, so about `1/N` of the sources move to a new pod, and a removed pod's
+sources move to the others, with nothing lost or duplicated (see the coordination notes in
+[Quickstart](#quickstart)).
+
+### Change configuration
+
+Non-secret settings live in `gitops/apps/pipa/configmap.yaml` (RustFS endpoint, region, Redis URL,
+refresh and maintenance intervals, CORS origin, log level). Other runtime settings can be added
+there too (see [Runtime settings](#runtime-settings)). A pod reads its environment at start, so a
+changed ConfigMap does not restart anything by itself:
+
+```sh
+kubectl -n pipa rollout restart deployment/backend statefulset/ingestion
+```
+
+### Secrets
+
+`pipa-secrets` holds `jwt-secret`, `admin-password`, `rustfs-access-key` and `rustfs-secret-key`.
+It is **not in git**: `up` creates it once with random values and never overwrites it, so tokens and
+the admin login survive re-runs. Everything in `gitops/` is public to anyone who can read the repo,
+so never commit a plain Secret.
+
+- **Rotate a value:** delete the Secret and re-run `up` (this also resets the admin login and
+  invalidates tokens), or patch one key with `kubectl -n pipa create secret generic pipa-secrets
+  --dry-run=client -o yaml --from-literal=… | kubectl apply -f -`, then
+  `kubectl -n pipa rollout restart deployment/backend statefulset/ingestion statefulset/rustfs`.
+  Changing the RustFS keys on an existing volume needs the RustFS data to be reset too.
+- **Keep secrets in git, encrypted (optional, not wired in):** the Flux-native way is
+  [SOPS](https://fluxcd.io/flux/guides/mozilla-sops/) with [age](https://github.com/FiloSottile/age).
+  Outline: `age-keygen -o age.agekey`; store the private key in the cluster as a Secret `sops-age`
+  in `flux-system`; add a `.sops.yaml` with the public key and `encrypted_regex: ^(data|stringData)$`;
+  encrypt the Secret with `sops --encrypt --in-place`; and give the Flux `Kustomization` that
+  applies `apps/pipa` `decryption: {provider: sops, secretRef: {name: sops-age}}`. Drop the
+  secret creation from `up` at the same time, so the two don't fight. Back up the private key — a lost key means the
+  encrypted values in git can't be recovered. This repo doesn't do it yet.
+  [External Secrets](https://external-secrets.io) is the alternative for a real secret store.
+
+### Private images
+
+The `ghcr.io/randiapr/pipa-*` images are pulled anonymously. If the packages are private, create a
+pull Secret and reference it from the pod specs (`imagePullSecrets`):
+
+```sh
+kubectl -n pipa create secret docker-registry ghcr \
+  --docker-server=ghcr.io --docker-username=<user> --docker-password=<token with read:packages>
+```
+
+then add `imagePullSecrets: [{name: ghcr}]` to the three pipa pod templates under `gitops/apps/pipa/`
+(`backend.yaml`, `ingestion.yaml`, `ui.yaml`; the rustfs, redis and rc images are public) and push.
+
+### Pause Flux while you experiment
+
+```sh
+kubectl -n flux-system patch kustomization flux-system --type merge -p '{"spec":{"suspend":true}}'
+# ... kubectl edit / scale / debug ...
+kubectl -n flux-system patch kustomization flux-system --type merge -p '{"spec":{"suspend":false}}'
+```
+
+On resume Flux restores whatever differs from git.
+
+### Stop and remove
+
+```sh
+just gitops::down       # deletes the FluxInstance, the pipa namespace (its data too), the operator
+# then stop your local cluster the way you started it
+```
+
+`down` deletes the `pipa` namespace, so the RustFS volume — every captured table — goes with it.
+Stopping the cluster alone keeps everything, and it resumes when the cluster is started again.
+
+### Troubleshooting
+
+| Symptom | Likely cause and fix |
+| --- | --- |
+| `up`: "no kubectl context" / "not a local cluster" | Start a local cluster and select it (`kubectl config use-context …`), or set `GITOPS_KUBE_CONTEXT` to the context's name to use a remote one on purpose. |
+| `GitRepository` not Ready, authentication/not found | Private repo without a token, or a token without access: set `GITHUB_TOKEN` (or `gh auth login`) and re-run `up`. |
+| `Kustomization` not Ready: path or `kustomization.yaml` not found | The branch Flux follows doesn't have `gitops/` yet. Push it, or re-run `up` with `GITOPS_BRANCH`. |
+| `Kustomization` stuck on a build error | Run `just gitops::validate` and fix the manifest; `kubectl -n flux-system describe kustomization flux-system` shows Flux's message. |
+| backend / ingestion pods restarting at first | Waiting for RustFS and the `pipa` bucket; check `kubectl -n pipa logs job/create-bucket`. Settles on its own. |
+| `ImagePullBackOff` | The tag in `kustomization.yaml` doesn't exist, or the package is private (see Private images). |
+| Dashboard loads but can't log in / network errors | Only `ui` is forwarded: run `just gitops::app` (it forwards the backend on 8080 too). |
+| `create-bucket` Job unchanged after editing it | Jobs are immutable; Flux recreates it (the `force` annotation in `create-bucket.yaml`). Reconcile and check the Kustomization's events. |
+
+Useful commands: `kubectl -n pipa get pods`, `kubectl -n pipa logs deploy/backend`,
+`kubectl -n pipa logs sts/ingestion`, `kubectl -n flux-system get fluxinstance,gitrepository,kustomization`.
+
+### Recipe reference
+
+| Recipe | What it does |
+| --- | --- |
+| `just gitops::up` | Install the Flux Operator, create the secrets, apply the `FluxInstance`; wait until Ready. Re-runnable. |
+| `just gitops::status` | Flux objects and the `pipa` pods. |
+| `just gitops::ui` | Port-forward the Flux web UI to `localhost:9080`. |
+| `just gitops::app` | Port-forward the dashboard (`3000`) and the API (`8080`). |
+| `just gitops::validate` | Render `apps/pipa` and `clusters/local` offline; schema-check with `kubeconform` if installed. |
+| `just gitops::down` | Remove the `FluxInstance`, the `pipa` namespace (data included) and the operator. |
+
+Environment: `GITOPS_BRANCH` (branch Flux follows, default `main`), `GITHUB_TOKEN` (Git read
+access, default `gh auth token`) and `GITOPS_KUBE_CONTEXT` (allow a non-local cluster). All can be set in `.env`. See also `gitops/README.md`.
+
 ## Known limitations
 
 **Upstream (DataFusion / `iceberg-datafusion`).** `SELECT count(*)` over an Iceberg metadata table
