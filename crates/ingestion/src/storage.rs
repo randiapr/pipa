@@ -33,8 +33,8 @@ impl ObjectStoreConfig {
                 .unwrap_or_else(|_| "http://localhost:9000".to_string()),
             bucket: std::env::var("RUSTFS_BUCKET").unwrap_or_else(|_| "pipa".to_string()),
             region: std::env::var("RUSTFS_REGION").unwrap_or_else(|_| "ap-southeast-3".to_string()),
-            // Matches the `--access-key`/`--secret-key` the `just rustfs` recipe starts the
-            // local dev server with, so `just ingestion`/`just rest` connect with no extra setup.
+            // Matches the `--access-key`/`--secret-key` the `just run-rustfs` recipe starts the
+            // local dev server with, so `just run-ingestion`/`just run-backend` connect with no extra setup.
             access_key_id: std::env::var("RUSTFS_ACCESS_KEY_ID")
                 .unwrap_or_else(|_| "rustfsadmin".to_string()),
             secret_access_key: std::env::var("RUSTFS_SECRET_ACCESS_KEY")

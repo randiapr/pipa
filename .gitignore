@@ -10,7 +10,7 @@ dist
 # `@plugin "daisyui"`; package-lock.json is still tracked to pin its version
 node_modules
 
-# Local RustFS storage volume (`just rustfs`)
+# Local RustFS storage volume (`just run-rustfs`)
 /rustfs-data
 
 # Local stack service logs (`just local::up` / `just local::log`)
