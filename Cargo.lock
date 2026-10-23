@@ -4847,7 +4847,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-backend"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -4879,7 +4879,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-catalog-proxy"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "anyhow",
  "axum",
@@ -4896,7 +4896,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-ingestion"
-version = "0.9.4"
+version = "0.9.5"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -4925,7 +4925,7 @@ dependencies = [
 
 [[package]]
 name = "pipa-integration-test"
-version = "0.3.3"
+version = "0.3.4"
 dependencies = [
  "anyhow",
  "chrono",
