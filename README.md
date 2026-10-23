@@ -163,7 +163,7 @@ you change files under `gitops/`, push, and Flux reconciles.
 ```
 gitops/
   clusters/local/   flux-instance.yaml (Flux itself, applied by `up`) + kustomization.yaml (what Flux syncs)
-  apps/pipa/        rustfs, redis, create-bucket Job, backend, ingestion (StatefulSet, 2), ui
+  apps/pipa/        rustfs (StatefulSet, 4: a cluster), redis, create-bucket Job, backend, ingestion (StatefulSet, 2), ui
 gitops.just         the `just gitops::*` recipes
 ```
 
@@ -288,6 +288,161 @@ are replaced by a normal rolling update. To roll back, push the old tag. Bump th
 only when their changelogs say they must be: the dashboard and the backend share the HTTP contract
 in `pipa-api`.
 
+### Persistent data (`gitops-data/`)
+
+The RustFS volumes are directories in the project, in the gitignored `gitops-data/` (like
+`rustfs-data/` and `postgres-data/` for the other setups), not in the cluster's own storage. So
+everything pipa stores (users, projects, data sources, captured tables) **survives `just gitops::down`
+and `up`, and recreating the cluster**:
+
+```
+gitops-data/
+  rustfs-0/ … rustfs-3/   one directory per RustFS pod (the cluster's 4 volumes)
+  pipa-secrets.env        the generated secrets, mode 600 (see Secrets)
+```
+
+- **How:** `just gitops::up` creates four PersistentVolumes of the `pipa-local` StorageClass
+  (`gitops/apps/pipa/storageclass.yaml`, a class with no provisioner) on those directories. Each is
+  reserved for one claim (`data-rustfs-0` … `-3`), so a pod gets its own directory back; a volume
+  left over from a deleted claim is freed again by the next `up`. The directories are made
+  world-writable, because RustFS runs as uid 10001 and the directory belongs to you.
+- **Needs:** a cluster whose nodes see this directory at the same path. A local cluster that runs in
+  a VM sharing your home directory (the default for most such tools) does; one that doesn't would keep
+  the data inside the node instead. Checked on a VM-based k3s cluster only.
+- **Leaves with the data:** `gitops-data/` is plain files, and is not in git. Back it up like any
+  data directory, and delete it only through `just gitops::purge` (or after `down` plus
+  `kubectl delete pv -l app.kubernetes.io/part-of=pipa-gitops`).
+- **Checked:** with the stack on these volumes, a project written through the backend was still there
+  after the whole namespace was deleted and recreated, and the cluster re-formed on the same data.
+
+#### How `pipa-local` maps to the working directory
+
+A Kubernetes volume ends up in your project directory through a chain of four links:
+
+```
+your project:  <repo>/gitops-data/rustfs-0          (created by `just gitops::up`)
+      │  the cluster's VM shares your home directory at the same path
+      ▼
+PersistentVolume pipa-rustfs-0   hostPath: <repo>/gitops-data/rustfs-0     (created by `up`)
+      │  reserved for the claim data-rustfs-0 (claimRef), class pipa-local
+      ▼
+PersistentVolumeClaim data-rustfs-0                (made by the StatefulSet's volumeClaimTemplates)
+      │  mounted into the pod
+      ▼
+pod rustfs-0:  /data
+```
+
+Three objects make it up, and only the first two are in git:
+
+1. **The StorageClass** (`gitops/apps/pipa/storageclass.yaml`, applied by Flux). It has
+   `provisioner: kubernetes.io/no-provisioner`, so Kubernetes creates no volume for a claim of this class:
+   the claim waits for a PersistentVolume that already exists (`volumeBindingMode: WaitForFirstConsumer`
+   delays binding until the pod is scheduled).
+2. **The claim**, in `gitops/apps/pipa/rustfs.yaml`: the StatefulSet's `volumeClaimTemplates` asks for
+   5Gi of `storageClassName: pipa-local`, which creates `data-rustfs-0` … `-3` (one per pod).
+3. **The PersistentVolumes**, which are what point at your directories, and so are **not in git** (the path
+   is specific to your machine). `just gitops::up` creates them from the private recipe `_storage` in
+   `gitops.just`, one per pod:
+
+   ```yaml
+   apiVersion: v1
+   kind: PersistentVolume
+   metadata:
+     name: pipa-rustfs-0                     # <namespace>-rustfs-<n>
+     labels:
+       app.kubernetes.io/part-of: pipa-gitops
+   spec:
+     capacity: {storage: 5Gi}
+     accessModes: ["ReadWriteOnce"]
+     persistentVolumeReclaimPolicy: Retain   # keep the data when the claim is deleted
+     storageClassName: pipa-local
+     claimRef:                               # only data-rustfs-0 may bind this volume
+       namespace: pipa
+       name: data-rustfs-0
+     hostPath:
+       path: /path/to/pipa/gitops-data/rustfs-0
+       type: DirectoryOrCreate
+   ```
+
+   The `claimRef` is what keeps each pod on its own directory: without it any free volume could bind
+   any claim, and a pod could end up with another pod's data (RustFS keeps per-drive state, so each
+   pod should get its own back). `Retain` is what keeps the files when
+   the claim goes away with the namespace.
+
+What `up` does around that, per directory: `mkdir -p` it, `chmod 777` it (the pod runs as uid 10001,
+the directory belongs to you), apply the PersistentVolume, and, if the volume was left `Released` by a
+deleted claim, clear the stale `claimRef.uid` so the next claim can bind it. The path comes from the
+`gitops_data` variable at the top of `gitops.just` (`<repo>/gitops-data`).
+
+Look at it yourself:
+
+```sh
+kubectl get pv -l app.kubernetes.io/part-of=pipa-gitops    # the 4 volumes, their status and claim
+kubectl -n pipa get pvc                                    # data-rustfs-N -> pipa-rustfs-N, class pipa-local
+ls gitops-data/rustfs-0                                    # RustFS's files: .rustfs.sys/ and pipa/ (the bucket)
+```
+
+The lifecycle: `Available` (created by `up`) → `Bound` (the pods run) → `Released` (namespace deleted by
+`down`; the files stay) → `Available` (the next `up`) → `Bound`. `purge` deletes the volumes and the
+directory.
+
+To keep the volumes elsewhere, change `gitops_data` in `gitops.just` before the first `up`. To move
+existing data, run `just gitops::down`, move `gitops-data/`, change the variable, and run `up`: the
+volumes are re-applied with the new path (a PersistentVolume's `hostPath` can't be edited in place, so
+delete the old four first with `kubectl delete pv -l app.kubernetes.io/part-of=pipa-gitops`).
+
+### RustFS cluster (distributed mode)
+
+The object store is a RustFS **cluster**, not a single server: `gitops/apps/pipa/rustfs.yaml` runs 4 pods
+(`rustfs-0` … `rustfs-3`), each with its own 5 GiB volume (a directory under `gitops-data/`), which RustFS joins into one erasure-coded
+store (4 servers with 1 disk each is the minimum its [multi-node docs](https://docs.rustfs.com/en/installation/linux/multiple-node-multiple-disk)
+describe). Everything else is unchanged: backend, ingestion and the bucket Job still use
+`http://rustfs:9000`, which is a normal Service in front of whichever pods are ready.
+
+- **How the pods find each other:** the headless Service `rustfs-headless` gives each pod a stable DNS
+  name, and `RUSTFS_VOLUMES` in the StatefulSet lists all four. The pods start together
+  (`podManagementPolicy: Parallel`) and form the cluster once they can all reach each other, so they
+  stay "not ready" for a short while after a first start. `RUSTFS_RPC_SECRET` (`rpc-secret` in
+  `pipa-secrets`, created by `up`) is the key the pods authenticate to each other with.
+- **Losing a pod:** checked on a local cluster with one pod deleted: reads and writes through the
+  backend kept working while it was down, and everything written before and during was there after
+  it came back. Don't count on more than one pod down at a time.
+- **Size is fixed up front.** The `{0...3}` in `RUSTFS_VOLUMES` and `replicas: 4` go together, and
+  editing those two numbers on a running cluster does not grow it. Growing means a further RustFS
+  server pool (supported by RustFS, not set up here) or a bigger new cluster with the data copied
+  across. pipa uses one object store, so this is how you get "another RustFS", not a second instance
+  next to it.
+- **No spreading over nodes.** The pods have no anti-affinity, so on a one-node cluster they share the
+  node and its disk: this protects against a pod failing, not against the machine failing.
+- **Storage:** 4 × 5 GiB, a directory per pod (see Persistent data). The size is only a label on a
+  directory (nothing enforces it): change it in `volumeClaimTemplates` and in `_storage` together before the first start; Kubernetes
+  does not allow it on an existing StatefulSet.
+
+#### Switch RustFS to distributed mode (a cluster that already runs the single server)
+
+This is a one-time migration, and **it starts the object store empty**: a single-server data
+directory cannot join a cluster, and everything pipa keeps in RustFS goes with it (users and the first
+admin, projects, saved queries, registered data sources and every captured table). Copy out what you
+need first (for example with `rc mirror`), and expect to drop the leftover `pipa_cdc_*` replication
+slots on your source databases. Not run against a live Flux deployment yet, only the manifests in a
+scratch namespace.
+
+```sh
+just gitops::up                      # adds rpc-secret and creates the volumes in gitops-data/; Flux still follows main
+kubectl -n flux-system patch kustomization flux-system --type merge -p '{"spec":{"suspend":true}}'
+kubectl -n pipa delete statefulset rustfs
+kubectl -n pipa delete pvc data-rustfs-0     # the old single server's volume (cluster storage, not gitops-data/)
+kubectl -n pipa delete job create-bucket
+# merge/push the change to the branch Flux follows, then:
+kubectl -n flux-system patch kustomization flux-system --type merge -p '{"spec":{"suspend":false}}'
+kubectl -n pipa rollout status statefulset/rustfs
+kubectl -n pipa rollout restart deployment/backend statefulset/ingestion   # re-enable S3 Tables on the new store
+```
+
+The Job is recreated by Flux and ensures the `pipa` bucket again. The backend recreates the first
+admin from the secret's `admin-password`. A fresh `down` and `up` also works, and is simpler if the
+data doesn't matter.
+
 ### Scale ingestion
 
 Ingestion is a StatefulSet; `INGESTION_INSTANCE_ID` is the pod name (`ingestion-0`, `ingestion-1`, …),
@@ -309,13 +464,18 @@ kubectl -n pipa rollout restart deployment/backend statefulset/ingestion
 
 ### Secrets
 
-`pipa-secrets` holds `jwt-secret`, `admin-password`, `rustfs-access-key` and `rustfs-secret-key`.
-It is **not in git**: `up` creates it once with random values and never overwrites it, so tokens and
-the admin login survive re-runs. Everything in `gitops/` is public to anyone who can read the repo,
+`pipa-secrets` holds `jwt-secret`, `admin-password`, `rustfs-access-key`, `rustfs-secret-key` and
+`rpc-secret` (the key the RustFS pods authenticate to each other with).
+It is **not in git**: `up` generates the values once and keeps them in `gitops-data/pipa-secrets.env`
+(mode 600, gitignored), then applies them to the cluster. Because the data on the volumes outlives
+the cluster, so do the secrets: after `down` and `up`, or on a new cluster, the same values are applied,
+so the admin login and tokens stay valid. A first `up` on a cluster that already has the Secret adopts
+its values into that file; a Secret missing `rpc-secret` gets one. Everything in `gitops/` is public to anyone who can read the repo,
 so never commit a plain Secret.
 
-- **Rotate a value:** delete the Secret and re-run `up` (this also resets the admin login and
-  invalidates tokens), or patch one key with `kubectl -n pipa create secret generic pipa-secrets
+- **Rotate a value:** edit it in `gitops-data/pipa-secrets.env` and re-run `up` (rotating the
+  admin password does not change an admin that already exists in the data; rotating the RustFS keys
+  on existing data needs the data reset), or patch one key with `kubectl -n pipa create secret generic pipa-secrets
   --dry-run=client -o yaml --from-literal=… | kubectl apply -f -`, then
   `kubectl -n pipa rollout restart deployment/backend statefulset/ingestion statefulset/rustfs`.
   Changing the RustFS keys on an existing volume needs the RustFS data to be reset too.
@@ -355,11 +515,21 @@ On resume Flux restores whatever differs from git.
 ### Stop and remove
 
 ```sh
-just gitops::down       # deletes the FluxInstance, the pipa namespace (its data too), the operator
+just gitops::down       # deletes the FluxInstance and the pipa namespace; the Flux Operator and gitops-data/ stay
+just gitops::purge      # deletes everything: the stack, its volumes and gitops-data/ (asks first)
 # then stop your local cluster the way you started it
 ```
 
-`down` deletes the `pipa` namespace, so the RustFS volume — every captured table — goes with it.
+`down` deletes the `pipa` namespace, but the data lives in `gitops-data/` and stays: the next `up`
+brings the stack back with its users, projects, sources and captured tables. `purge` is the way to
+start from nothing: after a confirmation it runs `down`, deletes the volumes and removes `gitops-data/`
+(including the generated secrets).
+It leaves the Flux Operator (and its CRDs and web UI, `just gitops::ui`) installed and running, so the
+next `up` only has to create the `FluxInstance` and the secrets. `up` installs the operator chart
+without a pinned version, so every `up` — the first or a re-run — also upgrades the operator to the
+newest release, and Flux with it (the `FluxInstance` follows `2.x`). To remove the operator too:
+`helm uninstall flux-operator -n flux-system`, then delete the `flux-system` namespace and the
+`*.fluxcd.controlplane.io` CRDs.
 Stopping the cluster alone keeps everything, and it resumes when the cluster is started again.
 
 ### Troubleshooting
@@ -371,6 +541,8 @@ Stopping the cluster alone keeps everything, and it resumes when the cluster is 
 | `Kustomization` not Ready: path or `kustomization.yaml` not found | The branch Flux follows doesn't have `gitops/` yet. Push it, or re-run `up` with `GITOPS_BRANCH`. |
 | `Kustomization` stuck on a build error | Run `just gitops::validate` and fix the manifest; `kubectl -n flux-system describe kustomization flux-system` shows Flux's message. |
 | backend / ingestion pods restarting at first | Waiting for RustFS and the `pipa` bucket; check `kubectl -n pipa logs job/create-bucket`. Settles on its own. |
+| `data-rustfs-N` claims stay `Pending` | The volumes are created by `just gitops::up`, not by Flux: run it (again), and check `kubectl get pv`. |
+| `rustfs-*` pods not Ready, or `CreateContainerConfigError` | The cluster forms once all 4 pods run (it takes a minute). A missing `rpc-secret` key means `pipa-secrets` predates the cluster: re-run `just gitops::up`. A pod crash-looping on an old volume: see "Switch RustFS to distributed mode". |
 | `ImagePullBackOff` | The tag in `kustomization.yaml` doesn't exist, or the package is private (see Private images). |
 | Dashboard loads but can't log in / network errors | Only `ui` is forwarded: run `just gitops::app` (it forwards the backend on 8080 too). |
 | `create-bucket` Job unchanged after editing it | Jobs are immutable; Flux recreates it (the `force` annotation in `create-bucket.yaml`). Reconcile and check the Kustomization's events. |
@@ -387,7 +559,8 @@ Useful commands: `kubectl -n pipa get pods`, `kubectl -n pipa logs deploy/backen
 | `just gitops::ui` | Port-forward the Flux web UI to `localhost:9080`. |
 | `just gitops::app` | Port-forward the dashboard (`3000`) and the API (`8080`). |
 | `just gitops::validate` | Render `apps/pipa` and `clusters/local` offline; schema-check with `kubeconform` if installed. |
-| `just gitops::down` | Remove the `FluxInstance`, the `pipa` namespace (data included) and the operator. |
+| `just gitops::down` | Remove the `FluxInstance` (Flux itself) and the `pipa` namespace. The data in `gitops-data/`, the Flux Operator, its CRDs and the web UI stay. |
+| `just gitops::purge` | `down`, then delete the volumes and `gitops-data/` (data and secrets). Asks first. |
 
 Environment: `GITOPS_BRANCH` (branch Flux follows, default `main`), `GITHUB_TOKEN` (Git read
 access, default `gh auth token`) and `GITOPS_KUBE_CONTEXT` (allow a non-local cluster). All can be set in `.env`. See also `gitops/README.md`.
