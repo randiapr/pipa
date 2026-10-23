@@ -107,9 +107,9 @@ projects it may access. Roles:
 - **user**: view-only. It can browse the Iceberg tables of its projects (paged, no SQL) but cannot run
   queries or see data sources.
 
-Alternatively, containerized: RustFS, Redis, `pipa-backend`, two `pipa-ingestion`
-instances, the dashboard, and an example Postgres source (`localhost:5432`, user/password `pipa`,
-database `testdb`, `wal_level=logical`) to register as a data source:
+Alternatively, containerized: RustFS, Redis, `pipa-backend`, two `pipa-ingestion` instances and the
+dashboard. There is no example source database in it: register your own (a Postgres on the host is
+`host.docker.internal` to `pipa-backend`, with `wal_level=logical`; `just run-pg-native` starts one):
 
 ```sh
 just docker-up   # first run creates .env with a random JWT secret and admin password
@@ -414,11 +414,12 @@ just clippy       # lint native crates
 just fmt          # format all crates
 just clean        # remove build artifacts (target/, crates/ui/dist/)
 
-just rustfs       # run local RustFS alone (S3 API :9000, console :9001)
-just rustfs-init  # one-time: configure `rc` and ensure the "pipa" bucket exists
-just backend      # run pipa-backend alone (0.0.0.0:8080)
-just ingestion    # run pipa-ingestion alone
-just ui           # run the dashboard dev server (trunk serve, :3000)
+just run-rustfs    # run local RustFS alone (S3 API :9000, console :9001)
+just rustfs-init   # one-time: configure `rc` and ensure the "pipa" bucket exists
+just run-pg-native # run the example Postgres source alone (brew's postgresql@18, :5432, wal_level=logical)
+just run-backend   # run pipa-backend alone (0.0.0.0:8080)
+just run-ingestion # run pipa-ingestion alone
+just run-ui        # run the dashboard dev server (trunk serve, :3000)
 just build-ui     # production build of the dashboard
 ```
 

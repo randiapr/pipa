@@ -17,6 +17,9 @@ target_limit_gb := "10"
 # local RustFS storage volume, rooted in the project so it's easy to find/wipe (gitignored)
 rustfs_data := "rustfs-data"
 
+# local example Postgres cluster (brew's postgresql@18), rooted in the project like RustFS's volume (gitignored)
+postgres_data := "postgres-data"
+
 # some machines only have the standalone `docker-compose` binary, not the `docker compose`
 # CLI plugin (e.g. no ~/.docker/cli-plugins/docker-compose) — detect which works, once
 compose := `docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose"`
@@ -65,14 +68,42 @@ build: _target-guard
     cargo build {{ native }}
 
 # run a local RustFS server (S3 API on :9000, console on :9001, data under ./rustfs-data)
-rustfs:
+run-rustfs:
     # Credentials match the RUSTFS_ACCESS_KEY_ID/RUSTFS_SECRET_ACCESS_KEY defaults
     # `pipa-backend`'s `ObjectStoreConfig::from_env()` (and `pipa-ingestion`'s own duplicate of it)
-    # use, so `just ingestion`/`just backend` connect with no extra setup. Still need the "pipa"
+    # use, so `just run-ingestion`/`just run-backend` connect with no extra setup. Still need the "pipa"
     # bucket created once — see `rustfs-init`, or just use `just local::up`, which does both
     # automatically.
     mkdir -p {{ rustfs_data }}
     rustfs server --console-enable --access-key rustfsadmin --secret-key rustfsadmin {{ rustfs_data }}
+
+# Same cluster as `just local::up` (./postgres-data; 127.0.0.1:5432, pipa/pipa, db testdb). wal_level=logical is what pipa-ingestion's replication slot needs.
+
+# run an example Postgres source in the foreground, from brew's postgresql@18; Ctrl+C stops it
+run-pg-native:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pg_bin="$(brew --prefix postgresql@18)/bin"
+    if "$pg_bin/pg_isready" -q -h 127.0.0.1 -p 5432; then
+        echo "postgres is already listening on :5432 (is \`just local::up\` running?)" >&2
+        exit 1
+    fi
+    pg_opts="-c wal_level=logical -c listen_addresses=127.0.0.1 -p 5432"
+    if [ ! -f {{ postgres_data }}/PG_VERSION ]; then
+        pwfile="$(mktemp)"; echo pipa > "$pwfile"
+        "$pg_bin/initdb" -D {{ postgres_data }} -U pipa --pwfile="$pwfile" --auth=scram-sha-256 >/dev/null
+        rm -f "$pwfile"
+    fi
+    # the server only runs in the foreground below, so testdb is created through a short-lived instance
+    if [ ! -f {{ postgres_data }}/.testdb-created ]; then
+        "$pg_bin/pg_ctl" -D {{ postgres_data }} -o "$pg_opts" -w -s start
+        PGPASSWORD=pipa "$pg_bin/psql" -h 127.0.0.1 -U pipa -d postgres -tAc \
+            "SELECT 1 FROM pg_database WHERE datname = 'testdb'" | grep -q 1 \
+            || PGPASSWORD=pipa "$pg_bin/createdb" -h 127.0.0.1 -U pipa testdb
+        "$pg_bin/pg_ctl" -D {{ postgres_data }} -m fast -w -s stop
+        touch {{ postgres_data }}/.testdb-created
+    fi
+    exec "$pg_bin/postgres" -D {{ postgres_data }} $pg_opts
 
 # one-time (idempotent) setup: point `rc` at the local RustFS and ensure the "pipa" bucket exists
 rustfs-init:
@@ -80,12 +111,12 @@ rustfs-init:
     rc bucket create pipa-local/pipa --ignore-existing
 
 # run the CDC engine
-ingestion: _target-guard
+run-ingestion: _target-guard
     cargo run -p pipa-ingestion
 
 # run the backend API (serves on 0.0.0.0:8080, GET /healthz). Login needs a JWT secret and a
 # first admin; these local-only defaults apply unless already set in the environment.
-backend: _target-guard
+run-backend: _target-guard
     JWT_SECRET="${JWT_SECRET:-pipa-local-dev-secret-do-not-use-in-production}" \
     PIPA_ADMIN_USERNAME="${PIPA_ADMIN_USERNAME:-admin}" \
     PIPA_ADMIN_PASSWORD="${PIPA_ADMIN_PASSWORD:-admin-password}" \
@@ -97,7 +128,7 @@ ui-deps:
     cd crates/ui && [ -d node_modules ] || npm install
 
 # run the dashboard dev server
-ui: _target-guard ui-deps
+run-ui: _target-guard ui-deps
     cd crates/ui && trunk serve
 
 # production build of the dashboard
@@ -172,10 +203,9 @@ mutants *args: _target-guard
 machete *args:
     cargo machete {{ args }}
 
-# check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
-outdated:
-    @DEPS=$(awk '/^\[/{s=$0} s~/\[workspace\.dependencies\]/ && /^[a-zA-Z]/{sub(/[[:space:]=].*/,""); print}' Cargo.toml | tr '\n' '|' | sed 's/|$//'); \
-      cargo update --dry-run 2>&1 | grep -E " ($DEPS) " || echo "All direct dependencies are up to date"
+# check every workspace crate's direct dependencies for newer versions: `Compat` is the newest one the Cargo.toml requirement allows (minor/patch, what `cargo update` takes), `Latest` the newest published (including major bumps). Extra args go to cargo-outdated, e.g. `just outdated --exit-code 1` to fail when anything is outdated (requires cargo-outdated: cargo install cargo-outdated --locked; add --features vendored-openssl if OpenSSL isn't installed)
+outdated *args:
+    cargo outdated --workspace --root-deps-only {{ args }}
 
 # audit Cargo.lock for known security advisories and upgrade the vulnerable dependencies it can (requires cargo-audit
 # with the fix feature: cargo install cargo-audit --locked --features fix). Edits Cargo.toml for direct dependencies
@@ -236,6 +266,22 @@ clean:
     else
         rm -rf logs
     fi
+
+# resources for the Colima VM; match the existing `default` profile (Colima's own 2 CPU / 2 GiB is too small for this stack)
+colima_cpus := "6"
+colima_memory := "8"
+
+# start Colima without Kubernetes for the containerized stack; runtime is docker (default) or containerd (no Docker socket, so docker-up and test-integration won't work), e.g. `just run-colima containerd`; extra args go to `colima start`. On a VM that is already running this does nothing: `just stop-colima` first to switch modes
+run-colima runtime="docker" *args:
+    colima start --runtime {{ runtime }} --cpu {{ colima_cpus }} --memory {{ colima_memory }} {{ args }}
+
+# start Colima with its built-in k3s Kubernetes cluster; runtime is docker (default) or containerd, e.g. `just run-colima-k8s containerd`; extra args go to `colima start`, e.g. `--kubernetes-version v1.35.0+k3s1`. On a VM that is already running this does nothing: `just stop-colima` first to switch modes
+run-colima-k8s runtime="docker" *args:
+    colima start --kubernetes --runtime {{ runtime }} --cpu {{ colima_cpus }} --memory {{ colima_memory }} {{ args }}
+
+# stop Colima (and Kubernetes, if it was started with it); the VM and its images are kept
+stop-colima:
+    colima stop
 
 # make sure the mandatory compose secrets exist (PIPA_JWT_SECRET, PIPA_ADMIN_PASSWORD; see
 # docker-compose.yml): creates `.env` from `.env.example` if missing, then fills any of them that is
@@ -312,10 +358,10 @@ docker-logs *services:
 # `down` still interpolates docker-compose.yml, so the two required secrets get throwaway values
 # in the recipes below (they never reach a running container) instead of demanding a real `.env`.
 
-# tear down the containerized stack, leaving its volumes (rustfs-data, postgres-data) intact
+# tear down the containerized stack, leaving its volumes (rustfs-data) intact
 docker-down:
     {{ compose }} down
 
-# tear down the containerized stack AND delete its volumes — irreversible, wipes rustfs-data/postgres-data
+# tear down the containerized stack AND delete its volumes — irreversible, wipes rustfs-data
 docker-down-clean:
     {{ compose }} down --volumes

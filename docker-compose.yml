@@ -76,36 +76,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Example OLTP source for local CDC testing: register it as a data source via pipa-backend's
-  # /datasources API (or pipa-ui) pointing at example-source:5432 — pipa-backend connects to it
-  # from inside the compose network to test it and list its tables — then choose the tables to
-  # capture in the dashboard's data source explorer; a new source captures none. pipa-ingestion
-  # picks it up on its next read of the shared object store (see
-  # crates/ingestion/src/datasource.rs). wal_level
-  # must be logical for PostgresWalSource's replication slot (crates/ingestion/src/capture/
-  # infrastructure/postgres) — the default "replica" won't support logical decoding.
-  example-source:
-    image: postgres:18.6-alpine
-    command: ["postgres", "-c", "wal_level=logical"]
-    environment:
-      POSTGRES_USER: pipa
-      POSTGRES_PASSWORD: pipa
-      POSTGRES_DB: testdb
-      # The 18+ images default to /var/lib/postgresql/18/docker and refuse to start on data
-      # mounted at the pre-18 path; pin PGDATA to it so the existing postgres-data volume is used
-      # as-is. Dropping this means mounting the volume at /var/lib/postgresql instead, on a fresh
-      # volume.
-      PGDATA: /var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pipa -d testdb"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # One-shot: ensures the "pipa" bucket exists before anything tries to read/write it.
   # rustfs/rc ships the `rc` CLI (RustFS's mc-equivalent, also used by `just rustfs-init`) —
   # not curl — so this ensures the bucket the same way, rather than hand-rolling sigv4 requests.
@@ -204,4 +174,3 @@ services:
 
 volumes:
   rustfs-data:
-  postgres-data:

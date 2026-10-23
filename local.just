@@ -42,8 +42,7 @@ up:
 
     mkdir -p {{rustfs_data}} {{logs_dir}}
 
-    # Example OLTP source for local CDC testing, from brew's postgresql@18 (same user/password/db
-    # as docker-compose's example-source). Its cluster lives in {{postgres_data}}/, initialised on
+    # Example OLTP source for local CDC testing, from brew's postgresql@18. Its cluster lives in {{postgres_data}}/, initialised on
     # first run; wal_level=logical is what PostgresWalSource's replication slot needs.
     pg_bin="$(brew --prefix postgresql@18)/bin"
     if [ ! -f {{postgres_data}}/PG_VERSION ]; then

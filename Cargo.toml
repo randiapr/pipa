@@ -66,7 +66,7 @@ sha2 = "0.11.1"
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "postgres", "mysql"] }
 testcontainers = "0.28.0"
 thiserror = "2.0.21"
-tokio = { version = "1.54.0", features = ["full"] }
+tokio = { version = "1.54.1", features = ["full"] }
 tower = "0.5.3"
 tower-http = { version = "0.7.1", features = ["cors", "trace"] }
 tracing = "0.1.44"
