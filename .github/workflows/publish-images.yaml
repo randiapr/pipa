@@ -1,34 +1,89 @@
 name: Publish images
 
-# Runs when a release is published (the draft that draft-release.yaml maintains), not on merges:
-# the images get the semver tags of its vX.Y.Z tag, i.e. `X.Y.Z`, `X.Y` and, from 1.0 on, `X`,
-# plus `sha-<short>` and `latest` (metadata-action adds `latest` itself for a non-prerelease).
+# Runs on every push to main. Each image is versioned by its own crate, exactly like the crate:
+# `pipa-backend` by crates/backend, `pipa-ingestion` by crates/ingestion, `pipa-ui` by crates/ui.
+# The `plan` job reads each crate's `version` from its Cargo.toml and publishes the image only
+# when no `pipa-<image>-vX.Y.Z` git tag exists for it yet, so a merge that doesn't bump a crate
+# publishes nothing for it (the Changelog check requires the bump, with a matching
+# `## [X.Y.Z]` heading in the crate's CHANGELOG.md, for any change to the crate).
+#
+# A published image gets the tags `X.Y.Z`, `X.Y` and, from 1.0 on, `X`, plus `sha-<short>` and
+# `latest` (not for a pre-release version), and a GitHub release `pipa-<image>-vX.Y.Z` whose notes
+# are that crate's CHANGELOG.md section. The repo-wide `vX.Y.Z` releases of draft-release.yaml are
+# separate and no longer publish anything.
+#
 # Every image is multi-arch (linux/amd64 + linux/arm64): each architecture is built natively on its
 # own runner (Rust under QEMU would take hours) and pushed by digest, then the `merge` job
 # stitches the per-arch images into one tagged manifest list.
+#
+# Run it by hand (workflow_dispatch) to publish a version whose run failed: the git tag is created
+# last, so an image that wasn't fully published is picked up again.
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
-# Queue rather than cancel: if two releases are published close together, `latest` must end up
-# on the newer one, which a cancelled-then-skipped run could leave behind.
+# Queue rather than cancel: `latest` must end up on the newest version. GitHub keeps only the
+# newest queued run, which is fine: every run publishes all versions that are still unpublished at
+# its own commit, so a skipped run's versions are published by the next one.
 concurrency:
   group: publish-images
   cancel-in-progress: false
 
 jobs:
+  # Which images have a new version to publish. `matrix` is a JSON list of {image, version} for the
+  # `merge` job; `backend`, `ingestion` and `ui` hold the version to publish, or are empty.
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      backend: ${{ steps.plan.outputs.backend }}
+      ingestion: ${{ steps.plan.outputs.ingestion }}
+      ui: ${{ steps.plan.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: plan
+        run: |
+          matrix='[]'
+          for image in backend ingestion ui; do
+            version="$(grep -m1 '^version' "crates/$image/Cargo.toml" | sed -E 's/^version *= *"([^"]+)".*/\1/')"
+            if ! grep -qE "^## \[$version\]" "crates/$image/CHANGELOG.md"; then
+              echo "::error file=crates/$image/CHANGELOG.md::no '## [$version]' heading for the version in crates/$image/Cargo.toml"
+              exit 1
+            fi
+
+            tag="pipa-$image-v$version"
+            rc=0
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 || rc=$?
+            case "$rc" in
+              0) echo "$tag is already published"; version="" ;;
+              2) echo "$tag is new" ;;
+              *) echo "::error::could not look up tag $tag (git ls-remote exited $rc)"; exit 1 ;;
+            esac
+
+            echo "$image=$version" >> "$GITHUB_OUTPUT"
+            if [ -n "$version" ]; then
+              matrix="$(jq -c --arg image "$image" --arg version "$version" '. + [{image: $image, version: $version}]' <<<"$matrix")"
+            fi
+          done
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   # The `ui` image only packages crates/ui/dist/ (see the Dockerfile), and a wasm32 build is the same
   # for every architecture, so the dashboard is built once here with Trunk, exactly as
   # `just build-ui-release` does locally, and handed to the per-arch builds as an artifact.
   dist:
     name: Build dashboard (Trunk)
+    needs: plan
+    if: ${{ needs.plan.outputs.ui != '' }}
     runs-on: ubuntu-latest
     steps:
-      # Checks out the release's tag, so the images are built from the exact commit released.
       - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
@@ -56,8 +111,10 @@ jobs:
           retention-days: 1
 
   build:
-    name: Build ${{ matrix.platform }} (backend, ingestion, ui)
-    needs: dist
+    name: Build ${{ matrix.platform }}
+    needs: [plan, dist]
+    # `dist` is skipped when the dashboard has no new version, which must not skip this job.
+    if: ${{ !cancelled() && needs.plan.outputs.matrix != '[]' && (needs.dist.result == 'success' || needs.dist.result == 'skipped') }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
@@ -73,6 +130,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v8
+        if: ${{ needs.plan.outputs.ui != '' }}
         with:
           name: ui-dist
           path: crates/ui/dist
@@ -89,17 +147,21 @@ jobs:
       - name: Image names
         run: echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pipa-" >> "$GITHUB_ENV"
 
-      # The three builds share one buildx builder, so the Dockerfile's `builder` stage (the
-      # whole `cargo build --release`) is compiled by the first and reused by the next two.
-      # Each image is pushed by digest only, without a tag: the `merge` job tags the manifest list.
+      # The builds share one buildx builder, so the Dockerfile's `builder` stage (the whole
+      # `cargo build --release`) is compiled by the first and reused by the others. Each image is
+      # pushed by digest only, without a tag: the `merge` job tags the manifest list. The tag rule
+      # here only gives the image its `org.opencontainers.image.version` label.
       - name: Labels for pipa-backend
         id: meta-backend
+        if: ${{ needs.plan.outputs.backend != '' }}
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_PREFIX }}backend
+          tags: type=semver,pattern={{version}},value=v${{ needs.plan.outputs.backend }}
 
       - name: Push pipa-backend
         id: push-backend
+        if: ${{ needs.plan.outputs.backend != '' }}
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -112,12 +174,15 @@ jobs:
 
       - name: Labels for pipa-ingestion
         id: meta-ingestion
+        if: ${{ needs.plan.outputs.ingestion != '' }}
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_PREFIX }}ingestion
+          tags: type=semver,pattern={{version}},value=v${{ needs.plan.outputs.ingestion }}
 
       - name: Push pipa-ingestion
         id: push-ingestion
+        if: ${{ needs.plan.outputs.ingestion != '' }}
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -130,12 +195,15 @@ jobs:
 
       - name: Labels for pipa-ui
         id: meta-ui
+        if: ${{ needs.plan.outputs.ui != '' }}
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_PREFIX }}ui
+          tags: type=semver,pattern={{version}},value=v${{ needs.plan.outputs.ui }}
 
       - name: Push pipa-ui
         id: push-ui
+        if: ${{ needs.plan.outputs.ui != '' }}
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -146,14 +214,15 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.arch }},mode=max
 
-      # One empty file per image, named after its digest, for the `merge` job to collect.
+      # One empty file per planned image, named after its digest, for the `merge` job to collect.
       - name: Export digests
         env:
+          MATRIX: ${{ needs.plan.outputs.matrix }}
           BACKEND: ${{ steps.push-backend.outputs.digest }}
           INGESTION: ${{ steps.push-ingestion.outputs.digest }}
           UI: ${{ steps.push-ui.outputs.digest }}
         run: |
-          for image in backend ingestion ui; do
+          for image in $(jq -r '.[].image' <<<"$MATRIX"); do
             var=${image^^}
             digest=${!var}
             mkdir -p "/tmp/digests/$image"
@@ -168,13 +237,21 @@ jobs:
           retention-days: 1
 
   merge:
-    name: Publish ${{ matrix.image }}
-    needs: build
+    name: Publish pipa-${{ matrix.image }} ${{ matrix.version }}
+    needs: [plan, build]
+    # An empty matrix is an error, and `build` is skipped too when nothing is new.
+    if: ${{ needs.plan.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
+    # The release (and its git tag) is created here, after the images are pushed.
+    permissions:
+      contents: write
+      packages: write
     strategy:
       matrix:
-        image: [backend, ingestion, ui]
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
     steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/download-artifact@v8
         with:
           pattern: digests-*
@@ -192,16 +269,18 @@ jobs:
       - name: Image name
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pipa-${{ matrix.image }}" >> "$GITHUB_ENV"
 
-      # metadata-action lowercases the image names too. The semver rules skip `X` while the major is 0.
+      # metadata-action lowercases the image names too. The semver rules skip `X` while the major
+      # is 0, and a pre-release version (X.Y.Z-rc.1) doesn't take `latest`.
       - name: Tags for pipa-${{ matrix.image }}
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
+          flavor: latest=${{ !contains(matrix.version, '-') }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=semver,pattern={{version}},value=v${{ matrix.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ matrix.version }}
+            type=semver,pattern={{major}},value=v${{ matrix.version }}
             type=sha,prefix=sha-
 
       - name: Create manifest list and push
@@ -212,4 +291,27 @@ jobs:
             $(printf "$IMAGE@sha256:%s " *)
 
       - name: Inspect
-        run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
+        run: docker buildx imagetools inspect "$IMAGE:${{ matrix.version }}"
+
+      # Last, so the tag only exists once the image is fully published (plan skips an image whose
+      # tag exists). The notes are this version's section of the crate's own CHANGELOG.md.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_NAME: ${{ matrix.image }}
+          VERSION: ${{ matrix.version }}
+        run: |
+          tag="pipa-$IMAGE_NAME-v$VERSION"
+          {
+            echo "Image: \`$IMAGE:$VERSION\`"
+            echo
+            awk -v heading="## [$VERSION]" '
+              index($0, heading) == 1 { found = 1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' "crates/$IMAGE_NAME/CHANGELOG.md"
+          } > notes.md
+          flags=(--latest=false)
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$tag" --target "$GITHUB_SHA" --title "pipa-$IMAGE_NAME $VERSION" \
+            --notes-file notes.md "${flags[@]}"

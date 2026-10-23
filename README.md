@@ -133,10 +133,17 @@ replication slot position, so a handoff loses and duplicates nothing.
 
 ### Published images
 
-When a release is published on GitHub, `.github/workflows/publish-images.yaml` pushes
-`ghcr.io/<owner>/pipa-backend`, `pipa-ingestion` and `pipa-ui` (linux/amd64), each tagged with the
-release's semver (`X.Y.Z`, `X.Y`, and `X` from 1.0 on), `sha-<short>` and `latest`. Merges to `main`
-don't publish. The `pipa-ui` image has the API address `http://localhost:8080` compiled in (like the
+Each image is versioned by its own crate, like the crate itself: `ghcr.io/<owner>/pipa-backend` by
+`crates/backend`, `pipa-ingestion` by `crates/ingestion` and `pipa-ui` by `crates/ui`, so the image
+tag is that crate's `version` and its notes are that crate's `CHANGELOG.md`. On every merge to
+`main`, `.github/workflows/publish-images.yaml` publishes (linux/amd64 and linux/arm64) each image
+whose crate has a new version, tagged `X.Y.Z`, `X.Y` (and `X` from 1.0 on), `sha-<short>` and
+`latest`, and creates a GitHub release `pipa-<image>-vX.Y.Z` with that changelog section as its
+notes. A merge that doesn't bump a crate publishes nothing for it (the Changelog check requires the
+bump). To stay on a specific version in Compose, set `PIPA_BACKEND_TAG`, `PIPA_INGESTION_TAG` and
+`PIPA_UI_TAG` in `.env` (default `latest`); the three move independently, so check that the versions
+you pin work together. The repo-wide `vX.Y.Z` releases drafted by `draft-release.yaml` no longer
+publish images. The `pipa-ui` image has the API address `http://localhost:8080` compiled in (like the
 local stack), so it only works as shipped next to a backend published on that address.
 
 `POST /query` and `pipa-ingestion` talk to RustFS's own embedded Iceberg REST Catalog ("S3 Tables"
@@ -273,10 +280,13 @@ the next reconcile; to experiment, suspend the sync first (see below).
 ### Roll out a new pipa version
 
 The images are pinned, not `latest`. In `gitops/apps/pipa/kustomization.yaml`, change the `newTag`
-of the three `images:` entries to a release published by `publish-images.yaml` (for example
-`0.17.0`), then push. The pods are replaced by a normal rolling update. To roll back, push the old
-tag. Use the same tag for all three: backend, ingestion and the `pipa-ui` image are released
-together.
+of the `images:` entries to the version you want, then push. The images are versioned by their own
+crates (see [Published images](#published-images)), so the tags differ per image: the current ones
+are the `version` in `crates/backend/Cargo.toml`, `crates/ingestion/Cargo.toml` and
+`crates/ui/Cargo.toml`, and only versions that `publish-images.yaml` has published exist. The pods
+are replaced by a normal rolling update. To roll back, push the old tag. Bump the three together
+only when their changelogs say they must be: the dashboard and the backend share the HTTP contract
+in `pipa-api`.
 
 ### Scale ingestion
 
