@@ -12,15 +12,17 @@
 #   - S3 Tables is opt-in per bucket; each of them turns it on for RUSTFS_BUCKET at startup.
 #
 # The pipa images are the published ones (ghcr.io/randiapr/pipa-*:latest, see
-# .github/workflows/publish-images.yaml), pulled rather than built. `latest` is the newest
-# non-prerelease release; pin PIPA_IMAGE_TAG in `.env` (e.g. 0.5.0) to stay on a specific one.
+# .github/workflows/publish-images.yaml), pulled rather than built. Each image is versioned by its
+# own crate (crates/backend, crates/ingestion, crates/ui; see that crate's CHANGELOG.md), so each
+# has its own tag: `latest` is the newest non-prerelease version of that image; pin
+# PIPA_BACKEND_TAG / PIPA_INGESTION_TAG / PIPA_UI_TAG in `.env` (e.g. 0.13.0) to stay on a specific one.
 # Compose only pulls an image that isn't local yet: run `docker compose pull` to fetch a newer `latest`.
 #
 # The images are multi-arch (linux/amd64 and linux/arm64), so each host pulls its native one.
 #
 # Quickstart: cp .env.example .env (fill in the secrets), then docker compose up
 
-x-pipa-ingestion-image: &pipa-ingestion-image ghcr.io/randiapr/pipa-ingestion:${PIPA_IMAGE_TAG:-latest}
+x-pipa-ingestion-image: &pipa-ingestion-image ghcr.io/randiapr/pipa-ingestion:${PIPA_INGESTION_TAG:-latest}
 
 x-pipa-ingestion-env: &pipa-ingestion-env
   RUSTFS_ENDPOINT: http://rustfs:9000
@@ -120,7 +122,7 @@ services:
         rc bucket create pipa/pipa --ignore-existing
 
   backend:
-    image: ghcr.io/randiapr/pipa-backend:${PIPA_IMAGE_TAG:-latest}
+    image: ghcr.io/randiapr/pipa-backend:${PIPA_BACKEND_TAG:-latest}
     depends_on:
       rustfs:
         condition: service_healthy
@@ -194,7 +196,7 @@ services:
   # from the browser at the compile-time API_BASE (localhost:8080, published above), not container-to-container, so `depends_on`
   # here is just for a sane startup order, not a network dependency.
   ui:
-    image: ghcr.io/randiapr/pipa-ui:${PIPA_IMAGE_TAG:-latest}
+    image: ghcr.io/randiapr/pipa-ui:${PIPA_UI_TAG:-latest}
     depends_on:
       - backend
     ports:

@@ -14,12 +14,13 @@ resources:
   - backend.yaml
   - ingestion.yaml
   - ui.yaml
-# The published images (.github/workflows/publish-images.yaml), pinned to a release instead of
-# `latest` so a push to this repo is the only thing that changes what runs. Bump newTag to roll out.
+# The published images (.github/workflows/publish-images.yaml), pinned instead of `latest` so a push
+# to this repo is the only thing that changes what runs. Each image is versioned by its own crate:
+# set newTag to the `version` in crates/<backend|ingestion|ui>/Cargo.toml (see its CHANGELOG.md).
 images:
   - name: ghcr.io/randiapr/pipa-backend
-    newTag: 0.17.0
+    newTag: 0.13.0
   - name: ghcr.io/randiapr/pipa-ingestion
-    newTag: 0.17.0
+    newTag: 0.9.4
   - name: ghcr.io/randiapr/pipa-ui
-    newTag: 0.17.0
+    newTag: 0.10.0

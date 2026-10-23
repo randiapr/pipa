@@ -24,7 +24,7 @@ cluster, encrypt it with SOPS or sync it from an external store instead.
 
 ## Images
 
-`apps/pipa/kustomization.yaml` pins the published `ghcr.io/randiapr/pipa-*` images to a release.
+`apps/pipa/kustomization.yaml` pins the published `ghcr.io/randiapr/pipa-*` images, each to its own crate's version (the image tags follow `crates/<backend|ingestion|ui>/Cargo.toml`).
 Change `newTag` and push to roll out a new version. If the packages are private, add an
 `imagePullSecret`.
 
