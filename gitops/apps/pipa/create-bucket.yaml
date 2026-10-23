@@ -1,0 +1,28 @@
+# One-shot: ensures the "pipa" bucket exists. Retries until RustFS answers, so no ordering is
+# needed. A Job's spec is immutable, so Flux is told to recreate it when this file changes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-bucket
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: rc
+          image: rustfs/rc:v0.1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              until rc alias set pipa http://rustfs:9000 "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY"
+              && rc bucket create pipa/pipa --ignore-existing; do sleep 2; done
+          env:
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: pipa-secrets, key: rustfs-access-key}
+            - name: RUSTFS_SECRET_KEY
+              valueFrom:
+                secretKeyRef: {name: pipa-secrets, key: rustfs-secret-key}

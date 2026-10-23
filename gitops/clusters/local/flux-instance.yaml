@@ -1,0 +1,25 @@
+# Flux itself, managed by the Flux Operator (installed by `just gitops::up`). The sync block makes
+# it watch this repository; the branch is rewritten by the recipe (`gitops_branch`). The operator
+# also serves the Flux web UI (`just gitops::ui`).
+apiVersion: fluxcd.controlplane.io/v1
+kind: FluxInstance
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  distribution:
+    version: "2.x"
+    registry: ghcr.io/fluxcd
+  components:
+    - source-controller
+    - kustomize-controller
+    - helm-controller
+    - notification-controller
+  cluster:
+    type: kubernetes
+  sync:
+    kind: GitRepository
+    url: https://github.com/randiapr/pipa.git
+    ref: refs/heads/main
+    path: gitops/clusters/local
+    pullSecret: flux-system

@@ -1,0 +1,25 @@
+# The pipa stack, the Kubernetes equivalent of docker-compose.yml at the repo root.
+#
+# Not in git: the Secret `pipa-secrets` (keys jwt-secret, admin-password, rustfs-access-key,
+# rustfs-secret-key). `just gitops::up` creates it in the cluster; see gitops/README.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pipa
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - rustfs.yaml
+  - redis.yaml
+  - create-bucket.yaml
+  - backend.yaml
+  - ingestion.yaml
+  - ui.yaml
+# The published images (.github/workflows/publish-images.yaml), pinned to a release instead of
+# `latest` so a push to this repo is the only thing that changes what runs. Bump newTag to roll out.
+images:
+  - name: ghcr.io/randiapr/pipa-backend
+    newTag: 0.17.0
+  - name: ghcr.io/randiapr/pipa-ingestion
+    newTag: 0.17.0
+  - name: ghcr.io/randiapr/pipa-ui
+    newTag: 0.17.0
