@@ -4,8 +4,9 @@ name: Publish images
 # `pipa-backend` by crates/backend, `pipa-ingestion` by crates/ingestion, `pipa-ui` by crates/ui.
 # The `plan` job reads each crate's `version` from its Cargo.toml and publishes the image only
 # when no `pipa-<image>-vX.Y.Z` git tag exists for it yet, so a merge that doesn't bump a crate
-# publishes nothing for it (the Changelog check requires the bump, with a matching
-# `## [X.Y.Z]` heading in the crate's CHANGELOG.md, for any change to the crate).
+# publishes nothing for it. The Cargo.toml version alone decides: the CHANGELOG.md only supplies
+# the release notes (the Changelog check on pull requests is what requires the bump and a
+# matching `## [X.Y.Z]` heading for any change to a crate).
 #
 # A published image gets the tags `X.Y.Z`, `X.Y` and, from 1.0 on, `X`, plus `sha-<short>` and
 # `latest` (not for a pre-release version), and a GitHub release `pipa-<image>-vX.Y.Z` whose notes
@@ -55,8 +56,7 @@ jobs:
           for image in backend ingestion ui; do
             version="$(grep -m1 '^version' "crates/$image/Cargo.toml" | sed -E 's/^version *= *"([^"]+)".*/\1/')"
             if ! grep -qE "^## \[$version\]" "crates/$image/CHANGELOG.md"; then
-              echo "::error file=crates/$image/CHANGELOG.md::no '## [$version]' heading for the version in crates/$image/Cargo.toml"
-              exit 1
+              echo "::warning file=crates/$image/CHANGELOG.md::no '## [$version]' heading for the version in crates/$image/Cargo.toml; its release will have no notes"
             fi
 
             tag="pipa-$image-v$version"
@@ -294,7 +294,7 @@ jobs:
         run: docker buildx imagetools inspect "$IMAGE:${{ matrix.version }}"
 
       # Last, so the tag only exists once the image is fully published (plan skips an image whose
-      # tag exists). The notes are this version's section of the crate's own CHANGELOG.md.
+      # tag exists). The notes are this version's section of the crate's own CHANGELOG.md, if it has one.
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
