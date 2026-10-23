@@ -267,6 +267,22 @@ clean:
         rm -rf logs
     fi
 
+# resources for the Colima VM; match the existing `default` profile (Colima's own 2 CPU / 2 GiB is too small for this stack)
+colima_cpus := "6"
+colima_memory := "8"
+
+# start Colima without Kubernetes for the containerized stack; runtime is docker (default) or containerd (no Docker socket, so docker-up and test-integration won't work), e.g. `just run-colima containerd`; extra args go to `colima start`. On a VM that is already running this does nothing: `just stop-colima` first to switch modes
+run-colima runtime="docker" *args:
+    colima start --runtime {{ runtime }} --cpu {{ colima_cpus }} --memory {{ colima_memory }} {{ args }}
+
+# start Colima with its built-in k3s Kubernetes cluster; runtime is docker (default) or containerd, e.g. `just run-colima-k8s containerd`; extra args go to `colima start`, e.g. `--kubernetes-version v1.35.0+k3s1`. On a VM that is already running this does nothing: `just stop-colima` first to switch modes
+run-colima-k8s runtime="docker" *args:
+    colima start --kubernetes --runtime {{ runtime }} --cpu {{ colima_cpus }} --memory {{ colima_memory }} {{ args }}
+
+# stop Colima (and Kubernetes, if it was started with it); the VM and its images are kept
+stop-colima:
+    colima stop
+
 # make sure the mandatory compose secrets exist (PIPA_JWT_SECRET, PIPA_ADMIN_PASSWORD; see
 # docker-compose.yml): creates `.env` from `.env.example` if missing, then fills any of them that is
 # neither exported in the shell nor already set in `.env` with a random value. Values you set
