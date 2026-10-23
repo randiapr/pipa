@@ -172,10 +172,9 @@ mutants *args: _target-guard
 machete *args:
     cargo machete {{ args }}
 
-# check for outdated Rust dependencies across the whole workspace (requires cargo-outdated: cargo install cargo-outdated)
-outdated:
-    @DEPS=$(awk '/^\[/{s=$0} s~/\[workspace\.dependencies\]/ && /^[a-zA-Z]/{sub(/[[:space:]=].*/,""); print}' Cargo.toml | tr '\n' '|' | sed 's/|$//'); \
-      cargo update --dry-run 2>&1 | grep -E " ($DEPS) " || echo "All direct dependencies are up to date"
+# check every workspace crate's direct dependencies for newer versions: `Compat` is the newest one the Cargo.toml requirement allows (minor/patch, what `cargo update` takes), `Latest` the newest published (including major bumps). Extra args go to cargo-outdated, e.g. `just outdated --exit-code 1` to fail when anything is outdated (requires cargo-outdated: cargo install cargo-outdated --locked; add --features vendored-openssl if OpenSSL isn't installed)
+outdated *args:
+    cargo outdated --workspace --root-deps-only {{ args }}
 
 # audit Cargo.lock for known security advisories and upgrade the vulnerable dependencies it can (requires cargo-audit
 # with the fix feature: cargo install cargo-audit --locked --features fix). Edits Cargo.toml for direct dependencies
