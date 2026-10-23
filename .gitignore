@@ -39,3 +39,4 @@ node_modules
 #.idea/
 CLAUDE.md
 postgres-data/
+.DS_Store
