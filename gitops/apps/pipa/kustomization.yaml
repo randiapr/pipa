@@ -1,12 +1,13 @@
 # The pipa stack, the Kubernetes equivalent of docker-compose.yml at the repo root.
 #
 # Not in git: the Secret `pipa-secrets` (keys jwt-secret, admin-password, rustfs-access-key,
-# rustfs-secret-key). `just gitops::up` creates it in the cluster; see gitops/README.md.
+# rustfs-secret-key, rpc-secret). `just gitops::up` creates it in the cluster; see gitops/README.md.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: pipa
 resources:
   - namespace.yaml
+  - storageclass.yaml
   - configmap.yaml
   - rustfs.yaml
   - redis.yaml

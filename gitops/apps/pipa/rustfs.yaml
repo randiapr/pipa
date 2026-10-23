@@ -1,4 +1,18 @@
 # S3-compatible object store; also serves the Iceberg REST catalog (S3 Tables).
+#
+# Distributed mode: 4 pods with one drive (volume) each form one erasure-coded cluster, the
+# minimum RustFS documents (4 servers, 1 disk each). Clients keep talking to the `rustfs` Service
+# (http://rustfs:9000), which spreads requests over the ready pods.
+#
+# The pods find each other through the headless Service `rustfs-headless`: RUSTFS_VOLUMES lists
+# every pod by its stable DNS name. It must be identical on all pods, so the pod count in it
+# ({0...3}) and `replicas` below go together.
+#
+# `serviceName` and `podManagementPolicy` cannot be changed on an existing StatefulSet, and a
+# single-node data directory is not a member of a distributed cluster. The `force` annotation lets
+# Flux recreate the StatefulSet for the first; for the second, see "Switch RustFS to distributed
+# mode" in the README. Changing the pod count of a running cluster is not supported by RustFS
+# either: size it up front.
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,13 +26,34 @@ spec:
     - name: console
       port: 9001
 ---
+# Pod DNS only: it publishes pods before they are ready, because the cluster only becomes ready
+# once the pods have found each other.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs-headless
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: rustfs
+  ports:
+    - name: s3
+      port: 9000
+    - name: console
+      port: 9001
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: rustfs
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
-  serviceName: rustfs
-  replicas: 1
+  serviceName: rustfs-headless
+  replicas: 4
+  # The pods wait for each other, so they must start together, not one after another.
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app: rustfs
@@ -27,25 +62,61 @@ spec:
       labels:
         app: rustfs
     spec:
+      # The image runs as uid/gid 10001; fsGroup makes the volumes writable for it.
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
         - name: rustfs
           image: rustfs/rustfs:1.0.3
-          args: ["/data"]
           env:
+            # Order matters: $(VAR) only expands variables defined above it.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef: {fieldPath: metadata.name}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef: {fieldPath: metadata.namespace}
+            - name: RUSTFS_VOLUMES
+              value: http://rustfs-{0...3}.rustfs-headless.$(POD_NAMESPACE).svc.cluster.local:9000/data
+            # Which of the volumes above is this pod's own, without waiting for every peer's DNS.
+            - name: RUSTFS_LOCAL_ENDPOINT_HOST
+              value: $(POD_NAME).rustfs-headless.$(POD_NAMESPACE).svc.cluster.local
+            - name: RUSTFS_ADDRESS
+              value: ":9000"
+            - name: RUSTFS_CONSOLE_ADDRESS
+              value: ":9001"
+            - name: RUSTFS_CONSOLE_ENABLE
+              value: "true"
             - name: RUSTFS_ACCESS_KEY
               valueFrom:
                 secretKeyRef: {name: pipa-secrets, key: rustfs-access-key}
             - name: RUSTFS_SECRET_KEY
               valueFrom:
                 secretKeyRef: {name: pipa-secrets, key: rustfs-secret-key}
+            # The pods authenticate to each other with this (identical on all of them). Without it
+            # RustFS derives one from the credentials above, and refuses to when the access key
+            # is the default `rustfsadmin`.
+            - name: RUSTFS_RPC_SECRET
+              valueFrom:
+                secretKeyRef: {name: pipa-secrets, key: rpc-secret}
           ports:
             - {name: s3, containerPort: 9000}
             - {name: console, containerPort: 9001}
           readinessProbe:
             httpGet: {path: /health/ready, port: s3}
+            initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 5
+          # Not ready is expected while the cluster forms; only restart a pod that is really stuck.
+          livenessProbe:
+            httpGet: {path: /health, port: s3}
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
           volumeMounts:
             - {name: data, mountPath: /data}
   volumeClaimTemplates:
@@ -53,6 +124,8 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        # bound to the pipa-rustfs-N volume in gitops-data/ (storageclass.yaml)
+        storageClassName: pipa-local
         resources:
           requests:
             storage: 5Gi

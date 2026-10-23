@@ -39,4 +39,7 @@ node_modules
 #.idea/
 CLAUDE.md
 postgres-data/
+
+# Persistent volumes of the GitOps cluster, and its generated secrets (`just gitops::up`)
+/gitops-data
 .DS_Store

@@ -1,0 +1,11 @@
+# Volumes that live in the project's gitops-data/ directory (gitignored), so the data survives
+# `just gitops::down`, `up` and recreating the cluster. There is no provisioner: `just gitops::up`
+# creates the PersistentVolumes (one directory each, see `_storage` in gitops.just) and reserves
+# each for its claim, so a pod always gets its own data back. A claim stays Pending until `up` ran.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pipa-local
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
