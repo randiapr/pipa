@@ -103,10 +103,9 @@ up:
     export PIPA_ADMIN_USERNAME="${PIPA_ADMIN_USERNAME:-admin}"
     export PIPA_ADMIN_PASSWORD="${PIPA_ADMIN_PASSWORD:-admin-password}"
 
-    # RustFS's Iceberg REST catalog rejects unsigned requests with 403 and `iceberg-catalog-rest`
-    # can't sign, so the backend and ingestion each embed the pipa-catalog-proxy signer on a
-    # loopback port of their own process (ICEBERG_CATALOG_URI unset selects it), which also
-    # enables S3 Tables on the bucket at startup.
+    # RustFS's Iceberg REST catalog rejects unsigned requests with 403, so the backend and
+    # ingestion each SigV4-sign their catalog requests in-process (pipa-catalog-auth;
+    # ICEBERG_CATALOG_URI unset selects it), and enable S3 Tables on the bucket at startup.
     REDIS_URL="${REDIS_URL:-redis://127.0.0.1:{{redis_port}}}" \
         nohup ./target/debug/pipa-backend > {{logs_dir}}/backend.log 2>&1 &
     disown

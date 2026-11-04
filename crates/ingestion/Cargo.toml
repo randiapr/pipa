@@ -1,6 +1,6 @@
 [package]
 name = "pipa-ingestion"
-version = "0.9.5"
+version = "0.10.0"
 edition.workspace = true
 license.workspace = true
 publish = false
@@ -18,7 +18,7 @@ iceberg-storage-opendal.workspace = true
 object_store.workspace = true
 parquet.workspace = true
 pgwire-replication.workspace = true
-pipa-catalog-proxy.workspace = true
+pipa-catalog-auth.workspace = true
 redis.workspace = true
 reqwest.workspace = true
 serde.workspace = true

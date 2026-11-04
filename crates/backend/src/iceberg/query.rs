@@ -3,7 +3,6 @@
 
 //! Ad-hoc SQL query execution against Iceberg tables, via DataFusion, through the REST catalog.
 
-use std::any::Any;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -18,6 +17,7 @@ use datafusion::functions_window::expr_fn::row_number;
 use datafusion::logical_expr::{Expr, ExprFunctionExt};
 use datafusion::prelude::{SessionContext, ident, lit};
 use datafusion::sql::TableReference;
+use iceberg::inspect::MetadataTableType;
 use iceberg::{Catalog, NamespaceIdent, TableIdent};
 use iceberg_datafusion::IcebergCatalogProvider;
 use thiserror::Error;
@@ -71,10 +71,6 @@ struct ScopedCatalog {
 }
 
 impl CatalogProvider for ScopedCatalog {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn schema_names(&self) -> Vec<String> {
         self.inner
             .schema_names()
@@ -212,16 +208,15 @@ pub const DEFAULT_TABLE_ROWS: usize = 100;
 /// The most rows a single table read may return.
 pub const MAX_TABLE_ROWS: usize = 1000;
 
-/// Suffixes of the metadata tables iceberg-datafusion exposes next to every Iceberg table
-/// (`orders$snapshots`, `orders$manifests`).
-const METADATA_TABLE_SUFFIXES: [&str; 2] = ["$snapshots", "$manifests"];
-
-/// Whether `table` is one of iceberg-datafusion's metadata tables rather than a data table. Only
-/// the exact suffixes count, since `$` is legal in a Postgres table name.
+/// Whether `table` is one of the metadata tables iceberg-datafusion exposes next to every Iceberg
+/// table (`orders$snapshots`, `orders$manifests`, `orders$history`, ...) rather than a data table.
+/// The suffixes come from iceberg's own `MetadataTableType`, so a type a new release adds is
+/// covered without a change here (0.11 added `$history`). Only those exact suffixes count, since
+/// `$` is legal in a Postgres table name.
 pub fn is_metadata_table(table: &str) -> bool {
-    METADATA_TABLE_SUFFIXES
-        .iter()
-        .any(|suffix| table.ends_with(suffix))
+    table
+        .rsplit_once('$')
+        .is_some_and(|(_, suffix)| MetadataTableType::try_from(suffix).is_ok())
 }
 
 /// Table property `pipa-ingestion` records each target table's row key in (its source table's
@@ -488,6 +483,7 @@ mod tests {
     fn recognizes_only_iceberg_metadata_tables() {
         assert!(is_metadata_table("public__orders$snapshots"));
         assert!(is_metadata_table("public__orders$manifests"));
+        assert!(is_metadata_table("public__orders$history"));
         assert!(!is_metadata_table("public__orders"));
         assert!(!is_metadata_table("public__price$list"));
     }

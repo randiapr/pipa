@@ -148,49 +148,92 @@ impl SnapshotSource for PostgresSnapshotSource {
         let mut conn = postgres::connect(source)
             .await
             .map_err(|err| CaptureError::Connect(err.to_string()))?;
-        let Some(key_names) = postgres::key_columns(&mut conn)
-            .await
-            .map_err(snapshot_error)?
-            .remove(&(table.schema.clone(), table.name.clone()))
-        else {
+        let Some(key_names) = row_key(&mut conn, table).await? else {
             return Ok(SnapshotRead::Keyless);
         };
-        let columns = columns(&mut conn, table).await?;
-        let keys = key_names
-            .iter()
-            .map(|name| {
-                columns
-                    .iter()
-                    .find(|column| &column.name == name)
-                    .ok_or_else(|| {
-                        CaptureError::Snapshot(format!(
-                            "key column {name:?} of {}.{} is not a stored column",
-                            table.schema, table.name
-                        ))
-                    })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        if let Some(after) = after
-            && after.len() != keys.len()
-        {
-            return Err(CaptureError::Snapshot(format!(
-                "resume key {after:?} doesn't match the key {key_names:?} of {}.{}",
-                table.schema, table.name
-            )));
-        }
+        read_page(&mut conn, table, &key_names, after, limit).await
+    }
+}
 
-        // Identifiers are quoted by `quote_ident` and types come from the database's own
-        // `format_type`; the only values are bound parameters.
-        let sql = sqlx::AssertSqlSafe(chunk_query(table, &columns, &keys, after.is_some(), limit));
-        let mut query = sqlx::query(sql);
-        for value in after.unwrap_or_default() {
-            query = query.bind(value.as_str());
-        }
-        let fetched = query.fetch_all(&mut conn).await.map_err(snapshot_error)?;
+/// `table`'s row key, `None` when it has none.
+async fn row_key(
+    conn: &mut PgConnection,
+    table: &TableRef,
+) -> Result<Option<Vec<String>>, CaptureError> {
+    Ok(postgres::key_columns(conn)
+        .await
+        .map_err(snapshot_error)?
+        .remove(&(table.schema.clone(), table.name.clone())))
+}
 
-        let mut rows = Vec::with_capacity(fetched.len());
-        for row in &fetched {
-            let values = columns
+/// The page of `table` (keyed by `key_names`) after `after`, at most `limit` rows.
+async fn read_page(
+    conn: &mut PgConnection,
+    table: &TableRef,
+    key_names: &[String],
+    after: Option<&[String]>,
+    limit: usize,
+) -> Result<SnapshotRead, CaptureError> {
+    let columns = columns(conn, table).await?;
+    let keys = page_keys(table, &columns, key_names, after)?;
+    let rows = fetch_rows(conn, table, &columns, &keys, after, limit).await?;
+    let last_key = last_key(&keys, &rows);
+    Ok(SnapshotRead::Chunk { rows, last_key })
+}
+
+/// The key columns among `columns`, checked against the resume key `after`, if any.
+fn page_keys<'a>(
+    table: &TableRef,
+    columns: &'a [Column],
+    key_names: &[String],
+    after: Option<&[String]>,
+) -> Result<Vec<&'a Column>, CaptureError> {
+    let keys = key_names
+        .iter()
+        .map(|name| {
+            columns
+                .iter()
+                .find(|column| &column.name == name)
+                .ok_or_else(|| {
+                    CaptureError::Snapshot(format!(
+                        "key column {name:?} of {}.{} is not a stored column",
+                        table.schema, table.name
+                    ))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if let Some(after) = after
+        && after.len() != keys.len()
+    {
+        return Err(CaptureError::Snapshot(format!(
+            "resume key {after:?} doesn't match the key {key_names:?} of {}.{}",
+            table.schema, table.name
+        )));
+    }
+    Ok(keys)
+}
+
+/// Runs the page query ([`chunk_query`]) and reads every row's columns as text.
+async fn fetch_rows(
+    conn: &mut PgConnection,
+    table: &TableRef,
+    columns: &[Column],
+    keys: &[&Column],
+    after: Option<&[String]>,
+    limit: usize,
+) -> Result<Vec<Vec<ColumnValue>>, CaptureError> {
+    // Identifiers are quoted by `quote_ident` and types come from the database's own
+    // `format_type`; the only values are bound parameters.
+    let sql = sqlx::AssertSqlSafe(chunk_query(table, columns, keys, after.is_some(), limit));
+    let mut query = sqlx::query(sql);
+    for value in after.unwrap_or_default() {
+        query = query.bind(value.as_str());
+    }
+    let fetched = query.fetch_all(conn).await.map_err(snapshot_error)?;
+    fetched
+        .iter()
+        .map(|row| {
+            columns
                 .iter()
                 .enumerate()
                 .map(|(index, column)| {
@@ -201,23 +244,25 @@ impl SnapshotSource for PostgresSnapshotSource {
                             .map_err(snapshot_error)?,
                     })
                 })
-                .collect::<Result<Vec<_>, CaptureError>>()?;
-            rows.push(values);
-        }
-        let last_key = rows.last().map(|values: &Vec<ColumnValue>| {
-            keys.iter()
-                .map(|key| {
-                    values
-                        .iter()
-                        .find(|value| value.name == key.name)
-                        .and_then(|value| value.value.clone())
-                        // A replica identity's columns are NOT NULL.
-                        .unwrap_or_default()
-                })
                 .collect()
-        });
-        Ok(SnapshotRead::Chunk { rows, last_key })
-    }
+        })
+        .collect()
+}
+
+/// The key of the last of `rows`, where the next page starts. `None` when there are no rows.
+fn last_key(keys: &[&Column], rows: &[Vec<ColumnValue>]) -> Option<Vec<String>> {
+    rows.last().map(|values| {
+        keys.iter()
+            .map(|key| {
+                values
+                    .iter()
+                    .find(|value| value.name == key.name)
+                    .and_then(|value| value.value.clone())
+                    // A replica identity's columns are NOT NULL.
+                    .unwrap_or_default()
+            })
+            .collect()
+    })
 }
 
 #[cfg(test)]
@@ -229,6 +274,67 @@ mod tests {
             name: name.to_string(),
             sql_type: sql_type.to_string(),
         }
+    }
+
+    fn orders() -> TableRef {
+        TableRef {
+            schema: "public".to_string(),
+            name: "order_items".to_string(),
+        }
+    }
+
+    #[test]
+    fn the_key_columns_are_found_among_the_stored_ones_in_key_order() {
+        let columns = [
+            column("line", "integer"),
+            column("order_id", "bigint"),
+            column("sku", "text"),
+        ];
+        let names = ["order_id".to_string(), "line".to_string()];
+        let keys = page_keys(&orders(), &columns, &names, None).unwrap();
+        assert_eq!(
+            keys.iter().map(|key| key.name.as_str()).collect::<Vec<_>>(),
+            ["order_id", "line"]
+        );
+        let after = ["7".to_string(), "2".to_string()];
+        assert!(page_keys(&orders(), &columns, &names, Some(&after)).is_ok());
+    }
+
+    #[test]
+    fn a_key_that_is_not_stored_or_a_resume_key_of_another_shape_is_refused() {
+        let columns = [column("id", "integer")];
+        assert!(matches!(
+            page_keys(&orders(), &columns, &["generated".to_string()], None),
+            Err(CaptureError::Snapshot(_))
+        ));
+        let after = ["1".to_string(), "2".to_string()];
+        assert!(matches!(
+            page_keys(&orders(), &columns, &["id".to_string()], Some(&after)),
+            Err(CaptureError::Snapshot(_))
+        ));
+    }
+
+    #[test]
+    fn the_next_page_starts_after_the_last_rows_key() {
+        let columns = [column("order_id", "bigint"), column("line", "integer")];
+        let keys = [&columns[0], &columns[1]];
+        let row = |order_id: &str, line: &str| {
+            vec![
+                ColumnValue {
+                    name: "line".to_string(),
+                    value: Some(line.to_string()),
+                },
+                ColumnValue {
+                    name: "order_id".to_string(),
+                    value: Some(order_id.to_string()),
+                },
+            ]
+        };
+        assert_eq!(last_key(&keys, &[]), None);
+        assert_eq!(
+            last_key(&keys, &[row("1", "1"), row("1", "2"), row("2", "1")]),
+            Some(vec!["2".to_string(), "1".to_string()])
+        );
     }
 
     #[test]

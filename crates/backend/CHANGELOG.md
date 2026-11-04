@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.14.0] - 2026-11-04
+
+### Changed
+
+- `iceberg`, `iceberg-catalog-rest`, `iceberg-datafusion` and `iceberg-storage-opendal` 0.10.1 → 0.11.0, and `datafusion` 53.1 → 54.1, which `iceberg-datafusion` 0.11 requires (`Cargo.toml`, `Cargo.lock`). `ScopedCatalog` drops `as_any`, which DataFusion 54 removed from `CatalogProvider`.
+- RustFS catalog requests are now SigV4-signed inside the catalog client, through `pipa-catalog-auth`'s `SigV4AuthManager` on `RestCatalogBuilder::with_auth_manager` (new in iceberg-rust 0.11). This replaces the `pipa-catalog-proxy` listener that ran on a loopback port in this process. With `ICEBERG_CATALOG_URI` unset, the catalog URI is now `{RUSTFS_ENDPOINT}/iceberg` itself, and S3 Tables is still enabled on `RUSTFS_BUCKET` at startup. With it set, requests go out unsigned, as before. `IcebergCatalogConfig` gains a `sigv4` field (not serialized).
+- `main` and the startup migrations are split into smaller functions (`user_service`, `query_api`, `serve`, `source_tables_in_pipa`, `create_admin_from_env`), so every function scores under `just crap`'s CRAP threshold. No behaviour change.
+- `zstd` 0.13.3 → 0.13.4 and 0.14.0 → 0.14.3, `zstd-safe` 7.3.0 → 7.4.0 and 8.0.0 → 8.2.0, `zstd-sys` 2.1.0 → 2.1.2, `ctutils` 0.4.2 → 0.4.8 (`Cargo.lock`), fixing RUSTSEC-2026-0391, RUSTSEC-2026-0398, RUSTSEC-2026-0403, RUSTSEC-2026-0410 and RUSTSEC-2026-0385. No code change.
+- `parquet` (through `datafusion`/`iceberg`) 58.4.0 → 58.4.1 (`Cargo.lock`), which moves `thrift` 0.17 → 0.23, fixing RUSTSEC-2026-0435. No code change.
+
+### Fixed
+
+- iceberg-datafusion 0.11 adds a `…$history` metadata table next to every table, and `GET /tables` listed it. `is_metadata_table` now takes its suffixes from iceberg's `MetadataTableType`, so `$history` (and any type a later release adds) is left out of the list and refused by `POST /tables/rows`, like `$snapshots` and `$manifests`.
+
 ## [0.13.1] - 2026-10-23
 
 ### Changed

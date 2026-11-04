@@ -172,6 +172,70 @@ mod tests {
         serde_json::from_value(json).unwrap()
     }
 
+    #[tokio::test]
+    async fn every_registered_source_is_read_and_a_corrupt_one_fails_the_listing() {
+        use object_store::PutPayload;
+        use object_store::memory::InMemory;
+
+        let store = InMemory::new();
+        assert!(list_registered(&store).await.unwrap().is_empty());
+
+        let stored = |id: &str| {
+            serde_json::json!({
+                "id": id,
+                "name": "orders",
+                "engine": "postgres",
+                "connection": {
+                    "host": "db", "port": 5432, "username": "u", "password": "p", "database": "d"
+                },
+                "ingested_tables": [],
+            })
+        };
+        for id in [
+            "0199c0de-0000-7000-8000-000000000001",
+            "0199c0de-0000-7000-8000-000000000002",
+        ] {
+            store
+                .put(
+                    &ObjectPath::from(format!("{PREFIX}/{id}.json")),
+                    PutPayload::from(serde_json::to_vec(&stored(id)).unwrap()),
+                )
+                .await
+                .unwrap();
+        }
+        // Not a data source: outside the prefix.
+        store
+            .put(
+                &ObjectPath::from("users/x.json"),
+                PutPayload::from_static(b"{}"),
+            )
+            .await
+            .unwrap();
+        let mut ids: Vec<String> = list_registered(&store)
+            .await
+            .unwrap()
+            .iter()
+            .map(|source| source.id.to_string())
+            .collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            [
+                "0199c0de-0000-7000-8000-000000000001",
+                "0199c0de-0000-7000-8000-000000000002"
+            ]
+        );
+
+        store
+            .put(
+                &ObjectPath::from(format!("{PREFIX}/broken.json")),
+                PutPayload::from_static(b"{"),
+            )
+            .await
+            .unwrap();
+        assert!(list_registered(&store).await.is_err());
+    }
+
     #[test]
     fn a_source_stored_without_a_choice_has_no_saved_choice() {
         assert_eq!(source(serde_json::Value::Null).chosen_tables(), None);

@@ -19,7 +19,7 @@ pub async fn live_data_files(
     let list = table.manifest_list_reader(snapshot).load().await?;
     let mut live = HashMap::new();
     for manifest_file in list.entries() {
-        let manifest = manifest_file.load_manifest(table.file_io()).await?;
+        let manifest = table.manifest_reader().read(manifest_file).await?;
         for entry in manifest.entries().iter().filter(|entry| entry.is_alive()) {
             if manifest_file.content != ManifestContentType::Data
                 || entry.content_type() != DataContentType::Data
@@ -47,7 +47,7 @@ pub async fn referenced_files(
         for manifest_file in list.entries() {
             files.insert(manifest_file.manifest_path.clone());
             if read_manifests.insert(manifest_file.manifest_path.clone()) {
-                let manifest = manifest_file.load_manifest(table.file_io()).await?;
+                let manifest = table.manifest_reader().read(manifest_file).await?;
                 for entry in manifest.entries() {
                     files.insert(entry.file_path().to_string());
                 }

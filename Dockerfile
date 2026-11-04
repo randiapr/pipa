@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Builds pipa-ingestion, pipa-backend and pipa-catalog-proxy (native crates) in one builder stage so their
+# Builds pipa-ingestion and pipa-backend (native crates) in one builder stage so their
 # shared workspace dependencies (datafusion, iceberg, sqlx, ...) are compiled once,
 # then copies each release binary into its own minimal distroless runtime image. pipa-ui
 # targets wasm32 instead and is built on the host with Trunk; the `ui` stage below just
@@ -8,7 +8,6 @@
 #
 # Build a single service with: docker build --target ingestion -t pipa-ingestion .
 #                               docker build --target backend -t pipa-backend .
-#                               docker build --target catalog-proxy -t pipa-catalog-proxy .
 #                               (just build-ui-release first)  docker build --target ui -t pipa-ui .
 # (docker-compose.yml does this via each service's `build.target`.)
 
@@ -22,8 +21,8 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
-    cargo build --release -p pipa-ingestion -p pipa-backend -p pipa-catalog-proxy && \
-    cp target/release/pipa-ingestion target/release/pipa-backend target/release/pipa-catalog-proxy /tmp/
+    cargo build --release -p pipa-ingestion -p pipa-backend && \
+    cp target/release/pipa-ingestion target/release/pipa-backend /tmp/
 
 # gcr.io/distroless/cc-debian13 provides glibc, libgcc, libstdc++ and CA certificates
 # (what a dynamically-linked Rust binary needs to run and make TLS connections) with no
@@ -38,13 +37,6 @@ FROM gcr.io/distroless/cc-debian13 AS backend
 COPY --from=builder /tmp/pipa-backend /usr/local/bin/pipa-backend
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/pipa-backend"]
-
-# Standalone signing proxy for catalog clients outside the workspace; docker-compose.yml doesn't use
-# it, since pipa-backend and pipa-ingestion embed the same proxy in-process.
-FROM gcr.io/distroless/cc-debian13 AS catalog-proxy
-COPY --from=builder /tmp/pipa-catalog-proxy /usr/local/bin/pipa-catalog-proxy
-EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/pipa-catalog-proxy"]
 
 # pipa-ui is a Trunk-built wasm32 SPA (crates/ui/), not a `cargo build` binary, and it is
 # deliberately NOT compiled inside Docker: the wasm build runs on the host with its native

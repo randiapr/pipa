@@ -16,7 +16,7 @@ A Cargo workspace of six crates, each versioned independently (see each crate's 
   Postgres source via logical replication and appends them to Iceberg tables as changelog
   rows (`_op`, `_position`, ... plus the source columns), with effectively-once delivery: the
   checkpoint is committed in the same Iceberg snapshot as the data. A standalone service with
-  no dependency on `pipa-backend` (only on the embedded `pipa-catalog-proxy` signer) — it reads
+  no dependency on `pipa-backend` (only on the `pipa-catalog-auth` signer) — it reads
   registered sources directly from the shared
   object store, and is designed to run distributed: with `REDIS_URL` set, instances share the sources through
   Redis and a stopped one's sources move to the others; without it, `INGESTION_SHARD_INDEX`/
@@ -29,12 +29,11 @@ A Cargo workspace of six crates, each versioned independently (see each crate's 
   scoped to the caller's project), whose results — and the table listing — are cached for a short
   TTL in memory, or in Redis with `REDIS_URL` set. Every external caller (the dashboard, any future client)
   talks to this, never to `pipa-ingestion` directly.
-- **`pipa-catalog-proxy`** — SigV4 signing for RustFS's embedded Iceberg REST catalog, which
-  rejects unsigned requests (`iceberg-catalog-rest` can't sign). A library that `pipa-backend`
-  and `pipa-ingestion` embed in their own process, so catalog calls need no separate service or
-  network hop, plus a binary that runs the same proxy standalone for clients outside this
-  workspace. The signing is implemented in-house on `hmac`/`sha2`; there is no AWS dependency.
-  Not an external-facing service.
+- **`pipa-catalog-auth`** — SigV4 signing for RustFS's embedded Iceberg REST catalog, which
+  rejects unsigned requests. A library that `pipa-backend` and `pipa-ingestion` plug into
+  `iceberg-catalog-rest` as its auth manager, so every catalog request is signed in-process,
+  with no separate service or network hop. The signing is implemented in-house on
+  `hmac`/`sha2`; there is no AWS dependency.
 - **`pipa-api`** — the HTTP contract (request/response types, routes) shared by `pipa-backend`
   and `pipa-ui`; builds for both native and wasm32.
 - **`pipa-integration-test`** — end-to-end tests: the real `pipa-backend` and `pipa-ingestion`
@@ -147,9 +146,9 @@ publish images. The `pipa-ui` image has the API address `http://localhost:8080` 
 local stack), so it only works as shipped next to a backend published on that address.
 
 `POST /query` and `pipa-ingestion` talk to RustFS's own embedded Iceberg REST Catalog ("S3 Tables"
-feature). That catalog requires SigV4-signed requests, which `iceberg-catalog-rest` can't send, so
-both embed the `pipa-catalog-proxy` signer (`crates/catalog-proxy`) in their own process and enable
-S3 Tables on the `pipa` bucket at startup — all automatic, locally and in compose, as long as
+feature). That catalog requires SigV4-signed requests, so both sign their catalog requests in
+their own process (`crates/catalog-auth`, plugged into `iceberg-catalog-rest` as its auth manager)
+and enable S3 Tables on the `pipa` bucket at startup — all automatic, locally and in compose, as long as
 `ICEBERG_CATALOG_URI` is left unset (see the note at the top of `docker-compose.yml`).
 
 ## GitOps (Flux)
@@ -648,8 +647,7 @@ which `cargo-crap` can't see, so it would be scored as production code.
 ### Runtime settings
 
 Environment variables: the compose secrets are in the root `.env.example`, and `pipa-backend`,
-`pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`. The standalone
-`pipa-catalog-proxy` binary's are listed at the top of `crates/catalog-proxy/src/main.rs`.
+`pipa-ingestion` and `pipa-ui` each have their own `crates/*/.env.example`.
 
 Optional runtime settings (all set in compose and by `just local::up` where it matters):
 
@@ -681,7 +679,7 @@ cargo clippy -p pipa-ui --target wasm32-unknown-unknown -- -D warnings   # if yo
 ```
 
 CI (`.github/workflows/ci.yaml`) runs `cargo fmt --all -- --check`, clippy with `-D warnings` and the
-tests for `pipa-api`, `pipa-backend`, `pipa-catalog-proxy` and `pipa-ingestion`, and clippy for
+tests for `pipa-api`, `pipa-backend`, `pipa-catalog-auth` and `pipa-ingestion`, and clippy for
 `pipa-ui` on wasm32. All three must pass. Tests marked `#[ignore]` (the live Postgres WAL test) need a
 real database and are skipped. The `Clippy & test (backend, ingestion)` job name is required by a
 branch ruleset on `main`, so don't rename it.

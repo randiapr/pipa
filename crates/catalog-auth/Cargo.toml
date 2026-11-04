@@ -1,21 +1,22 @@
 [package]
-name = "pipa-catalog-proxy"
-version = "0.3.4"
+name = "pipa-catalog-auth"
+version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [dependencies]
 anyhow.workspace = true
-axum.workspace = true
+async-trait.workspace = true
 chrono.workspace = true
 hmac.workspace = true
+iceberg.workspace = true
+iceberg-catalog-rest.workspace = true
 reqwest.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
-tower = { workspace = true, features = ["util"] }
+axum.workspace = true

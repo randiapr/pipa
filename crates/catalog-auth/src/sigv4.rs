@@ -1,17 +1,24 @@
 // Copyright (c) 2026 Randi Apriansyah
 // SPDX-License-Identifier: MIT
 
-//! AWS Signature Version 4 request signing, implemented directly on `hmac`/`sha2` so the proxy
+//! AWS Signature Version 4 request signing, implemented directly on `hmac`/`sha2` so this crate
 //! depends on no AWS SDK or crate. Only the `Authorization` header flavour is supported (what
-//! RustFS's S3 Tables catalog expects), with the payload hash computed by the caller.
+//! RustFS's S3 Tables catalog expects).
 
 use std::fmt::Write;
 
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, KeyInit, Mac};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
+use reqwest::{Method, Url};
 use sha2::{Digest, Sha256};
 
 const ALGORITHM: &str = "AWS4-HMAC-SHA256";
+
+/// A request whose body is a stream: its bytes aren't known up front, so it can't be hashed.
+#[derive(Debug, thiserror::Error)]
+#[error("a streaming request body can't be SigV4-signed")]
+pub struct StreamingBody;
 
 #[derive(Clone)]
 pub struct Signer {
@@ -34,6 +41,69 @@ impl Signer {
             region,
             service,
         }
+    }
+
+    /// Signs a request in place: sets `x-amz-content-sha256`, `x-amz-date` and `authorization`
+    /// for `method` on `url` with `body`, replacing any `x-amz-*` or `authorization` header
+    /// already in `headers`. `host` is signed but not set: the HTTP client sends the same value,
+    /// derived from `url`.
+    pub fn sign(
+        &self,
+        method: &Method,
+        url: &Url,
+        headers: &mut HeaderMap,
+        body: &[u8],
+        now: DateTime<Utc>,
+    ) {
+        let host = match (url.host_str(), url.port()) {
+            (Some(host), Some(port)) => format!("{host}:{port}"),
+            (host, None) => host.unwrap_or_default().to_string(),
+            (None, Some(_)) => String::new(),
+        };
+        let date = amz_date(now);
+        let payload_hash = sha256_hex(body);
+        let authorization = self.authorization(
+            method.as_str(),
+            url.path(),
+            url.query().unwrap_or_default(),
+            &[
+                ("host", &host),
+                ("x-amz-content-sha256", &payload_hash),
+                ("x-amz-date", &date),
+            ],
+            &payload_hash,
+            now,
+        );
+
+        let stale: Vec<HeaderName> = headers
+            .keys()
+            .filter(|name| name.as_str().starts_with("x-amz-") || **name == AUTHORIZATION)
+            .cloned()
+            .collect();
+        for name in stale {
+            headers.remove(name);
+        }
+        for (name, value) in [
+            ("x-amz-content-sha256", payload_hash),
+            ("x-amz-date", date),
+            (AUTHORIZATION.as_str(), authorization),
+        ] {
+            headers.insert(
+                HeaderName::from_static(name),
+                HeaderValue::try_from(value).expect("signing output is valid header text"),
+            );
+        }
+    }
+
+    /// [`Self::sign`] for a built `reqwest` request, at the current time.
+    pub fn sign_request(&self, request: &mut reqwest::Request) -> Result<(), StreamingBody> {
+        let body = match request.body() {
+            None => Vec::new(),
+            Some(body) => body.as_bytes().ok_or(StreamingBody)?.to_vec(),
+        };
+        let (method, url) = (request.method().clone(), request.url().clone());
+        self.sign(&method, &url, request.headers_mut(), &body, Utc::now());
+        Ok(())
     }
 
     /// Builds the `Authorization` header value for a request. `headers` are exactly the headers
@@ -90,6 +160,18 @@ impl Signer {
             "{ALGORITHM} Credential={}/{scope}, SignedHeaders={signed_headers}, Signature={signature}",
             self.access_key_id
         )
+    }
+}
+
+/// Leaves the secret out: [`Signer`]s end up inside `Debug` types (the REST catalog's auth
+/// manager, the catalog config).
+impl std::fmt::Debug for Signer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Signer")
+            .field("access_key_id", &self.access_key_id)
+            .field("region", &self.region)
+            .field("service", &self.service)
+            .finish_non_exhaustive()
     }
 }
 
@@ -215,6 +297,43 @@ mod tests {
              SignedHeaders=host;x-amz-date, \
              Signature=5fa00fa31553b73ebf1942676e86291e8372ff2a2260956d9b8aae1d763fbf31"
         );
+    }
+
+    #[test]
+    fn sign_sets_the_signed_headers_and_replaces_stale_ones() {
+        let signer = Signer::new(
+            "AKIDEXAMPLE".to_string(),
+            "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY".to_string(),
+            "us-east-1".to_string(),
+            "s3".to_string(),
+        );
+        let now = Utc.with_ymd_and_hms(2015, 8, 30, 12, 36, 0).unwrap();
+        let url = Url::parse("http://rustfs:9000/iceberg/v1/config?warehouse=pipa").unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert("x-amz-security-token", HeaderValue::from_static("stale"));
+        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer stale"));
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+
+        signer.sign(&Method::POST, &url, &mut headers, b"{}", now);
+
+        let expected = signer.authorization(
+            "POST",
+            "/iceberg/v1/config",
+            "warehouse=pipa",
+            &[
+                ("host", "rustfs:9000"),
+                ("x-amz-content-sha256", &sha256_hex(b"{}")),
+                ("x-amz-date", "20150830T123600Z"),
+            ],
+            &sha256_hex(b"{}"),
+            now,
+        );
+        assert_eq!(headers[AUTHORIZATION], expected.as_str());
+        assert_eq!(headers["x-amz-date"], "20150830T123600Z");
+        assert_eq!(headers["x-amz-content-sha256"], sha256_hex(b"{}").as_str());
+        assert_eq!(headers["content-type"], "application/json");
+        assert!(!headers.contains_key("x-amz-security-token"));
+        assert!(!format!("{signer:?}").contains("EXAMPLEKEY"));
     }
 
     #[test]
