@@ -420,12 +420,12 @@ impl CaptureOrchestrator {
     /// between transactions only.
     async fn flush_due(&self, source: &DataSource, tables: &mut HashMap<TargetTable, TableState>) {
         let now = Instant::now();
-        for state in tables.values_mut() {
-            if !state.pending.is_empty()
-                && now.duration_since(state.last_flush) >= self.batch.max_flush_interval
-            {
-                self.flush_table(source, state).await;
-            }
+        let interval = self.batch.max_flush_interval;
+        let due = tables.values_mut().filter(|state| {
+            !state.pending.is_empty() && now.duration_since(state.last_flush) >= interval
+        });
+        for state in due {
+            self.flush_table(source, state).await;
         }
     }
 

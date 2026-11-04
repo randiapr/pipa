@@ -168,10 +168,10 @@ async fn rewrite(
         .plan_files()
         .await?;
     let mut tasks: Vec<_> = tasks
-        .try_filter(|task| std::future::ready(order.contains_key(task.data_file_path.as_str())))
+        .try_filter(|task| std::future::ready(order.contains_key(task.data_file_path())))
         .try_collect()
         .await?;
-    tasks.sort_by_key(|task| (order[task.data_file_path.as_str()], task.start));
+    tasks.sort_by_key(|task| (order[task.data_file_path()], task.start()));
 
     // One file at a time, so the rows come out in the order the files were committed.
     let mut batches = ArrowReaderBuilder::new(table.file_io().clone(), Runtime::current())
@@ -256,121 +256,26 @@ async fn stage_replace(
     attempt: u32,
 ) -> Result<Option<StagedReplace>, MaintenanceError> {
     let metadata = table.metadata();
-    let snapshot_id = new_snapshot_id(table);
-    let commit_id = uuid::Uuid::now_v7().simple();
-    let mut metadata_files = Vec::new();
-    let mut manifest_count = 0;
-    let mut new_manifest =
-        |metadata_files: &mut Vec<String>| -> Result<ManifestWriter, MaintenanceError> {
-            manifest_count += 1;
-            let path = format!(
-                "{}/metadata/{commit_id}-m{manifest_count}.avro",
-                metadata.location()
-            );
-            metadata_files.push(path.clone());
-            Ok(ManifestWriterBuilder::new(
-                table.file_io().new_output(&path)?,
-                Some(snapshot_id),
-                metadata.current_schema().clone(),
-                metadata.default_partition_spec().as_ref().clone(),
-            )
-            .build_v2_data())
-        };
+    let mut files = ReplaceFiles::new(table);
+    let snapshot_id = files.snapshot_id;
 
-    let list = table.manifest_list_reader(base).load().await?;
-    let mut manifests: Vec<ManifestFile> = Vec::new();
-    let mut removed: Vec<ManifestEntryRef> = Vec::new();
-    for manifest_file in list.entries() {
-        if manifest_file.content != ManifestContentType::Data {
-            manifests.push(manifest_file.clone());
-            continue;
-        }
-        // An earlier compaction's removal records: dropped here, as Iceberg's own rewrites drop
-        // them. This is the only place they leave the table's current state — the writer's
-        // appends carry them forward — and until they have, expiry can't delete the files they
-        // name (see `expiry`).
-        if !manifest_file.has_added_files() && !manifest_file.has_existing_files() {
-            continue;
-        }
-        let manifest = manifest_file.load_manifest(table.file_io()).await?;
-        let touched = manifest
-            .entries()
-            .iter()
-            .any(|entry| entry.is_alive() && inputs.contains(entry.file_path()));
-        if !touched {
-            manifests.push(manifest_file.clone());
-            continue;
-        }
-        // Rewritten without the inputs, everything else as it was.
-        let mut kept = Vec::new();
-        for entry in manifest.entries().iter().filter(|entry| entry.is_alive()) {
-            if inputs.contains(entry.file_path()) {
-                removed.push(entry.clone());
-            } else {
-                kept.push(entry);
-            }
-        }
-        if kept.is_empty() {
-            continue;
-        }
-        let mut writer = new_manifest(&mut metadata_files)?;
-        for entry in kept {
-            writer.add_existing_file(
-                entry.data_file().clone(),
-                entry
-                    .snapshot_id()
-                    .unwrap_or(manifest_file.added_snapshot_id),
-                sequence_number_of(entry)?,
-                entry.file_sequence_number,
-            )?;
-        }
-        manifests.push(writer.write_manifest_file().await?);
-    }
+    let (mut manifests, removed) = files.without_inputs(base, inputs).await?;
     if removed.len() != inputs.len() {
-        delete_files(table, metadata_files.iter()).await;
+        delete_files(table, files.written.iter()).await;
         return Ok(None);
     }
-
-    // The inputs' removal records, in a manifest of their own so the next compaction can drop
-    // them whole. RustFS's catalog requires them (a replace must name what it removes), and
-    // checks on every later commit that each file they name still exists.
-    let mut writer = new_manifest(&mut metadata_files)?;
-    for entry in &removed {
-        writer.add_delete_file(
-            entry.data_file().clone(),
-            sequence_number_of(entry)?,
-            entry.file_sequence_number,
-        )?;
-    }
-    manifests.push(writer.write_manifest_file().await?);
+    manifests.push(files.removals(&removed).await?);
     let removed: Vec<DataFile> = removed
         .iter()
         .map(|entry| entry.data_file().clone())
         .collect();
-
-    // The new files keep the data sequence number of the snapshot they were read from, like
-    // Iceberg's own rewrites (`use-starting-sequence-number`): to any delete applying to the
-    // rows they hold, they are as old as those rows.
-    let mut writer = new_manifest(&mut metadata_files)?;
-    for file in output {
-        writer.add_file(file.clone(), data_sequence_number)?;
-    }
-    manifests.push(writer.write_manifest_file().await?);
+    manifests.push(files.additions(output, data_sequence_number).await?);
 
     let sequence_number = metadata.next_sequence_number();
-    let list_path = format!(
-        "{}/metadata/snap-{snapshot_id}-{attempt}-{commit_id}.avro",
-        metadata.location()
-    );
-    metadata_files.push(list_path.clone());
-    let mut list_writer = ManifestListWriter::v2(
-        table.file_io().new_output(&list_path)?.writer().await?,
-        snapshot_id,
-        Some(base.snapshot_id()),
-        sequence_number,
-    );
-    list_writer.add_manifests(manifests.into_iter())?;
-    list_writer.close().await?;
+    let list_path = files
+        .manifest_list(base, attempt, sequence_number, manifests)
+        .await?;
+    let metadata_files = files.written;
 
     let snapshot = Snapshot::builder()
         .with_snapshot_id(snapshot_id)
@@ -404,6 +309,190 @@ async fn stage_replace(
         ],
         metadata_files,
     }))
+}
+
+/// The metadata files a staged replace writes, named after its snapshot and commit, and the
+/// list of those written so far, to delete if it doesn't land.
+struct ReplaceFiles<'a> {
+    table: &'a Table,
+    snapshot_id: i64,
+    commit_id: uuid::fmt::Simple,
+    manifests: usize,
+    written: Vec<String>,
+}
+
+impl<'a> ReplaceFiles<'a> {
+    fn new(table: &'a Table) -> Self {
+        Self {
+            table,
+            snapshot_id: new_snapshot_id(table),
+            commit_id: uuid::Uuid::now_v7().simple(),
+            manifests: 0,
+            written: Vec::new(),
+        }
+    }
+
+    /// A writer for the next manifest of the snapshot.
+    fn manifest_writer(&mut self) -> Result<ManifestWriter, MaintenanceError> {
+        let metadata = self.table.metadata();
+        self.manifests += 1;
+        let path = format!(
+            "{}/metadata/{}-m{}.avro",
+            metadata.location(),
+            self.commit_id,
+            self.manifests
+        );
+        self.written.push(path.clone());
+        Ok(ManifestWriterBuilder::new(
+            self.table.file_io().new_output(&path)?,
+            Some(self.snapshot_id),
+            metadata.current_schema().clone(),
+            metadata.default_partition_spec().as_ref().clone(),
+        )
+        .build_v2_data())
+    }
+
+    /// `base`'s manifests with the `inputs` taken out, and the inputs' entries.
+    async fn without_inputs(
+        &mut self,
+        base: &SnapshotRef,
+        inputs: &HashSet<String>,
+    ) -> Result<(Vec<ManifestFile>, Vec<ManifestEntryRef>), MaintenanceError> {
+        let list = self.table.manifest_list_reader(base).load().await?;
+        let mut manifests = Vec::new();
+        let mut removed = Vec::new();
+        for manifest_file in list.entries() {
+            if let Some(kept) = self.without(manifest_file, inputs, &mut removed).await? {
+                manifests.push(kept);
+            }
+        }
+        Ok((manifests, removed))
+    }
+
+    /// `manifest_file` without the `inputs`, whose entries go to `removed`: as it is when it
+    /// holds none of them, rewritten when it holds others too, `None` when nothing is left.
+    async fn without(
+        &mut self,
+        manifest_file: &ManifestFile,
+        inputs: &HashSet<String>,
+        removed: &mut Vec<ManifestEntryRef>,
+    ) -> Result<Option<ManifestFile>, MaintenanceError> {
+        if manifest_file.content != ManifestContentType::Data {
+            return Ok(Some(manifest_file.clone()));
+        }
+        // An earlier compaction's removal records: dropped here, as Iceberg's own rewrites drop
+        // them. This is the only place they leave the table's current state — the writer's
+        // appends carry them forward — and until they have, expiry can't delete the files they
+        // name (see `expiry`).
+        if !manifest_file.has_added_files() && !manifest_file.has_existing_files() {
+            return Ok(None);
+        }
+        let manifest = self.table.manifest_reader().read(manifest_file).await?;
+        let (taken, kept): (Vec<&ManifestEntryRef>, Vec<&ManifestEntryRef>) = manifest
+            .entries()
+            .iter()
+            .filter(|entry| entry.is_alive())
+            .partition(|entry| inputs.contains(entry.file_path()));
+        if taken.is_empty() {
+            return Ok(Some(manifest_file.clone()));
+        }
+        removed.extend(taken.into_iter().cloned());
+        if kept.is_empty() {
+            return Ok(None);
+        }
+        // Rewritten without the inputs, everything else as it was.
+        Ok(Some(self.rewritten(manifest_file, kept).await?))
+    }
+
+    /// A manifest holding `kept`, the entries of `manifest_file` that stay, as they were.
+    async fn rewritten(
+        &mut self,
+        manifest_file: &ManifestFile,
+        kept: Vec<&ManifestEntryRef>,
+    ) -> Result<ManifestFile, MaintenanceError> {
+        let mut writer = self.manifest_writer()?;
+        for entry in kept {
+            add_existing(&mut writer, entry, manifest_file)?;
+        }
+        Ok(writer.write_manifest_file().await?)
+    }
+
+    /// The inputs' removal records, in a manifest of their own so the next compaction can drop
+    /// them whole. RustFS's catalog requires them (a replace must name what it removes), and
+    /// checks on every later commit that each file they name still exists.
+    async fn removals(
+        &mut self,
+        removed: &[ManifestEntryRef],
+    ) -> Result<ManifestFile, MaintenanceError> {
+        let mut writer = self.manifest_writer()?;
+        for entry in removed {
+            writer.add_delete_file(
+                entry.data_file().clone(),
+                sequence_number_of(entry)?,
+                entry.file_sequence_number,
+            )?;
+        }
+        Ok(writer.write_manifest_file().await?)
+    }
+
+    /// The new files. They keep the data sequence number of the snapshot they were read from,
+    /// like Iceberg's own rewrites (`use-starting-sequence-number`): to any delete applying to
+    /// the rows they hold, they are as old as those rows.
+    async fn additions(
+        &mut self,
+        output: &[DataFile],
+        data_sequence_number: i64,
+    ) -> Result<ManifestFile, MaintenanceError> {
+        let mut writer = self.manifest_writer()?;
+        for file in output {
+            writer.add_file(file.clone(), data_sequence_number)?;
+        }
+        Ok(writer.write_manifest_file().await?)
+    }
+
+    /// Writes the snapshot's manifest list of `manifests`, on top of `base`, and returns its
+    /// path.
+    async fn manifest_list(
+        &mut self,
+        base: &SnapshotRef,
+        attempt: u32,
+        sequence_number: i64,
+        manifests: Vec<ManifestFile>,
+    ) -> Result<String, MaintenanceError> {
+        let path = format!(
+            "{}/metadata/snap-{}-{attempt}-{}.avro",
+            self.table.metadata().location(),
+            self.snapshot_id,
+            self.commit_id
+        );
+        self.written.push(path.clone());
+        let mut writer = ManifestListWriter::v2(
+            self.table.file_io().new_output(&path)?.writer().await?,
+            self.snapshot_id,
+            Some(base.snapshot_id()),
+            sequence_number,
+        );
+        writer.add_manifests(manifests.into_iter())?;
+        writer.close().await?;
+        Ok(path)
+    }
+}
+
+/// Adds `entry` of `manifest_file` to `writer` as an existing file, as it was.
+fn add_existing(
+    writer: &mut ManifestWriter,
+    entry: &ManifestEntryRef,
+    manifest_file: &ManifestFile,
+) -> Result<(), MaintenanceError> {
+    writer.add_existing_file(
+        entry.data_file().clone(),
+        entry
+            .snapshot_id()
+            .unwrap_or(manifest_file.added_snapshot_id),
+        sequence_number_of(entry)?,
+        entry.file_sequence_number,
+    )?;
+    Ok(())
 }
 
 /// The summary of the replace snapshot on top of `base`: what it added and removed, the

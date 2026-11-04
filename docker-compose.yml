@@ -5,10 +5,10 @@
 # Two things sit between it and pipa's Iceberg clients, both handled inside pipa-backend
 # (querying, POST /query) and pipa-ingestion (writing captured changes,
 # crates/ingestion/src/write/) themselves, with no extra service or network hop:
-#   - The catalog requires every request to be AWS SigV4-signed (signing name "s3"), which
-#     iceberg-catalog-rest can't do, so each of them embeds the pipa-catalog-proxy signer
-#     (crates/catalog-proxy) on a loopback port of its own process and points its catalog
-#     client there. Leaving ICEBERG_CATALOG_URI unset is what selects this.
+#   - The catalog requires every request to be AWS SigV4-signed (signing name "s3"), so each of
+#     them signs its catalog requests in-process (crates/catalog-auth, plugged into
+#     iceberg-catalog-rest as its auth manager). Leaving ICEBERG_CATALOG_URI unset is what
+#     selects this.
 #   - S3 Tables is opt-in per bucket; each of them turns it on for RUSTFS_BUCKET at startup.
 #
 # The pipa images are the published ones (ghcr.io/randiapr/pipa-*:latest, see

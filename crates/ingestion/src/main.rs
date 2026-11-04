@@ -3,8 +3,8 @@
 
 //! Ingestion engine: connects to OLTP databases and streams captured changes into Iceberg.
 //!
-//! Standalone service: the only workspace crate it depends on is `pipa-catalog-proxy`, which it
-//! embeds to sign its requests to RustFS's Iceberg catalog — not `pipa-backend`, not even for its
+//! Standalone service: the only workspace crate it depends on is `pipa-catalog-auth`, which it
+//! uses to sign its requests to RustFS's Iceberg catalog — not `pipa-backend`, not even for its
 //! `iceberg`/`iceberg-catalog-rest` access (`write/` keeps its own independent copy of that
 //! dependency; see the root `CLAUDE.md`). Data sources
 //! are registered through the `pipa-ui` dashboard, which submits them via `pipa-backend`;
@@ -68,112 +68,153 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("pipa-ingestion starting");
     let coordination = coordination::from_env()?;
-    let coordinator = coordination.coordinator;
-
-    let refresh_interval = Duration::from_secs(
-        std::env::var("INGESTION_SOURCE_REFRESH_INTERVAL_SECS")
-            .ok()
-            .and_then(|value| value.parse().ok())
-            .unwrap_or(30)
-            .max(1),
-    );
-
     let store_config = ObjectStoreConfig::from_env();
     let store = store_config.build_store()?;
-
     let catalog_config = IcebergCatalogConfig::from_env(&store_config).await?;
     let catalog = catalog_config.build_catalog(&store_config).await?;
+
     let writer: Arc<dyn IcebergWriter> =
         Arc::new(IcebergChangelogWriter::new(Arc::clone(&catalog)));
-    let postgres_source: Arc<dyn CdcSource> = Arc::new(PostgresWalSource::new());
-    let mut orchestrator = CaptureOrchestrator::new(
-        Arc::clone(&postgres_source),
-        Arc::clone(&writer),
-        BatchConfig::from_env(),
-    );
-    match BackfillConfig::from_env() {
-        Some(config) => {
-            tracing::info!(chunk_rows = config.chunk_rows, "snapshot backfill enabled");
-            let snapshots: Arc<dyn SnapshotSource> = Arc::new(PostgresSnapshotSource::new());
-            orchestrator = orchestrator.with_backfill(snapshots, config);
-        }
-        None => tracing::info!("snapshot backfill disabled"),
-    }
-    let orchestrator = Arc::new(orchestrator);
-
     let (owned_tx, owned_rx) = watch::channel(Vec::new());
-    let maintenance_config = MaintenanceConfig::from_env();
-    let maintenance = match maintenance_config.interval {
-        Some(interval) => {
-            let orphans = maintenance_config.orphan_min_age.map(|min_age| {
-                OrphanSweeper::new(
-                    Arc::clone(&store),
-                    format!("s3://{}/", store_config.bucket),
-                    min_age,
-                )
-            });
-            let maintainer = Arc::new(IcebergTableMaintainer::new(
-                Arc::clone(&catalog),
-                Arc::new(RestSnapshotCommitter::new(&catalog_config)),
-                maintenance_config.compaction,
-                maintenance_config.expiry,
-                orphans,
-            ));
-            tracing::info!(
-                interval_secs = interval.as_secs(),
-                "table maintenance enabled"
-            );
-            Some(tokio::spawn(
-                MaintenanceScheduler::new(maintainer, interval).run(owned_rx),
-            ))
-        }
-        None => {
-            tracing::info!("table maintenance disabled");
-            None
-        }
-    };
+    let maintenance = spawn_maintenance(
+        MaintenanceConfig::from_env(),
+        &store,
+        &store_config,
+        catalog,
+        &catalog_config,
+        owned_rx,
+    );
 
-    let mut captures = Captures::new(orchestrator, Arc::clone(&writer));
-    let mut assignment = Assignment::new(coordinator, owned_tx);
-    assignment.registered = datasource::list_registered(store.as_ref()).await?;
-    assignment.coordinate(&mut captures, true).await;
+    let mut captures = Captures::new(Arc::new(capture_orchestrator(Arc::clone(&writer))), writer);
+    let mut assignment = Assignment::new(coordination.coordinator, owned_tx);
+    let result = run(
+        &mut assignment,
+        &mut captures,
+        store.as_ref(),
+        coordination.interval,
+    )
+    .await;
+    shut_down(maintenance, &mut assignment, &mut captures).await;
+    result
+}
 
-    let shutdown = shutdown_signal();
-    tokio::pin!(shutdown);
-    let mut refresh = tokio::time::interval(refresh_interval);
-    refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    refresh.tick().await; // The first tick is immediate; the sources were just read.
-    let mut coordinate = tokio::time::interval(coordination.interval);
-    coordinate.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    coordinate.tick().await;
-    loop {
-        tokio::select! {
-            result = &mut shutdown => {
-                result?;
-                break;
-            }
-            _ = refresh.tick() => {
-                match datasource::list_registered(store.as_ref()).await {
-                    Ok(registered) => assignment.registered = registered,
-                    Err(err) => {
-                        tracing::warn!(error = %err, "could not re-read the registered data sources, keeping the current ones");
-                    }
-                }
-                assignment.coordinate(&mut captures, true).await;
-            }
-            _ = coordinate.tick() => {
-                assignment.coordinate(&mut captures, false).await;
-            }
-        }
-    }
+/// Stops table maintenance, then every capture, and hands the sources back.
+async fn shut_down(
+    maintenance: Option<JoinHandle<()>>,
+    assignment: &mut Assignment,
+    captures: &mut Captures,
+) {
     tracing::info!("pipa-ingestion shutting down");
     // Before the sources are handed back, so their new owners don't race a compaction here.
     if let Some(maintenance) = maintenance {
         maintenance.abort();
     }
-    assignment.leave(&mut captures).await;
+    assignment.leave(captures).await;
+}
 
-    Ok(())
+/// The capture orchestrator for Postgres sources, writing through `writer`, with snapshot
+/// backfill unless it is turned off.
+fn capture_orchestrator(writer: Arc<dyn IcebergWriter>) -> CaptureOrchestrator {
+    let postgres_source: Arc<dyn CdcSource> = Arc::new(PostgresWalSource::new());
+    let orchestrator = CaptureOrchestrator::new(postgres_source, writer, BatchConfig::from_env());
+    match BackfillConfig::from_env() {
+        Some(config) => {
+            tracing::info!(chunk_rows = config.chunk_rows, "snapshot backfill enabled");
+            let snapshots: Arc<dyn SnapshotSource> = Arc::new(PostgresSnapshotSource::new());
+            orchestrator.with_backfill(snapshots, config)
+        }
+        None => {
+            tracing::info!("snapshot backfill disabled");
+            orchestrator
+        }
+    }
+}
+
+/// Starts table maintenance of the sources `owned` names, unless it is turned off.
+fn spawn_maintenance(
+    config: MaintenanceConfig,
+    store: &Arc<dyn object_store::ObjectStore>,
+    store_config: &ObjectStoreConfig,
+    catalog: Arc<dyn iceberg::Catalog>,
+    catalog_config: &IcebergCatalogConfig,
+    owned: watch::Receiver<Vec<DataSource>>,
+) -> Option<JoinHandle<()>> {
+    let Some(interval) = config.interval else {
+        tracing::info!("table maintenance disabled");
+        return None;
+    };
+    let orphans = config.orphan_min_age.map(|min_age| {
+        OrphanSweeper::new(
+            Arc::clone(store),
+            format!("s3://{}/", store_config.bucket),
+            min_age,
+        )
+    });
+    let maintainer = Arc::new(IcebergTableMaintainer::new(
+        catalog,
+        Arc::new(RestSnapshotCommitter::new(catalog_config)),
+        config.compaction,
+        config.expiry,
+        orphans,
+    ));
+    tracing::info!(
+        interval_secs = interval.as_secs(),
+        "table maintenance enabled"
+    );
+    Some(tokio::spawn(
+        MaintenanceScheduler::new(maintainer, interval).run(owned),
+    ))
+}
+
+/// Captures what this instance is assigned until a shutdown signal: the registered sources are
+/// re-read every `INGESTION_SOURCE_REFRESH_INTERVAL_SECS`, the coordinator asked every
+/// `coordination_interval`.
+async fn run(
+    assignment: &mut Assignment,
+    captures: &mut Captures,
+    store: &dyn object_store::ObjectStore,
+    coordination_interval: Duration,
+) -> anyhow::Result<()> {
+    assignment.registered = datasource::list_registered(store).await?;
+    assignment.coordinate(captures, true).await;
+
+    let shutdown = shutdown_signal();
+    tokio::pin!(shutdown);
+    // The first ticks are immediate; the sources were just read.
+    let mut refresh = interval_after_first_tick(source_refresh_interval()).await;
+    let mut coordinate = interval_after_first_tick(coordination_interval).await;
+    loop {
+        tokio::select! {
+            result = &mut shutdown => return result,
+            _ = refresh.tick() => {
+                assignment.refresh(store).await;
+                assignment.coordinate(captures, true).await;
+            }
+            _ = coordinate.tick() => {
+                assignment.coordinate(captures, false).await;
+            }
+        }
+    }
+}
+
+/// `INGESTION_SOURCE_REFRESH_INTERVAL_SECS`, 30 by default, at least 1.
+fn source_refresh_interval() -> Duration {
+    Duration::from_secs(
+        std::env::var("INGESTION_SOURCE_REFRESH_INTERVAL_SECS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(30)
+            .max(1),
+    )
+}
+
+/// An interval of `period` whose immediate first tick is already taken, and that waits a full
+/// period after a missed tick rather than bursting.
+async fn interval_after_first_tick(period: Duration) -> tokio::time::Interval {
+    let mut interval = tokio::time::interval(period);
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    interval.tick().await;
+    interval
 }
 
 /// Logs to stdout: JSON, one object per line, with `LOG_FORMAT=json` (what `just local::up` sets,
@@ -222,22 +263,30 @@ impl Assignment {
     /// coordination service never stops a running capture, which would only let its slot hold
     /// WAL back.
     async fn coordinate(&mut self, captures: &mut Captures, force: bool) {
-        let ids: Vec<DataSourceId> = self.registered.iter().map(|source| source.id).collect();
-        let owned = match self.coordinator.assign(&ids).await {
-            Ok(owned) => owned,
-            Err(err) => {
-                tracing::warn!(error = %err, "could not coordinate, keeping the current assignment");
-                if !force {
-                    return;
-                }
-                self.owned.clone()
-            }
+        let Some(owned) = self.ask(force).await else {
+            return;
         };
-        let changed = owned != self.owned;
-        if !changed && !force {
+        if owned == self.owned && !force {
             return;
         }
+        self.apply(captures, owned).await;
+    }
 
+    /// Which registered sources the coordinator says are ours. When it can't answer: the
+    /// current assignment if `force`d, nothing to apply otherwise.
+    async fn ask(&self, force: bool) -> Option<HashSet<DataSourceId>> {
+        let ids: Vec<DataSourceId> = self.registered.iter().map(|source| source.id).collect();
+        match self.coordinator.assign(&ids).await {
+            Ok(owned) => Some(owned),
+            Err(err) => {
+                tracing::warn!(error = %err, "could not coordinate, keeping the current assignment");
+                force.then(|| self.owned.clone())
+            }
+        }
+    }
+
+    /// Reconciles the running captures with `owned`, then releases the sources no longer ours.
+    async fn apply(&mut self, captures: &mut Captures, owned: HashSet<DataSourceId>) {
         let mine: Vec<DataSource> = self
             .registered
             .iter()
@@ -259,12 +308,36 @@ impl Assignment {
         self.owned = owned;
     }
 
+    /// Reads the registered sources again; on failure the ones read last stand.
+    async fn refresh(&mut self, store: &dyn object_store::ObjectStore) {
+        match datasource::list_registered(store).await {
+            Ok(registered) => self.registered = registered,
+            Err(err) => {
+                tracing::warn!(error = %err, "could not re-read the registered data sources, keeping the current ones");
+            }
+        }
+    }
+
     /// Stops every capture and hands the sources back.
     async fn leave(&mut self, captures: &mut Captures) {
         captures.reconcile(Vec::new()).await;
         self.owned_sources.send_replace(Vec::new());
         let held: Vec<DataSourceId> = self.owned.drain().collect();
         self.coordinator.leave(&held).await;
+    }
+}
+
+/// Hands `selection` to `id`'s running capture, if it changed.
+fn update_selection(id: DataSourceId, capture: &Capture, selection: TableSelection) {
+    let changed = capture.selection.send_if_modified(|current| {
+        let changed = *current != selection;
+        if changed {
+            *current = selection;
+        }
+        changed
+    });
+    if changed {
+        tracing::info!(id = %id, tables = %capture.selection.borrow().describe(), "ingested tables changed");
     }
 }
 
@@ -299,58 +372,66 @@ impl Captures {
     /// no table chosen: stopping it would leave its replication slot unconsumed, holding WAL.
     async fn reconcile(&mut self, sources: Vec<DataSource>) {
         let registered: HashSet<DataSourceId> = sources.iter().map(|source| source.id).collect();
-
         for source in sources {
-            let running = self.running.contains_key(&source.id);
-            if !running && source.engine == DbEngine::MySql {
-                if self.skipped.insert(source.id) {
-                    tracing::warn!(id = %source.id, "MySQL change capture is not implemented yet, skipping");
-                }
-                continue;
-            }
-            // Can't tell yet what a source without a saved choice captures: leave a running
-            // capture as it is, and don't start one — its slot keeps the changes meanwhile,
-            // where starting with nothing selected would skip them.
-            let Some(selection) = self.selection_of(&source).await else {
-                continue;
-            };
-
-            if let Some(capture) = self.running.get(&source.id) {
-                let changed = capture.selection.send_if_modified(|current| {
-                    let changed = *current != selection;
-                    if changed {
-                        *current = selection;
-                    }
-                    changed
-                });
-                if changed {
-                    tracing::info!(id = %source.id, tables = %capture.selection.borrow().describe(), "ingested tables changed");
-                }
-                continue;
-            }
-
-            tracing::info!(
-                id = %source.id,
-                engine = ?source.engine,
-                tables = %selection.describe(),
-                "registered OLTP data source: {}",
-                source.name
-            );
-            let (selection_tx, selection_rx) = watch::channel(selection);
-            let orchestrator = Arc::clone(&self.orchestrator);
-            let id = source.id;
-            let task = tokio::spawn(async move {
-                orchestrator.run(source, selection_rx).await;
-            });
-            self.running.insert(
-                id,
-                Capture {
-                    selection: selection_tx,
-                    task,
-                },
-            );
+            self.reconcile_one(source).await;
         }
+        self.stop_unregistered(&registered);
+    }
 
+    async fn reconcile_one(&mut self, source: DataSource) {
+        if self.skips(&source) {
+            return;
+        }
+        // Can't tell yet what a source without a saved choice captures: leave a running
+        // capture as it is, and don't start one — its slot keeps the changes meanwhile,
+        // where starting with nothing selected would skip them.
+        let Some(selection) = self.selection_of(&source).await else {
+            return;
+        };
+        if let Some(capture) = self.running.get(&source.id) {
+            update_selection(source.id, capture, selection);
+            return;
+        }
+        self.start(source, selection);
+    }
+
+    /// Whether `source` is one that can't be captured (MySQL, for now), warned about the first
+    /// time it is seen.
+    fn skips(&mut self, source: &DataSource) -> bool {
+        if self.running.contains_key(&source.id) || source.engine != DbEngine::MySql {
+            return false;
+        }
+        if self.skipped.insert(source.id) {
+            tracing::warn!(id = %source.id, "MySQL change capture is not implemented yet, skipping");
+        }
+        true
+    }
+
+    fn start(&mut self, source: DataSource, selection: TableSelection) {
+        tracing::info!(
+            id = %source.id,
+            engine = ?source.engine,
+            tables = %selection.describe(),
+            "registered OLTP data source: {}",
+            source.name
+        );
+        let (selection_tx, selection_rx) = watch::channel(selection);
+        let orchestrator = Arc::clone(&self.orchestrator);
+        let id = source.id;
+        let task = tokio::spawn(async move {
+            orchestrator.run(source, selection_rx).await;
+        });
+        self.running.insert(
+            id,
+            Capture {
+                selection: selection_tx,
+                task,
+            },
+        );
+    }
+
+    /// Stops the captures of sources not in `registered`.
+    fn stop_unregistered(&mut self, registered: &HashSet<DataSourceId>) {
         self.running.retain(|id, capture| {
             let keep = registered.contains(id);
             if !keep {

@@ -49,44 +49,21 @@ async fn main() -> anyhow::Result<()> {
     let store_config = ObjectStoreConfig::from_env();
     let store = store_config.build_store()?;
 
-    let datasource_repository = Arc::new(ObjectStoreDataSourceRepository::new(store.clone()));
     let datasource_service = Arc::new(DataSourceService::new(
-        datasource_repository,
+        Arc::new(ObjectStoreDataSourceRepository::new(store.clone())),
         Arc::new(SqlxConnectionTester),
         Arc::new(SqlxSchemaExplorer),
     ));
-
-    let project_repository = Arc::new(ObjectStoreProjectRepository::new(store.clone()));
-    let project_service = Arc::new(ProjectService::new(project_repository));
-
+    let project_service = Arc::new(ProjectService::new(Arc::new(
+        ObjectStoreProjectRepository::new(store.clone()),
+    )));
     let saved_query_service = Arc::new(SavedQueryService::new(Arc::new(
         ObjectStoreSavedQueryRepository::new(store.clone()),
     )));
-
-    let migration_store = store.clone();
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .context("JWT_SECRET must be set (at least 32 bytes) to sign login tokens")?;
-    let user_service = Arc::new(UserService::new(
-        Arc::new(ObjectStoreUserRepository::new(store)),
-        Arc::new(Argon2PasswordHasher),
-        Arc::new(JwtTokenService::new(&jwt_secret).context("invalid JWT_SECRET")?),
-    ));
-    migrate_legacy_user_roles(&migration_store, &user_service).await?;
-    bootstrap_admin(&user_service).await?;
-
-    let query_api = Arc::new(http::QueryApi {
-        queries: CachedQueries::new(
-            QueryService::new(
-                IcebergCatalogConfig::from_env(&store_config).await?,
-                store_config,
-            ),
-            cache::from_env()?,
-            CacheConfig::from_env(),
-        ),
-        datasources: datasource_service.clone(),
-    });
+    let user_service = user_service(&store).await?;
+    let query_api = query_api(store_config, datasource_service.clone()).await?;
     tokio::spawn(record_existing_ingested_tables(
-        migration_store,
+        store,
         datasource_service.clone(),
         query_api.clone(),
     ));
@@ -99,14 +76,52 @@ async fn main() -> anyhow::Result<()> {
         query_api,
     )
     .layer(cors_layer()?);
+    serve(app).await
+}
 
+/// Accounts, signed with `JWT_SECRET`, after the stored ones are migrated and the first admin
+/// created if need be.
+async fn user_service(
+    store: &Arc<dyn object_store::ObjectStore>,
+) -> anyhow::Result<Arc<UserService>> {
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .context("JWT_SECRET must be set (at least 32 bytes) to sign login tokens")?;
+    let users = Arc::new(UserService::new(
+        Arc::new(ObjectStoreUserRepository::new(store.clone())),
+        Arc::new(Argon2PasswordHasher),
+        Arc::new(JwtTokenService::new(&jwt_secret).context("invalid JWT_SECRET")?),
+    ));
+    migrate_legacy_user_roles(store, &users).await?;
+    bootstrap_admin(&users).await?;
+    Ok(users)
+}
+
+/// Query access to the Iceberg catalog, with its results cached.
+async fn query_api(
+    store_config: ObjectStoreConfig,
+    datasources: Arc<DataSourceService>,
+) -> anyhow::Result<Arc<http::QueryApi>> {
+    Ok(Arc::new(http::QueryApi {
+        queries: CachedQueries::new(
+            QueryService::new(
+                IcebergCatalogConfig::from_env(&store_config).await?,
+                store_config,
+            ),
+            cache::from_env()?,
+            CacheConfig::from_env(),
+        ),
+        datasources,
+    }))
+}
+
+/// Serves `app` on `BACKEND_LISTEN` (`0.0.0.0:8080` by default).
+async fn serve(app: Router) -> anyhow::Result<()> {
     let listen = std::env::var("BACKEND_LISTEN").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
     let listener = tokio::net::TcpListener::bind(&listen)
         .await
         .with_context(|| format!("binding BACKEND_LISTEN={listen}"))?;
     tracing::info!("pipa-backend listening on {}", listener.local_addr()?);
     axum::serve(listener, app).await?;
-
     Ok(())
 }
 
@@ -207,21 +222,30 @@ async fn record_existing_ingested_tables(
         }
     };
     for id in ids {
-        match record_existing_tables_of(
+        record_and_log_existing_tables_of(
             store.as_ref(),
             &datasources,
             query_api.queries.uncached(),
             id,
         )
-        .await
-        {
-            Ok(Some(count)) => {
-                tracing::info!(%id, tables = count, "recorded the tables the data source has in pipa as its choice");
-            }
-            Ok(None) => {}
-            Err(err) => {
-                tracing::warn!(%id, error = format!("{err:#}"), "could not record the data source's tables yet, retrying at the next start");
-            }
+        .await;
+    }
+}
+
+/// [`record_existing_tables_of`], logging how it went.
+async fn record_and_log_existing_tables_of(
+    store: &dyn object_store::ObjectStore,
+    datasources: &DataSourceService,
+    queries: &QueryService,
+    id: datasource::DataSourceId,
+) {
+    match record_existing_tables_of(store, datasources, queries, id).await {
+        Ok(Some(count)) => {
+            tracing::info!(%id, tables = count, "recorded the tables the data source has in pipa as its choice");
+        }
+        Ok(None) => {}
+        Err(err) => {
+            tracing::warn!(%id, error = format!("{err:#}"), "could not record the data source's tables yet, retrying at the next start");
         }
     }
 }
@@ -235,28 +259,7 @@ async fn record_existing_tables_of(
     queries: &QueryService,
     id: datasource::DataSourceId,
 ) -> anyhow::Result<Option<usize>> {
-    let in_pipa: std::collections::HashSet<String> = queries
-        .list_tables(std::collections::HashSet::from([namespace_for_source(id)]))
-        .await
-        .context("listing its tables in pipa")?
-        .into_iter()
-        .map(|(_, name)| name)
-        .filter(|name| !is_metadata_table(name))
-        .collect();
-    let tables = if in_pipa.is_empty() {
-        Vec::new()
-    } else {
-        let source = datasources.get(id).await?;
-        datasources
-            .list_tables(&source)
-            .await
-            .context("listing the tables of its database")?
-            .into_iter()
-            .map(|table| table.table)
-            .filter(|table| in_pipa.contains(&table_for_source_table(&table.schema, &table.name)))
-            .collect()
-    };
-
+    let tables = source_tables_in_pipa(datasources, queries, id).await?;
     if !lacks_ingested_tables(store, id).await? {
         return Ok(None);
     }
@@ -266,6 +269,34 @@ async fn record_existing_tables_of(
         .await
         .context("saving the choice")?;
     Ok(Some(count))
+}
+
+/// The tables of `id`'s database whose pipa table already exists.
+async fn source_tables_in_pipa(
+    datasources: &DataSourceService,
+    queries: &QueryService,
+    id: datasource::DataSourceId,
+) -> anyhow::Result<Vec<datasource::domain::TableRef>> {
+    let in_pipa: std::collections::HashSet<String> = queries
+        .list_tables(std::collections::HashSet::from([namespace_for_source(id)]))
+        .await
+        .context("listing its tables in pipa")?
+        .into_iter()
+        .map(|(_, name)| name)
+        .filter(|name| !is_metadata_table(name))
+        .collect();
+    if in_pipa.is_empty() {
+        return Ok(Vec::new());
+    }
+    let source = datasources.get(id).await?;
+    Ok(datasources
+        .list_tables(&source)
+        .await
+        .context("listing the tables of its database")?
+        .into_iter()
+        .map(|table| table.table)
+        .filter(|table| in_pipa.contains(&table_for_source_table(&table.schema, &table.name)))
+        .collect())
 }
 
 /// The data sources whose stored JSON has no `ingested_tables` key. Read raw, since parsed the
@@ -311,18 +342,24 @@ async fn lacks_ingested_tables(
 /// Creates the first admin from `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD` when no user exists
 /// yet. Once any user exists these are ignored. Fails if there is no way to sign in at all.
 async fn bootstrap_admin(users: &UserService) -> anyhow::Result<()> {
+    create_admin_from_env(users).await?;
+    if !users.has_users().await? {
+        anyhow::bail!(
+            "no users exist yet: set PIPA_ADMIN_USERNAME and PIPA_ADMIN_PASSWORD to create the first admin"
+        );
+    }
+    Ok(())
+}
+
+/// Creates the admin `PIPA_ADMIN_USERNAME`/`PIPA_ADMIN_PASSWORD` name, if both are set and no
+/// user exists yet.
+async fn create_admin_from_env(users: &UserService) -> anyhow::Result<()> {
     if let (Ok(username), Ok(password)) = (
         std::env::var("PIPA_ADMIN_USERNAME"),
         std::env::var("PIPA_ADMIN_PASSWORD"),
     ) && users.bootstrap_admin(&username, &password).await?
     {
         tracing::info!("created the initial admin user \"{username}\"");
-    }
-
-    if !users.has_users().await? {
-        anyhow::bail!(
-            "no users exist yet: set PIPA_ADMIN_USERNAME and PIPA_ADMIN_PASSWORD to create the first admin"
-        );
     }
     Ok(())
 }
@@ -398,6 +435,7 @@ mod tests {
                         name: "pipa".to_string(),
                         uri: "http://localhost:1/iceberg".to_string(),
                         warehouse: "pipa".to_string(),
+                        sigv4: None,
                     },
                     ObjectStoreConfig::from_env(),
                 ),
@@ -938,7 +976,11 @@ mod tests {
 
         // Iceberg metadata tables aren't browsable, for any role.
         for (who, token) in [("viewer", &viewer), ("admin", &admin)] {
-            for table in ["public__orders$snapshots", "public__orders$manifests"] {
+            for table in [
+                "public__orders$snapshots",
+                "public__orders$manifests",
+                "public__orders$history",
+            ] {
                 let (status, _) = call(
                     &app,
                     "POST",

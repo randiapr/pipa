@@ -404,4 +404,115 @@ mod tests {
             assert_eq!(serde_json::from_str::<BackfillState>(json).unwrap(), state);
         }
     }
+
+    /// Postgres' text output for each target type becomes a typed column, nulls kept.
+    #[test]
+    fn text_values_are_typed_by_the_target_column() {
+        let column = |data_type: DataType, texts: &[Option<&str>]| {
+            build_typed_column(&data_type, texts).unwrap()
+        };
+
+        let utf8 = column(DataType::Utf8, &[Some("a"), None]);
+        assert_eq!(
+            utf8.as_any().downcast_ref::<StringArray>().unwrap(),
+            &StringArray::from(vec![Some("a"), None])
+        );
+        let booleans = column(
+            DataType::Boolean,
+            &[Some("t"), Some("false"), Some("1"), Some("FALSE"), None],
+        );
+        assert_eq!(
+            booleans.as_any().downcast_ref::<BooleanArray>().unwrap(),
+            &BooleanArray::from(vec![Some(true), Some(false), Some(true), Some(false), None])
+        );
+        let int16 = column(DataType::Int16, &[Some("-7"), None]);
+        assert_eq!(
+            int16.as_any().downcast_ref::<Int16Array>().unwrap(),
+            &Int16Array::from(vec![Some(-7), None])
+        );
+        let int32 = column(DataType::Int32, &[Some("70000")]);
+        assert_eq!(
+            int32.as_any().downcast_ref::<Int32Array>().unwrap(),
+            &Int32Array::from(vec![70000])
+        );
+        let int64 = column(DataType::Int64, &[Some("9000000000")]);
+        assert_eq!(
+            int64.as_any().downcast_ref::<Int64Array>().unwrap(),
+            &Int64Array::from(vec![9_000_000_000])
+        );
+        let float32 = column(DataType::Float32, &[Some("1.5")]);
+        assert_eq!(
+            float32.as_any().downcast_ref::<Float32Array>().unwrap(),
+            &Float32Array::from(vec![1.5])
+        );
+        let float64 = column(DataType::Float64, &[Some("-2.25"), None]);
+        assert_eq!(
+            float64.as_any().downcast_ref::<Float64Array>().unwrap(),
+            &Float64Array::from(vec![Some(-2.25), None])
+        );
+        let dates = column(
+            DataType::Date32,
+            &[Some("1970-01-02"), Some("1969-12-31"), None],
+        );
+        assert_eq!(
+            dates.as_any().downcast_ref::<Date32Array>().unwrap(),
+            &Date32Array::from(vec![Some(1), Some(-1), None])
+        );
+
+        let naive = column(
+            DataType::Timestamp(TimeUnit::Microsecond, None),
+            &[
+                Some("1970-01-01 00:00:01.5"),
+                Some("1970-01-01 00:00:02"),
+                None,
+            ],
+        );
+        assert_eq!(
+            naive
+                .as_any()
+                .downcast_ref::<TimestampMicrosecondArray>()
+                .unwrap(),
+            &TimestampMicrosecondArray::from(vec![Some(1_500_000), Some(2_000_000), None])
+        );
+        let zoned = column(
+            DataType::Timestamp(TimeUnit::Microsecond, Some("+00:00".into())),
+            &[
+                Some("1970-01-01 07:00:01.25+07"),
+                Some("1970-01-01 00:00:02+00"),
+            ],
+        );
+        let zoned = zoned
+            .as_any()
+            .downcast_ref::<TimestampMicrosecondArray>()
+            .unwrap();
+        assert_eq!(zoned.values(), &[1_250_000, 2_000_000]);
+        assert_eq!(zoned.timezone(), Some("+00:00"));
+    }
+
+    #[test]
+    fn text_values_that_do_not_fit_the_target_column_are_mapping_errors() {
+        let cases = [
+            (DataType::Boolean, "maybe"),
+            (DataType::Int16, "70000"),
+            (DataType::Int64, "x"),
+            (DataType::Float64, "one"),
+            (DataType::Date32, "2026-13-01"),
+            (DataType::Timestamp(TimeUnit::Microsecond, None), "noon"),
+            (
+                DataType::Timestamp(TimeUnit::Microsecond, Some("+00:00".into())),
+                "1970-01-01 00:00:00",
+            ),
+        ];
+        for (data_type, text) in cases {
+            let result = build_typed_column(&data_type, &[Some(text)]);
+            assert!(
+                matches!(result, Err(WriteError::Mapping(_))),
+                "{data_type:?} accepted {text:?}"
+            );
+        }
+        assert!(matches!(
+            build_typed_column(&DataType::Binary, &[None]),
+            Err(WriteError::Mapping(_))
+        ));
+    }
 }

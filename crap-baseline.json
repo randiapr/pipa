@@ -1812,61 +1812,52 @@
     {
       "file": "crates/backend/src/iceberg/catalog.rs",
       "function": "IcebergCatalogConfig::build_catalog",
-      "line": 54,
-      "cyclomatic": 2.0,
-      "coverage": 100.0,
-      "crap": 2.0,
-      "crate": "pipa-backend"
+      "line": 70,
+      "cyclomatic": 3.0,
+      "coverage": 96.66666666666667,
+      "crap": 3.0003333333333333,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 99,
+          "end": 99
+        }
+      ]
     },
     {
       "file": "crates/backend/src/iceberg/catalog.rs",
       "function": "IcebergCatalogConfig::from_env",
-      "line": 38,
+      "line": 44,
       "cyclomatic": 4.0,
       "coverage": 0.0,
       "crap": 20.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 38,
-          "end": 49
-        }
-      ]
-    },
-    {
-      "file": "crates/backend/src/iceberg/catalog.rs",
-      "function": "embedded_catalog_uri",
-      "line": 89,
-      "cyclomatic": 2.0,
-      "coverage": 0.0,
-      "crap": 6.0,
-      "crate": "pipa-backend",
-      "uncovered": [
-        {
-          "start": 89,
-          "end": 99
+          "start": 44,
+          "end": 65
         }
       ]
     },
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "QueryService::list_tables",
-      "line": 129,
+      "line": 125,
       "cyclomatic": 2.0,
       "coverage": 60.0,
       "crap": 2.2560000000000002,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 134,
-          "end": 137
+          "start": 130,
+          "end": 133
         }
       ]
     },
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "QueryService::new",
-      "line": 103,
+      "line": 99,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -1875,37 +1866,37 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "QueryService::query",
-      "line": 119,
+      "line": 115,
       "cyclomatic": 2.0,
       "coverage": 87.5,
       "crap": 2.0078125,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 125,
-          "end": 125
+          "start": 121,
+          "end": 121
         }
       ]
     },
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "QueryService::read_table",
-      "line": 149,
+      "line": 145,
       "cyclomatic": 5.0,
       "coverage": 80.95238095238095,
       "crap": 5.172767519706295,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 165,
-          "end": 168
+          "start": 161,
+          "end": 164
         }
       ]
     },
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "QueryService::session",
-      "line": 174,
+      "line": 170,
       "cyclomatic": 2.0,
       "coverage": 100.0,
       "crap": 2.0,
@@ -1914,37 +1905,22 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "QueryService::session_with",
-      "line": 187,
+      "line": 183,
       "cyclomatic": 4.0,
       "coverage": 50.0,
       "crap": 6.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 196,
-          "end": 206
-        }
-      ]
-    },
-    {
-      "file": "crates/backend/src/iceberg/query.rs",
-      "function": "ScopedCatalog::as_any",
-      "line": 74,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-backend",
-      "uncovered": [
-        {
-          "start": 74,
-          "end": 76
+          "start": 192,
+          "end": 202
         }
       ]
     },
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "ScopedCatalog::schema",
-      "line": 86,
+      "line": 82,
       "cyclomatic": 2.0,
       "coverage": 100.0,
       "crap": 2.0,
@@ -1953,7 +1929,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "ScopedCatalog::schema_names",
-      "line": 78,
+      "line": 74,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -1962,7 +1938,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "encode",
-      "line": 344,
+      "line": 339,
       "cyclomatic": 3.0,
       "coverage": 100.0,
       "crap": 3.0,
@@ -1971,7 +1947,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "is_metadata_table",
-      "line": 221,
+      "line": 216,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -1980,15 +1956,15 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "key_columns",
-      "line": 246,
+      "line": 241,
       "cyclomatic": 3.0,
       "coverage": 75.0,
       "crap": 3.140625,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 252,
-          "end": 253
+          "start": 247,
+          "end": 248
         }
       ]
     },
@@ -2004,7 +1980,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "read_current_rows",
-      "line": 273,
+      "line": 268,
       "cyclomatic": 12.0,
       "coverage": 100.0,
       "crap": 12.0,
@@ -2013,7 +1989,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "read_rows",
-      "line": 327,
+      "line": 322,
       "cyclomatic": 4.0,
       "coverage": 100.0,
       "crap": 4.0,
@@ -2022,7 +1998,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "run_read_only",
-      "line": 356,
+      "line": 351,
       "cyclomatic": 3.0,
       "coverage": 100.0,
       "crap": 3.0,
@@ -2031,7 +2007,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "sortable_position",
-      "line": 258,
+      "line": 253,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -2049,7 +2025,7 @@
     {
       "file": "crates/backend/src/iceberg/query.rs",
       "function": "tables_of",
-      "line": 310,
+      "line": 305,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -2058,37 +2034,52 @@
     {
       "file": "crates/backend/src/main.rs",
       "function": "bootstrap_admin",
-      "line": 313,
-      "cyclomatic": 6.0,
+      "line": 344,
+      "cyclomatic": 4.0,
       "coverage": 0.0,
-      "crap": 42.0,
+      "crap": 20.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 313,
-          "end": 328
+          "start": 344,
+          "end": 352
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "cors_layer",
-      "line": 332,
+      "line": 369,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 332,
-          "end": 348
+          "start": 369,
+          "end": 385
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "create_admin_from_env",
+      "line": 356,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 356,
+          "end": 365
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "health",
-      "line": 350,
+      "line": 387,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -2097,22 +2088,22 @@
     {
       "file": "crates/backend/src/main.rs",
       "function": "init_tracing",
-      "line": 116,
+      "line": 131,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 116,
-          "end": 126
+          "start": 131,
+          "end": 141
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "lacks_ingested_tables",
-      "line": 296,
+      "line": 327,
       "cyclomatic": 4.0,
       "coverage": 100.0,
       "crap": 4.0,
@@ -2122,70 +2113,100 @@
       "file": "crates/backend/src/main.rs",
       "function": "main",
       "line": 46,
-      "cyclomatic": 11.0,
+      "cyclomatic": 5.0,
       "coverage": 0.0,
-      "crap": 132.0,
+      "crap": 30.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
           "start": 46,
-          "end": 111
+          "end": 80
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "migrate_legacy_user_roles",
-      "line": 163,
+      "line": 178,
       "cyclomatic": 7.0,
       "coverage": 90.47619047619048,
       "crap": 7.042328042328042,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 173,
-          "end": 173
+          "start": 188,
+          "end": 188
         },
         {
-          "start": 181,
-          "end": 181
+          "start": 196,
+          "end": 196
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "query_api",
+      "line": 100,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 100,
+          "end": 115
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "record_and_log_existing_tables_of",
+      "line": 236,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 236,
+          "end": 251
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "record_existing_ingested_tables",
-      "line": 197,
-      "cyclomatic": 7.0,
+      "line": 212,
+      "cyclomatic": 4.0,
       "coverage": 0.0,
-      "crap": 56.0,
+      "crap": 20.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 197,
-          "end": 227
+          "start": 212,
+          "end": 233
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "record_existing_tables_of",
-      "line": 232,
-      "cyclomatic": 8.0,
+      "line": 256,
+      "cyclomatic": 5.0,
       "coverage": 0.0,
-      "crap": 72.0,
+      "crap": 30.0,
       "crate": "pipa-backend",
       "uncovered": [
         {
-          "start": 232,
-          "end": 269
+          "start": 256,
+          "end": 272
         }
       ]
     },
     {
       "file": "crates/backend/src/main.rs",
       "function": "router",
-      "line": 130,
+      "line": 145,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -2193,12 +2214,57 @@
     },
     {
       "file": "crates/backend/src/main.rs",
+      "function": "serve",
+      "line": 118,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 118,
+          "end": 126
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "source_tables_in_pipa",
+      "line": 275,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 275,
+          "end": 300
+        }
+      ]
+    },
+    {
+      "file": "crates/backend/src/main.rs",
       "function": "sources_without_ingested_tables",
-      "line": 273,
+      "line": 304,
       "cyclomatic": 8.0,
       "coverage": 100.0,
       "crap": 8.0,
       "crate": "pipa-backend"
+    },
+    {
+      "file": "crates/backend/src/main.rs",
+      "function": "user_service",
+      "line": 84,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-backend",
+      "uncovered": [
+        {
+          "start": 84,
+          "end": 97
+        }
+      ]
     },
     {
       "file": "crates/backend/src/project/application.rs",
@@ -2978,250 +3044,202 @@
       "crate": "pipa-backend"
     },
     {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::enable_tables",
-      "line": 156,
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "SigV4AuthManager::catalog_session",
+      "line": 68,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "SigV4AuthManager::init_session",
+      "line": 58,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "SigV4AuthManager::new",
+      "line": 51,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "SigV4Session::authenticate",
+      "line": 87,
       "cyclomatic": 3.0,
-      "coverage": 100.0,
-      "crap": 3.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::enable_tables_with_retry",
-      "line": 175,
-      "cyclomatic": 5.0,
-      "coverage": 54.54545454545454,
-      "crap": 7.347858752817431,
-      "crate": "pipa-catalog-proxy",
+      "coverage": 16.666666666666664,
+      "crap": 8.208333333333336,
+      "crate": "pipa-catalog-auth",
       "uncovered": [
         {
-          "start": 183,
-          "end": 190
+          "start": 88,
+          "end": 104
         }
       ]
     },
     {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::new",
-      "line": 81,
-      "cyclomatic": 5.0,
-      "coverage": 94.44444444444444,
-      "crap": 5.004286694101509,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 91,
-          "end": 91
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::router",
-      "line": 194,
-      "cyclomatic": 1.0,
-      "coverage": 100.0,
-      "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::send_signed",
-      "line": 109,
-      "cyclomatic": 2.0,
-      "coverage": 100.0,
-      "crap": 2.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::serve_embedded",
-      "line": 202,
-      "cyclomatic": 5.0,
-      "coverage": 81.25,
-      "crap": 5.164794921875,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 213,
-          "end": 215
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "CatalogProxy::upstream",
-      "line": 103,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 103,
-          "end": 105
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "forward",
-      "line": 221,
-      "cyclomatic": 3.0,
-      "coverage": 100.0,
-      "crap": 3.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/lib.rs",
-      "function": "try_forward",
-      "line": 231,
-      "cyclomatic": 9.0,
-      "coverage": 87.8048780487805,
-      "crap": 9.146907328680664,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 268,
-          "end": 272
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/main.rs",
-      "function": "env_or",
-      "line": 22,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 22,
-          "end": 24
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/main.rs",
-      "function": "init_tracing",
-      "line": 54,
-      "cyclomatic": 2.0,
-      "coverage": 0.0,
-      "crap": 6.0,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 54,
-          "end": 64
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/main.rs",
-      "function": "main",
-      "line": 27,
-      "cyclomatic": 5.0,
-      "coverage": 0.0,
-      "crap": 30.0,
-      "crate": "pipa-catalog-proxy",
-      "uncovered": [
-        {
-          "start": 27,
-          "end": 49
-        }
-      ]
-    },
-    {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "Signer::authorization",
-      "line": 42,
-      "cyclomatic": 2.0,
-      "coverage": 100.0,
-      "crap": 2.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "Signer::new",
-      "line": 25,
-      "cyclomatic": 1.0,
-      "coverage": 100.0,
-      "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "amz_date",
-      "line": 97,
-      "cyclomatic": 1.0,
-      "coverage": 100.0,
-      "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "canonical_path",
-      "line": 121,
-      "cyclomatic": 2.0,
-      "coverage": 100.0,
-      "crap": 2.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "canonical_query",
-      "line": 129,
-      "cyclomatic": 1.0,
-      "coverage": 100.0,
-      "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
-    },
-    {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "decode",
-      "line": 146,
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "enable_s3_tables",
+      "line": 116,
       "cyclomatic": 5.0,
       "coverage": 100.0,
       "crap": 5.0,
-      "crate": "pipa-catalog-proxy"
+      "crate": "pipa-catalog-auth"
     },
     {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
-      "function": "encode",
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "enable_s3_tables_with_retry",
+      "line": 136,
+      "cyclomatic": 5.0,
+      "coverage": 68.75,
+      "crap": 5.762939453125,
+      "crate": "pipa-catalog-auth",
+      "uncovered": [
+        {
+          "start": 149,
+          "end": 156
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-auth/src/lib.rs",
+      "function": "rustfs_catalog_uri",
+      "line": 39,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "Signer::authorization",
+      "line": 112,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "Signer::fmt",
       "line": 169,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
+      "crate": "pipa-catalog-auth"
     },
     {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "Signer::new",
+      "line": 32,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "Signer::sign",
+      "line": 50,
+      "cyclomatic": 6.0,
+      "coverage": 95.45454545454545,
+      "crap": 6.0033809166040575,
+      "crate": "pipa-catalog-auth",
+      "uncovered": [
+        {
+          "start": 60,
+          "end": 61
+        }
+      ]
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "Signer::sign_request",
+      "line": 99,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "amz_date",
+      "line": 179,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "canonical_path",
+      "line": 203,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "canonical_query",
+      "line": 211,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "decode",
+      "line": 228,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
+      "function": "encode",
+      "line": 251,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-catalog-auth"
+    },
+    {
+      "file": "crates/catalog-auth/src/sigv4.rs",
       "function": "hex",
-      "line": 112,
+      "line": 194,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
+      "crate": "pipa-catalog-auth"
     },
     {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "file": "crates/catalog-auth/src/sigv4.rs",
       "function": "hmac",
-      "line": 106,
+      "line": 188,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
+      "crate": "pipa-catalog-auth"
     },
     {
-      "file": "crates/catalog-proxy/src/sigv4.rs",
+      "file": "crates/catalog-auth/src/sigv4.rs",
       "function": "sha256_hex",
-      "line": 102,
+      "line": 184,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
-      "crate": "pipa-catalog-proxy"
+      "crate": "pipa-catalog-auth"
     },
     {
       "file": "crates/ingestion/src/capture/application.rs",
@@ -3279,9 +3297,9 @@
       "file": "crates/ingestion/src/capture/application.rs",
       "function": "CaptureOrchestrator::flush_due",
       "line": 421,
-      "cyclomatic": 4.0,
+      "cyclomatic": 2.0,
       "coverage": 100.0,
-      "crap": 4.0,
+      "crap": 2.0,
       "crate": "pipa-ingestion"
     },
     {
@@ -3682,82 +3700,67 @@
     {
       "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
       "function": "PostgresWalSource::default",
-      "line": 90,
+      "line": 100,
       "cyclomatic": 1.0,
       "coverage": 0.0,
       "crap": 2.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 90,
-          "end": 92
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
-      "function": "PostgresWalSource::ensure_replication_objects",
-      "line": 48,
-      "cyclomatic": 8.0,
-      "coverage": 0.0,
-      "crap": 72.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 48,
-          "end": 86
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
-      "function": "PostgresWalSource::new",
-      "line": 44,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 44,
-          "end": 46
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
-      "function": "PostgresWalSource::stream_changes",
-      "line": 114,
-      "cyclomatic": 32.0,
-      "coverage": 0.0,
-      "crap": 1056.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 118,
-          "end": 296
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
-      "function": "is_duplicate_object",
-      "line": 95,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 95,
+          "start": 100,
           "end": 102
         }
       ]
     },
     {
       "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
-      "function": "postgres_to_unix_micros",
-      "line": 301,
+      "function": "PostgresWalSource::ensure_replication_objects",
+      "line": 49,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 49,
+          "end": 60
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "PostgresWalSource::new",
+      "line": 45,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 45,
+          "end": 47
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "PostgresWalSource::stream_changes",
+      "line": 124,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 128,
+          "end": 145
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "Step::decode_error",
+      "line": 269,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -3765,48 +3768,213 @@
     },
     {
       "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
-      "function": "replication_publication_name",
-      "line": 108,
+      "function": "Step::deliver",
+      "line": 275,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "Step::progress",
+      "line": 263,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "Step::send",
+      "line": 256,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "WalDecoder::event",
+      "line": 310,
+      "cyclomatic": 8.0,
+      "coverage": 100.0,
+      "crap": 8.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "WalDecoder::receive",
+      "line": 299,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "WalDecoder::relation",
+      "line": 367,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "WalDecoder::xlog_data",
+      "line": 339,
+      "cyclomatic": 8.0,
+      "coverage": 100.0,
+      "crap": 8.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "confirm",
+      "line": 219,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 219,
+          "end": 236
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "ensure_publication",
+      "line": 64,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 64,
+          "end": 78
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "ensure_slot",
+      "line": 81,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 81,
+          "end": 97
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "forward_stream",
+      "line": 193,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 193,
+          "end": 211
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "is_duplicate_object",
+      "line": 105,
       "cyclomatic": 1.0,
       "coverage": 0.0,
       "crap": 2.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 108,
-          "end": 110
+          "start": 105,
+          "end": 112
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "postgres_to_unix_micros",
+      "line": 380,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "replication_config",
+      "line": 150,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "replication_publication_name",
+      "line": 118,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 118,
+          "end": 120
         }
       ]
     },
     {
       "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
       "function": "replication_slot_name",
-      "line": 104,
+      "line": 114,
       "cyclomatic": 1.0,
       "coverage": 0.0,
       "crap": 2.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 104,
-          "end": 106
+          "start": 114,
+          "end": 116
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
+      "function": "start_replication",
+      "line": 179,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 179,
+          "end": 188
         }
       ]
     },
     {
       "file": "crates/ingestion/src/capture/infrastructure/postgres/mod.rs",
       "function": "to_change_event",
-      "line": 305,
+      "line": 384,
       "cyclomatic": 5.0,
-      "coverage": 0.0,
-      "crap": 30.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 305,
-          "end": 338
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
@@ -3857,14 +4025,14 @@
       "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
       "function": "PostgresSnapshotSource::read_chunk",
       "line": 141,
-      "cyclomatic": 11.0,
+      "cyclomatic": 3.0,
       "coverage": 0.0,
-      "crap": 132.0,
+      "crap": 12.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
           "start": 147,
-          "end": 220
+          "end": 155
         }
       ]
     },
@@ -3889,6 +4057,69 @@
         {
           "start": 46,
           "end": 69
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "fetch_rows",
+      "line": 217,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 217,
+          "end": 250
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "last_key",
+      "line": 253,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "page_keys",
+      "line": 185,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "read_page",
+      "line": 170,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 170,
+          "end": 182
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/capture/infrastructure/postgres/snapshot.rs",
+      "function": "row_key",
+      "line": 159,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 159,
+          "end": 167
         }
       ]
     },
@@ -3958,15 +4189,30 @@
     {
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "RedisCoordinator::assign",
-      "line": 195,
+      "line": 222,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 198,
-          "end": 202
+          "start": 225,
+          "end": 229
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::claim",
+      "line": 160,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 160,
+          "end": 186
         }
       ]
     },
@@ -4018,15 +4264,30 @@
     {
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "RedisCoordinator::leave",
-      "line": 214,
-      "cyclomatic": 6.0,
+      "line": 241,
+      "cyclomatic": 4.0,
       "coverage": 0.0,
-      "crap": 42.0,
+      "crap": 20.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 214,
-          "end": 231
+          "start": 241,
+          "end": 249
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::leave_group",
+      "line": 189,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 189,
+          "end": 197
         }
       ]
     },
@@ -4050,43 +4311,37 @@
       "function": "RedisCoordinator::new",
       "line": 66,
       "cyclomatic": 2.0,
-      "coverage": 0.0,
-      "crap": 6.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 66,
-          "end": 74
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "RedisCoordinator::release",
-      "line": 204,
+      "line": 231,
       "cyclomatic": 4.0,
       "coverage": 0.0,
       "crap": 20.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 204,
-          "end": 212
+          "start": 231,
+          "end": 239
         }
       ]
     },
     {
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "RedisCoordinator::release_leases",
-      "line": 172,
+      "line": 199,
       "cyclomatic": 4.0,
       "coverage": 0.0,
       "crap": 20.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 172,
-          "end": 190
+          "start": 199,
+          "end": 217
         }
       ]
     },
@@ -4094,44 +4349,53 @@
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "RedisCoordinator::round",
       "line": 134,
-      "cyclomatic": 6.0,
+      "cyclomatic": 3.0,
       "coverage": 0.0,
-      "crap": 42.0,
+      "crap": 12.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
           "start": 134,
-          "end": 170
+          "end": 142
         }
       ]
     },
     {
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
+      "function": "RedisCoordinator::wins",
+      "line": 145,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "eval",
-      "line": 237,
+      "line": 255,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 237,
-          "end": 244
+          "start": 255,
+          "end": 262
         }
       ]
     },
     {
       "file": "crates/ingestion/src/coordination/infrastructure/redis_coordinator.rs",
       "function": "unavailable",
-      "line": 246,
+      "line": 264,
       "cyclomatic": 1.0,
       "coverage": 0.0,
       "crap": 2.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 246,
-          "end": 248
+          "start": 264,
+          "end": 266
         }
       ]
     },
@@ -4278,118 +4542,247 @@
       "function": "list_registered",
       "line": 141,
       "cyclomatic": 6.0,
-      "coverage": 0.0,
-      "crap": 42.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 141,
-          "end": 152
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/main.rs",
-      "function": "Assignment::coordinate",
-      "line": 224,
-      "cyclomatic": 7.0,
-      "coverage": 0.0,
-      "crap": 56.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 224,
-          "end": 260
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/main.rs",
-      "function": "Assignment::leave",
-      "line": 263,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 263,
-          "end": 268
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/main.rs",
-      "function": "Assignment::new",
-      "line": 205,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 205,
-          "end": 215
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/main.rs",
-      "function": "Captures::new",
-      "line": 288,
-      "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 288,
-          "end": 295
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/main.rs",
-      "function": "Captures::reconcile",
-      "line": 300,
-      "cyclomatic": 7.0,
-      "coverage": 0.0,
-      "crap": 56.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 300,
-          "end": 363
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/main.rs",
-      "function": "Captures::selection_of",
-      "line": 367,
-      "cyclomatic": 4.0,
-      "coverage": 0.0,
-      "crap": 20.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 367,
-          "end": 378
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/main.rs",
-      "function": "init_tracing",
-      "line": 182,
+      "function": "Assignment::apply",
+      "line": 289,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 182,
-          "end": 192
+          "start": 289,
+          "end": 309
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::ask",
+      "line": 277,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 277,
+          "end": 286
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::coordinate",
+      "line": 265,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 265,
+          "end": 273
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::leave",
+      "line": 322,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 322,
+          "end": 327
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::new",
+      "line": 246,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 246,
+          "end": 256
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Assignment::refresh",
+      "line": 312,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 312,
+          "end": 319
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::new",
+      "line": 361,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 361,
+          "end": 368
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::reconcile",
+      "line": 373,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 373,
+          "end": 379
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::reconcile_one",
+      "line": 381,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 381,
+          "end": 396
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::selection_of",
+      "line": 448,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 448,
+          "end": 459
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::skips",
+      "line": 400,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 400,
+          "end": 408
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::start",
+      "line": 410,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 410,
+          "end": 431
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "Captures::stop_unregistered",
+      "line": 434,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 434,
+          "end": 444
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "capture_orchestrator",
+      "line": 117,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 117,
+          "end": 131
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "init_tracing",
+      "line": 223,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 223,
+          "end": 233
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "interval_after_first_tick",
+      "line": 213,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 213,
+          "end": 218
         }
       ]
     },
@@ -4397,29 +4790,104 @@
       "file": "crates/ingestion/src/main.rs",
       "function": "main",
       "line": 66,
-      "cyclomatic": 12.0,
+      "cyclomatic": 5.0,
       "coverage": 0.0,
-      "crap": 156.0,
+      "crap": 30.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
           "start": 66,
-          "end": 177
+          "end": 99
         }
       ]
     },
     {
       "file": "crates/ingestion/src/main.rs",
-      "function": "shutdown_signal",
-      "line": 385,
+      "function": "run",
+      "line": 172,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 172,
+          "end": 198
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "shut_down",
+      "line": 102,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 385,
-          "end": 392
+          "start": 102,
+          "end": 113
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "shutdown_signal",
+      "line": 466,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 466,
+          "end": 473
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "source_refresh_interval",
+      "line": 201,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 201,
+          "end": 209
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "spawn_maintenance",
+      "line": 134,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 134,
+          "end": 167
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/main.rs",
+      "function": "update_selection",
+      "line": 331,
+      "cyclomatic": 2.0,
+      "coverage": 0.0,
+      "crap": 6.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 331,
+          "end": 342
         }
       ]
     },
@@ -4556,7 +5024,7 @@
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
       "function": "CatalogConfig::base",
-      "line": 112,
+      "line": 124,
       "cyclomatic": 3.0,
       "coverage": 100.0,
       "crap": 3.0,
@@ -4565,14 +5033,14 @@
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
       "function": "RestSnapshotCommitter::base",
-      "line": 69,
+      "line": 83,
       "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
+      "coverage": 85.71428571428571,
+      "crap": 1.0029154518950438,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 69,
+          "start": 96,
           "end": 99
         }
       ]
@@ -4580,30 +5048,142 @@
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
       "function": "RestSnapshotCommitter::commit",
-      "line": 131,
+      "line": 143,
       "cyclomatic": 7.0,
-      "coverage": 0.0,
-      "crap": 56.0,
+      "coverage": 50.0,
+      "crap": 13.125,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 136,
-          "end": 170
+          "start": 160,
+          "end": 171
         }
       ]
     },
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
       "function": "RestSnapshotCommitter::new",
-      "line": 58,
+      "line": 60,
       "cyclomatic": 1.0,
-      "coverage": 0.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/commit.rs",
+      "function": "RestSnapshotCommitter::send",
+      "line": 71,
+      "cyclomatic": 3.0,
+      "coverage": 100.0,
+      "crap": 3.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::additions",
+      "line": 441,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::manifest_list",
+      "line": 455,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::manifest_writer",
+      "line": 336,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
       "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::new",
+      "line": 325,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::removals",
+      "line": 423,
+      "cyclomatic": 6.0,
+      "coverage": 92.3076923076923,
+      "crap": 6.0163859808830225,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 58,
-          "end": 65
+          "start": 433,
+          "end": 433
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::rewritten",
+      "line": 408,
+      "cyclomatic": 5.0,
+      "coverage": 0.0,
+      "crap": 30.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 408,
+          "end": 418
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::without",
+      "line": 374,
+      "cyclomatic": 8.0,
+      "coverage": 88.88888888888889,
+      "crap": 8.087791495198903,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 381,
+          "end": 381
+        },
+        {
+          "start": 402,
+          "end": 404
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "ReplaceFiles::without_inputs",
+      "line": 356,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
+      "function": "add_existing",
+      "line": 482,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 482,
+          "end": 496
         }
       ]
     },
@@ -4687,22 +5267,22 @@
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
       "function": "delete_files",
-      "line": 507,
+      "line": 596,
       "cyclomatic": 4.0,
       "coverage": 77.77777777777779,
       "crap": 4.175582990397805,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 512,
-          "end": 513
+          "start": 601,
+          "end": 602
         }
       ]
     },
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
       "function": "load",
-      "line": 499,
+      "line": 588,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -4711,30 +5291,30 @@
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
       "function": "new_snapshot_id",
-      "line": 489,
+      "line": 578,
       "cyclomatic": 4.0,
       "coverage": 85.71428571428571,
       "crap": 4.0466472303206995,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 495,
-          "end": 495
+          "start": 584,
+          "end": 584
         }
       ]
     },
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
       "function": "replace_summary",
-      "line": 411,
+      "line": 500,
       "cyclomatic": 11.0,
       "coverage": 93.75,
       "crap": 11.029541015625,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 466,
-          "end": 469
+          "start": 555,
+          "end": 558
         }
       ]
     },
@@ -4750,15 +5330,15 @@
     {
       "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
       "function": "sequence_number_of",
-      "line": 482,
+      "line": 571,
       "cyclomatic": 1.0,
       "coverage": 60.0,
       "crap": 1.064,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 484,
-          "end": 485
+          "start": 573,
+          "end": 574
         }
       ]
     },
@@ -4766,30 +5346,14 @@
       "file": "crates/ingestion/src/maintenance/infrastructure/compaction.rs",
       "function": "stage_replace",
       "line": 250,
-      "cyclomatic": 30.0,
-      "coverage": 85.38461538461539,
-      "crap": 32.80978607191624,
+      "cyclomatic": 6.0,
+      "coverage": 96.61016949152543,
+      "crap": 6.001402285530653,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 285,
-          "end": 286
-        },
-        {
-          "start": 310,
-          "end": 311
-        },
-        {
-          "start": 315,
-          "end": 327
-        },
-        {
-          "start": 330,
-          "end": 331
-        },
-        {
-          "start": 343,
-          "end": 343
+          "start": 264,
+          "end": 265
         }
       ]
     },
@@ -4965,23 +5529,32 @@
     },
     {
       "file": "crates/ingestion/src/postgres.rs",
+      "function": "group_key_columns",
+      "line": 51,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/postgres.rs",
       "function": "key_columns",
       "line": 29,
-      "cyclomatic": 6.0,
+      "cyclomatic": 2.0,
       "coverage": 0.0,
-      "crap": 42.0,
+      "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
           "start": 29,
-          "end": 55
+          "end": 48
         }
       ]
     },
     {
       "file": "crates/ingestion/src/postgres.rs",
       "function": "quote_ident",
-      "line": 58,
+      "line": 62,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -5049,23 +5622,9 @@
       "function": "build_typed_column",
       "line": 264,
       "cyclomatic": 21.0,
-      "coverage": 17.5,
-      "crap": 268.62839062499995,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 268,
-          "end": 268
-        },
-        {
-          "start": 271,
-          "end": 277
-        },
-        {
-          "start": 279,
-          "end": 308
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 21.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/domain.rs",
@@ -5105,60 +5664,36 @@
       "function": "parse_bool",
       "line": 332,
       "cyclomatic": 4.0,
-      "coverage": 0.0,
-      "crap": 20.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 332,
-          "end": 340
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/domain.rs",
       "function": "parse_date32",
       "line": 344,
       "cyclomatic": 2.0,
-      "coverage": 0.0,
-      "crap": 6.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 344,
-          "end": 349
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/domain.rs",
       "function": "parse_numbers",
       "line": 313,
       "cyclomatic": 1.0,
-      "coverage": 88.23529411764706,
-      "crap": 1.0016283329940974,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 324,
-          "end": 325
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/domain.rs",
       "function": "parse_timestamp_micros",
       "line": 353,
       "cyclomatic": 5.0,
-      "coverage": 0.0,
-      "crap": 30.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 353,
-          "end": 371
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/domain.rs",
@@ -5181,131 +5716,151 @@
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergCatalogConfig::build_catalog",
-      "line": 107,
-      "cyclomatic": 2.0,
+      "line": 124,
+      "cyclomatic": 3.0,
       "coverage": 0.0,
-      "crap": 6.0,
+      "crap": 12.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 107,
-          "end": 136
+          "start": 124,
+          "end": 157
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergCatalogConfig::from_env",
-      "line": 92,
+      "line": 99,
       "cyclomatic": 4.0,
       "coverage": 0.0,
       "crap": 20.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 92,
-          "end": 103
+          "start": 99,
+          "end": 120
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergChangelogWriter::backfill_state",
-      "line": 330,
+      "line": 431,
       "cyclomatic": 4.0,
       "coverage": 50.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 339,
-          "end": 347
+          "start": 440,
+          "end": 448
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergChangelogWriter::commit_backfill",
-      "line": 351,
-      "cyclomatic": 10.0,
+      "line": 452,
+      "cyclomatic": 7.0,
       "coverage": 40.0,
-      "crap": 31.6,
+      "crap": 17.584,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 385,
-          "end": 395
+          "start": 474,
+          "end": 484
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergChangelogWriter::commit_batch",
-      "line": 266,
+      "line": 367,
       "cyclomatic": 5.0,
       "coverage": 50.0,
       "crap": 8.125,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 298,
-          "end": 301
+          "start": 399,
+          "end": 402
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::create_or_load",
+      "line": 258,
+      "cyclomatic": 4.0,
+      "coverage": 90.0,
+      "crap": 4.016,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 266,
+          "end": 266
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::ensure_namespace",
+      "line": 237,
+      "cyclomatic": 6.0,
+      "coverage": 87.5,
+      "crap": 6.0703125,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 252,
+          "end": 253
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergChangelogWriter::ensure_table",
-      "line": 180,
-      "cyclomatic": 18.0,
-      "coverage": 59.42028985507246,
-      "crap": 39.65069450152051,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 204,
-          "end": 211
-        },
-        {
-          "start": 227,
-          "end": 248
-        }
-      ]
+      "line": 187,
+      "cyclomatic": 5.0,
+      "coverage": 100.0,
+      "crap": 5.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergChangelogWriter::existing_tables",
-      "line": 399,
+      "line": 488,
       "cyclomatic": 4.0,
       "coverage": 0.0,
       "crap": 20.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 399,
-          "end": 417
+          "start": 488,
+          "end": 506
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "IcebergChangelogWriter::last_committed_position",
-      "line": 306,
+      "line": 407,
       "cyclomatic": 4.0,
       "coverage": 50.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 316,
-          "end": 325
+          "start": 417,
+          "end": 426
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
-      "function": "IcebergChangelogWriter::new",
-      "line": 163,
+      "function": "IcebergChangelogWriter::load_table",
+      "line": 270,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -5313,22 +5868,7 @@
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
-      "function": "IcebergChangelogWriter::record_key_columns",
-      "line": 419,
-      "cyclomatic": 12.0,
-      "coverage": 0.0,
-      "crap": 156.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 419,
-          "end": 482
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/write/infrastructure.rs",
-      "function": "IcebergChangelogWriter::table_ident",
+      "function": "IcebergChangelogWriter::new",
       "line": 170,
       "cyclomatic": 1.0,
       "coverage": 100.0,
@@ -5337,23 +5877,113 @@
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::open_or_create",
+      "line": 216,
+      "cyclomatic": 5.0,
+      "coverage": 83.33333333333334,
+      "crap": 5.1157407407407405,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 231,
+          "end": 233
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::record_key_columns",
+      "line": 508,
+      "cyclomatic": 4.0,
+      "coverage": 0.0,
+      "crap": 20.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 508,
+          "end": 521
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::record_keys",
+      "line": 310,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::table_ident",
+      "line": 177,
+      "cyclomatic": 1.0,
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "IcebergChangelogWriter::tables_without_key_columns",
+      "line": 276,
+      "cyclomatic": 7.0,
+      "coverage": 100.0,
+      "crap": 7.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "backfill_snapshot_properties",
+      "line": 526,
+      "cyclomatic": 4.0,
+      "coverage": 100.0,
+      "crap": 4.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "backfill_state_of",
-      "line": 511,
+      "line": 572,
       "cyclomatic": 2.0,
       "coverage": 75.0,
       "crap": 2.0625,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 515,
-          "end": 516
+          "start": 576,
+          "end": 577
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "catalog_error",
+      "line": 338,
+      "cyclomatic": 1.0,
+      "coverage": 0.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 338,
+          "end": 340
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "changelog_schema",
+      "line": 692,
+      "cyclomatic": 2.0,
+      "coverage": 100.0,
+      "crap": 2.0,
+      "crate": "pipa-ingestion"
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "checkpoint_of",
-      "line": 551,
+      "line": 612,
       "cyclomatic": 1.0,
       "coverage": 100.0,
       "crap": 1.0,
@@ -5362,82 +5992,61 @@
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "connect_source",
-      "line": 596,
+      "line": 657,
       "cyclomatic": 1.0,
       "coverage": 0.0,
       "crap": 2.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 596,
-          "end": 600
-        }
-      ]
-    },
-    {
-      "file": "crates/ingestion/src/write/infrastructure.rs",
-      "function": "embedded_catalog_uri",
-      "line": 141,
-      "cyclomatic": 2.0,
-      "coverage": 0.0,
-      "crap": 6.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 141,
-          "end": 151
+          "start": 657,
+          "end": 661
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "introspect_iceberg_schema",
-      "line": 611,
-      "cyclomatic": 7.0,
+      "line": 672,
+      "cyclomatic": 3.0,
       "coverage": 0.0,
-      "crap": 56.0,
+      "crap": 12.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 611,
-          "end": 654
+          "start": 672,
+          "end": 688
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "key_columns_property",
-      "line": 592,
+      "line": 653,
       "cyclomatic": 1.0,
-      "coverage": 0.0,
-      "crap": 2.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 592,
-          "end": 594
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 1.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "latest_checkpoint",
-      "line": 567,
+      "line": 628,
       "cyclomatic": 3.0,
       "coverage": 91.66666666666666,
       "crap": 3.0052083333333335,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 578,
-          "end": 578
+          "start": 639,
+          "end": 639
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "new_data_file_writer",
-      "line": 524,
+      "line": 585,
       "cyclomatic": 3.0,
       "coverage": 100.0,
       "crap": 3.0,
@@ -5446,37 +6055,46 @@
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "pg_type_to_arrow",
-      "line": 663,
+      "line": 727,
       "cyclomatic": 11.0,
-      "coverage": 0.0,
-      "crap": 132.0,
-      "crate": "pipa-ingestion",
-      "uncovered": [
-        {
-          "start": 663,
-          "end": 678
-        }
-      ]
+      "coverage": 100.0,
+      "crap": 11.0,
+      "crate": "pipa-ingestion"
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "source_key_columns",
-      "line": 582,
+      "line": 643,
       "cyclomatic": 2.0,
       "coverage": 0.0,
       "crap": 6.0,
       "crate": "pipa-ingestion",
       "uncovered": [
         {
-          "start": 582,
-          "end": 589
+          "start": 643,
+          "end": 650
+        }
+      ]
+    },
+    {
+      "file": "crates/ingestion/src/write/infrastructure.rs",
+      "function": "table_creation",
+      "line": 344,
+      "cyclomatic": 3.0,
+      "coverage": 0.0,
+      "crap": 12.0,
+      "crate": "pipa-ingestion",
+      "uncovered": [
+        {
+          "start": 344,
+          "end": 363
         }
       ]
     },
     {
       "file": "crates/ingestion/src/write/infrastructure.rs",
       "function": "write_data_files",
-      "line": 487,
+      "line": 548,
       "cyclomatic": 4.0,
       "coverage": 100.0,
       "crap": 4.0,
@@ -5484,9 +6102,9 @@
     }
   ],
   "diagnostics": {
-    "analyzed_files": 62,
-    "lcov_files": 65,
-    "matched_files": 62,
+    "analyzed_files": 61,
+    "lcov_files": 64,
+    "matched_files": 61,
     "source_only": {
       "count": 0,
       "examples": []

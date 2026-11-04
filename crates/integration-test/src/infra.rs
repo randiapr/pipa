@@ -11,8 +11,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::{Context, bail};
-use chrono::Utc;
-use pipa_catalog_proxy::sigv4::{Signer, amz_date, sha256_hex};
+use pipa_catalog_auth::{DEFAULT_SERVICE, sigv4::Signer};
 use sqlx::{Connection, PgConnection};
 use testcontainers::core::wait::HttpWaitStrategy;
 use testcontainers::core::{IntoContainerPort, WaitFor};
@@ -208,36 +207,18 @@ pub fn admin_url(endpoints: &Endpoints) -> String {
 
 /// Sends a SigV4-signed request with an empty body to RustFS' S3 API.
 pub async fn s3_request(method: reqwest::Method, path: &str) -> anyhow::Result<reqwest::Response> {
-    let endpoints = endpoints();
-    let host = endpoints.s3.trim_start_matches("http://");
-    let now = Utc::now();
-    let date = amz_date(now);
-    let payload_hash = sha256_hex(b"");
-    let authorization = Signer::new(
+    let client = reqwest::Client::new();
+    let mut request = client
+        .request(method, format!("{}{path}", endpoints().s3))
+        .build()?;
+    Signer::new(
         S3_ACCESS_KEY.to_string(),
         S3_SECRET_KEY.to_string(),
         S3_REGION.to_string(),
-        "s3".to_string(),
+        DEFAULT_SERVICE.to_string(),
     )
-    .authorization(
-        method.as_str(),
-        path,
-        "",
-        &[
-            ("host", host),
-            ("x-amz-content-sha256", &payload_hash),
-            ("x-amz-date", &date),
-        ],
-        &payload_hash,
-        now,
-    );
-    Ok(reqwest::Client::new()
-        .request(method, format!("{}{path}", endpoints.s3))
-        .header("x-amz-content-sha256", payload_hash)
-        .header("x-amz-date", date)
-        .header("authorization", authorization)
-        .send()
-        .await?)
+    .sign_request(&mut request)?;
+    Ok(client.execute(request).await?)
 }
 
 /// Creates the S3 bucket `name` (the stack's `create-bucket` step). `pipa-backend` and

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.3.5] - 2026-11-04
+
+### Changed
+
+- Depends on `pipa-catalog-auth`, which replaces `pipa-catalog-proxy`. `s3_request` signs with `Signer::sign_request` instead of assembling the SigV4 headers itself. The `chrono` dependency is dropped as unused.
+
 ## [0.3.4] - 2026-10-23
 
 ### Changed

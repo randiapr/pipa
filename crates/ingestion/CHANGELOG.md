@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (pre-1.0: MINOR bumps may include breaking changes).
 
+## [0.10.0] - 2026-11-04
+
+### Changed
+
+- `iceberg`, `iceberg-catalog-rest` and `iceberg-storage-opendal` 0.10.1 → 0.11.0 (`Cargo.toml`, `Cargo.lock`). In maintenance, manifests are read with `Table::manifest_reader` (`ManifestFile::load_manifest` is gone), and `FileScanTask`'s path and start come from its new getters. Behaviour is unchanged.
+- RustFS catalog requests are now SigV4-signed inside the catalog client, through `pipa-catalog-auth`'s `SigV4AuthManager`. This replaces the `pipa-catalog-proxy` listener that ran on a loopback port in this process. With `ICEBERG_CATALOG_URI` unset, the catalog URI is now `{RUSTFS_ENDPOINT}/iceberg` itself, and S3 Tables is still enabled on `RUSTFS_BUCKET` at startup. With it set, requests go out unsigned, as before. `IcebergCatalogConfig` gains a `sigv4` field.
+- `arrow-array`, `arrow-schema` and `parquet` 58.4.0 → 58.4.1 (`Cargo.toml`, `Cargo.lock`), the newest release iceberg 0.11 accepts. It moves `parquet`'s `thrift` 0.17 → 0.23, fixing RUSTSEC-2026-0435. No code change.
+- Every function now scores under `just crap`'s CRAP threshold (30; 21 didn't). Logic that only ran against a live Postgres, Redis or catalog was pulled out into tested functions:
+  - the WAL stream's per-event handling (`WalDecoder`, with `forward_stream` left as I/O only);
+  - snapshot paging (`page_keys`, `last_key`);
+  - row-key grouping (`postgres::group_key_columns`);
+  - the target schema (`changelog_schema`);
+  - backfill commit properties;
+  - the writer's namespace/table creation and key-column recording, now tested against a `MemoryCatalog`;
+  - which sources an instance claims in Redis (`RedisCoordinator::wins`);
+  - `list_registered`, now tested against an in-memory store.
+
+  `main`, `Assignment::coordinate`, `Captures::reconcile` and compaction's `stage_replace` (now `ReplaceFiles`) are split into smaller steps. Behaviour is unchanged, except that `main` now aborts maintenance and leaves the coordination group even when it exits with an error.
+- The maintenance `RestSnapshotCommitter` signs its own `GET /v1/config` and commit `POST` with that same signer, since they no longer pass through the proxy.
+
 ## [0.9.5] - 2026-10-23
 
 ### Changed

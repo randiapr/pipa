@@ -318,7 +318,7 @@ impl Fixture {
             .plan_files()
             .await
             .unwrap()
-            .map_ok(|task| task.data_file_path)
+            .map_ok(|task| task.data_file_path().to_string())
             .try_collect()
             .await
             .unwrap()

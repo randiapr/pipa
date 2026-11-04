@@ -137,18 +137,34 @@ impl RedisCoordinator {
     ) -> Result<HashSet<DataSourceId>, CoordinationError> {
         let mut connection = self.connection().await?;
         let members = self.heartbeat(&mut connection).await.map_err(unavailable)?;
+        let wanted = self.wins(&members, registered);
+        self.claim(&mut connection, wanted).await
+    }
 
-        let wanted: Vec<DataSourceId> = registered
+    /// The `registered` sources this instance wins among `members`.
+    fn wins(
+        &self,
+        members: &BTreeSet<InstanceId>,
+        registered: &[DataSourceId],
+    ) -> Vec<DataSourceId> {
+        registered
             .iter()
             .copied()
             .filter(|source| {
-                owner_of(&members, *source).is_some_and(|owner| *owner == self.instance)
+                owner_of(members, *source).is_some_and(|owner| *owner == self.instance)
             })
-            .collect();
+            .collect()
+    }
+
+    /// Takes or renews the leases of `wanted`, and returns the sources whose lease it holds.
+    async fn claim(
+        &self,
+        connection: &mut ConnectionManager,
+        wanted: Vec<DataSourceId>,
+    ) -> Result<HashSet<DataSourceId>, CoordinationError> {
         if wanted.is_empty() {
             return Ok(HashSet::new());
         }
-
         let mut pipeline = redis::pipe();
         for source in &wanted {
             pipeline.add_command(eval(
@@ -159,7 +175,7 @@ impl RedisCoordinator {
             ));
         }
         let held: Vec<i64> = pipeline
-            .query_async(&mut connection)
+            .query_async(connection)
             .await
             .map_err(unavailable)?;
         Ok(wanted
@@ -167,6 +183,17 @@ impl RedisCoordinator {
             .zip(held)
             .filter_map(|(source, held)| (held == 1).then_some(source))
             .collect())
+    }
+
+    /// Releases `held` and removes this instance's member key.
+    async fn leave_group(&self, held: &[DataSourceId]) -> Result<(), CoordinationError> {
+        self.release_leases(held).await?;
+        let mut connection = self.connection().await?;
+        redis::cmd("DEL")
+            .arg(Self::member_key(&self.instance))
+            .query_async::<()>(&mut connection)
+            .await
+            .map_err(unavailable)
     }
 
     async fn release_leases(&self, sources: &[DataSourceId]) -> Result<(), CoordinationError> {
@@ -212,16 +239,7 @@ impl Coordinator for RedisCoordinator {
     }
 
     async fn leave(&self, held: &[DataSourceId]) {
-        let leave = async {
-            self.release_leases(held).await?;
-            let mut connection = self.connection().await?;
-            redis::cmd("DEL")
-                .arg(Self::member_key(&self.instance))
-                .query_async::<()>(&mut connection)
-                .await
-                .map_err(unavailable)
-        };
-        match tokio::time::timeout(self.timeout, leave).await {
+        match tokio::time::timeout(self.timeout, self.leave_group(held)).await {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
                 tracing::warn!(error = %err, "could not leave the group, it lapses on its own");
@@ -245,6 +263,38 @@ fn eval(script: &str, key: String, instance: &str, ttl: Option<Duration>) -> red
 
 fn unavailable(err: impl std::fmt::Display) -> CoordinationError {
     CoordinationError::Unavailable(err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::*;
+
+    /// Picks which sources to claim without Redis: `new` only parses the URL.
+    #[test]
+    fn an_instance_wants_exactly_the_sources_it_wins() {
+        let interval = Duration::from_secs(1);
+        let a = RedisCoordinator::new("redis://127.0.0.1:1", "a".to_string(), interval).unwrap();
+        let b = RedisCoordinator::new("redis://127.0.0.1:1", "b".to_string(), interval).unwrap();
+        let members = BTreeSet::from(["a".to_string(), "b".to_string()]);
+        let registered: Vec<DataSourceId> = (0..20).map(|_| DataSourceId(Uuid::now_v7())).collect();
+
+        let (wins_a, wins_b) = (a.wins(&members, &registered), b.wins(&members, &registered));
+        assert_eq!(wins_a.len() + wins_b.len(), registered.len());
+        assert!(wins_a.iter().all(|source| !wins_b.contains(source)));
+        assert!(
+            wins_a
+                .iter()
+                .all(|source| owner_of(&members, *source) == Some(&"a".to_string()))
+        );
+
+        // Alone, an instance wins everything.
+        assert_eq!(
+            a.wins(&BTreeSet::from(["a".to_string()]), &registered),
+            registered
+        );
+    }
 }
 
 /// Live tests against a real Redis, run with `REDIS_URL=redis://127.0.0.1:6379 cargo test -p

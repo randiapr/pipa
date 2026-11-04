@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use sqlx::{Connection, PgConnection, Row, postgres::PgConnectOptions};
+use sqlx::{Connection, PgConnection, postgres::PgConnectOptions};
 
 use crate::datasource::DataSource;
 
@@ -29,7 +29,7 @@ pub async fn connect(source: &DataSource) -> Result<PgConnection, sqlx::Error> {
 pub async fn key_columns(
     conn: &mut PgConnection,
 ) -> Result<HashMap<(String, String), Vec<String>>, sqlx::Error> {
-    let rows = sqlx::query(
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
         "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name \
          FROM pg_class c \
          JOIN pg_namespace n ON n.oid = c.relnamespace \
@@ -44,14 +44,18 @@ pub async fn key_columns(
     )
     .fetch_all(conn)
     .await?;
+    Ok(group_key_columns(rows))
+}
 
+/// `(schema, table, column)` rows, each table's in key order, grouped by table.
+fn group_key_columns(
+    rows: Vec<(String, String, String)>,
+) -> HashMap<(String, String), Vec<String>> {
     let mut keys: HashMap<(String, String), Vec<String>> = HashMap::new();
-    for row in rows {
-        keys.entry((row.try_get("schema_name")?, row.try_get("table_name")?))
-            .or_default()
-            .push(row.try_get("column_name")?);
+    for (schema, table, column) in rows {
+        keys.entry((schema, table)).or_default().push(column);
     }
-    Ok(keys)
+    keys
 }
 
 /// `name` as a quoted SQL identifier, safe to splice into a statement whatever it contains.
@@ -68,5 +72,24 @@ mod tests {
         assert_eq!(quote_ident("orders"), "\"orders\"");
         assert_eq!(quote_ident("Order Items"), "\"Order Items\"");
         assert_eq!(quote_ident("a\"b"), "\"a\"\"b\"");
+    }
+
+    #[test]
+    fn key_columns_are_grouped_by_table_in_key_order() {
+        let row = |schema: &str, table: &str, column: &str| {
+            (schema.to_string(), table.to_string(), column.to_string())
+        };
+        let keys = group_key_columns(vec![
+            row("public", "order_items", "order_id"),
+            row("public", "order_items", "line"),
+            row("public", "orders", "id"),
+            row("sales", "orders", "id"),
+        ]);
+        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            keys[&("public".to_string(), "order_items".to_string())],
+            ["order_id", "line"]
+        );
+        assert_eq!(keys[&("sales".to_string(), "orders".to_string())], ["id"]);
     }
 }

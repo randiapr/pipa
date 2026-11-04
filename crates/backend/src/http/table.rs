@@ -7,7 +7,7 @@
 //!
 //! Both routes are scoped to the project's own data sources: a read names a table of one of
 //! them, and the query session only sees that source's namespace. The Iceberg metadata tables
-//! (`…$snapshots`, `…$manifests`) aren't browsable for any role: they are left out of the list
+//! (`…$snapshots`, `…$manifests`, `…$history`) aren't browsable for any role: they are left out of the list
 //! and a read naming one is a bad request (`POST /query` can still select them). Every role reads a table's current rows (one row per key,
 //! without the changelog columns), all from Iceberg; the changelog itself is `/query`'s.
 
